@@ -85,6 +85,28 @@ async def start(client, message):
         )
         return
 
+@Client.on_message(filters.command("setting") & filters.private & filters.incoming)
+async def settings_command(client, message):
+    # Force Subscribe Check
+    chk_u = await is_subscribed_universal(client, message)
+    if chk_u == "kicked" or isinstance(chk_u, list):
+        return await start(client, message)
+
+    user_id = message.from_user.id
+    user = await get_user(user_id)
+    buttons = [[
+        InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
+        InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
+    ],[
+        InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
+    ]]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await message.reply_text(
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code></b>",
+        reply_markup=reply_markup,
+        parse_mode=enums.ParseMode.HTML
+    )
+
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
