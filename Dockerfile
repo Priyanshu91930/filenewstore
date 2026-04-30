@@ -1,6 +1,6 @@
-# Don't Remove Credit @VJ_Bots
+# Don't Remove Credit @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190
 
 FROM python:3.10.8-slim-buster
 
@@ -10,7 +10,7 @@ COPY requirements.txt /requirements.txt
 
 RUN cd /
 RUN pip3 install -U pip && pip3 install -U -r requirements.txt
-RUN mkdir /VJ-File-Store
-WORKDIR /VJ-File-Store
-COPY . /VJ-File-Store
+RUN mkdir /Viralverse-File-Store
+WORKDIR /Viralverse-File-Store
+COPY . /Viralverse-File-Store
 CMD ["python", "bot.py"]

@@ -1,18 +1,37 @@
-# Don't Remove Credit @VJ_Bots
+# Don't Remove Credit @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190
 
 import re
 from pyrogram import filters, Client, enums
 from clone_plugins.users_api import get_user, get_short_link
+from utils import is_subscribed_universal
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import base64
 
-# Don't Remove Credit Tg - @VJ_Bots
+# Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190
 
 @Client.on_message(filters.command(['link']))
 async def gen_link_s(client: Client, message):
+    # Universal Force Sub Check for Clones
+    chk = await is_subscribed_universal(client, message)
+    if chk == "kicked":
+        return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
+    if isinstance(chk, list):
+        buttons = []
+        for i, channel_id in enumerate(chk, start=1):
+            try:
+                chat = await client.get_chat(channel_id)
+                btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")]
+                buttons.append(btn)
+            except: continue
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{(await client.get_me()).username}?start=true")])
+        return await message.reply_text(
+            text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
     replied = message.reply_to_message
     if not replied:
         return await message.reply('Reply to a message to get a shareable link.')
@@ -20,9 +39,9 @@ async def gen_link_s(client: Client, message):
     if file_type not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.AUDIO, enums.MessageMediaType.DOCUMENT]:
         return await message.reply("Reply to a supported media")
 
-# Don't Remove Credit Tg - @VJ_Bots
+# Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190
     
     file_id = getattr(replied, file_type.value).file_id
     string = 'file_'
@@ -40,7 +59,7 @@ async def gen_link_s(client: Client, message):
         await message.reply(f"<b>⭕ ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ:\n\n🖇️ sʜᴏʀᴛ ʟɪɴᴋ :- {short_link}</b>")
 
 
-# Don't Remove Credit Tg - @VJ_Bots
+# Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190
     

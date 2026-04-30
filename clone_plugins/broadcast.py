@@ -1,8 +1,8 @@
-# Don't Remove Credit @VJ_Bots
+# Don't Remove Credit @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190
 
-# Clone Code Credit : YT - @Tech_VJ / TG - @VJ_Bots / GitHub - @VJBots
+# Clone Code Credit : YT - @Tech_VJ / TG - @viralverse0909 / GitHub - @VJBots
 
 import datetime, time, asyncio
 from pyrogram import Client, filters
@@ -56,9 +56,9 @@ async def pm_broadcast(bot, message):
     except Exception as e:
         print(f"error: {e}")
 
-# Don't Remove Credit Tg - @VJ_Bots
+# Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190
 
 async def broadcast_messages(bot_id, user_id, message):
     try:
@@ -80,6 +80,6 @@ async def broadcast_messages(bot_id, user_id, message):
         await clonedb.delete_user(bot_id, user_id)
         return False, "Error"
 
-# Don't Remove Credit Tg - @VJ_Bots
+# Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190

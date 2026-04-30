@@ -1,10 +1,12 @@
-# Don't Remove Credit @VJ_Bots
+# Don't Remove Credit @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# Ask Doubt on telegram @Brainaxe190
 
 import logging, asyncio, os, re, random, pytz, aiohttp, requests, string, json, http.client
 from datetime import date, datetime
-from config import SHORTLINK_API, SHORTLINK_URL
+from config import SHORTLINK_API, SHORTLINK_URL, FORCE_SUB_CHANNELS, UNIVERSAL_FORCE_SUB_CHANNEL
+from pyrogram.errors import UserNotParticipant
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from shortzy import Shortzy
 
 logger = logging.getLogger(__name__)
@@ -78,3 +80,32 @@ async def check_verification(bot, userid):
             return True
     else:
         return False
+async def is_subscribed(bot, message):
+    if not FORCE_SUB_CHANNELS:
+        return True
+    not_joined = []
+    for channel_id in FORCE_SUB_CHANNELS:
+        try:
+            member = await bot.get_chat_member(channel_id, message.from_user.id)
+            if member.status == "kicked":
+                return "kicked"
+        except UserNotParticipant:
+            not_joined.append(channel_id)
+        except Exception as e:
+            logger.error(f"Error checking membership for {channel_id}: {e}")
+            continue
+    return not_joined if not_joined else True
+
+async def is_subscribed_universal(bot, message):
+    if not UNIVERSAL_FORCE_SUB_CHANNEL:
+        return True
+    try:
+        member = await bot.get_chat_member(UNIVERSAL_FORCE_SUB_CHANNEL, message.from_user.id)
+        if member.status == "kicked":
+            return "kicked"
+    except UserNotParticipant:
+        return [UNIVERSAL_FORCE_SUB_CHANNEL]
+    except Exception as e:
+        logger.error(f"Error checking universal membership: {e}")
+        return True
+    return True

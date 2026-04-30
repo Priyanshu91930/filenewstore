@@ -85,13 +85,13 @@
 
 <b><details><summary>Tap On Me For See Credit</summary>
 
-💝 Credit Goes To [Tech VJ](https://telegram.me/VJ_Bots)
+💝 Credit Goes To [Brainaxe](https://telegram.me/VJ_Bots)
 
-🖍️ This Code Is Fully Written Or Coded And Public By [Tech VJ](https://github.com/VJBots) So Don't Forgot To Give Credit
+🖍️ This Code Is Fully Written Or Coded And Public By [Brainaxe](https://github.com/VJBots) So Don't Forgot To Give Credit
 
 💖 And Thank You So Much To All Who Help In This Journey 💕
 
-Copyright ©️ [Tech VJ](https://youtube.com/@Tech_VJ)
+Copyright ©️ [Brainaxe](https://youtube.com/@Tech_VJ)
 
 </b>
 </details>
@@ -100,16 +100,16 @@ Copyright ©️ [Tech VJ](https://youtube.com/@Tech_VJ)
 
 <b><details><summary>Tap On Me For See Details Of Owner</summary>
 
-- YouTube Channel : [Tech VJ](https://youtube.com/@Tech_VJ)
+- YouTube Channel : [Brainaxe](https://youtube.com/@Tech_VJ)
 - Telegram Channel : [VJ Bots](https://telegram.me/VJ_Bots)
 - Contact Link : [King VJ](https://telegram.me/Kingvj01)
-- Instagram Id Link : [Tech VJ](https://instagram.com/tech.vj)
+- Instagram Id Link : [Brainaxe](https://instagram.com/tech.vj)
 
 </b>
 </details>
 
 
-### Copyright ©️ [Tech VJ](https://youtube.com/@Tech_VJ)
+### Copyright ©️ [Brainaxe](https://youtube.com/@Tech_VJ)
 
 <b>Selling This Repo Or Code Of This Repo For Money Is Strictly Prohibited 🚫</b>
 
