@@ -54,87 +54,87 @@ def formate_file_name(file_name):
 
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
-    me = await client.get_me()
-    username = me.username
-    if not await db.is_user_exist(message.from_user.id):
-        await db.add_user(message.from_user.id, message.from_user.first_name)
-        try:
-            await client.send_message(LOG_CHANNEL, script.LOG_TEXT.format(message.from_user.id, message.from_user.mention))
-        except:
-            pass
-    
-    # Universal Force Sub Check
-    chk_u = await is_subscribed_universal(client, message)
-    if chk_u == "kicked":
-        await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-        return
-    if isinstance(chk_u, list):
-        buttons = []
-        for i, channel_id in enumerate(chk_u, start=1):
+    try:
+        me = await client.get_me()
+        if not await db.is_user_exist(message.from_user.id):
             try:
-                chat = await client.get_chat(channel_id)
-                btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")]
-                buttons.append(btn)
-            except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{username}?start=true")])
-        return await message.reply_text(
-            text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜɴɪᴠᴇʀsᴀʟ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-
-    # Force Subscribe Check (Main Channels)
-    chk = await is_subscribed(client, message)
-    if chk == "kicked":
-        await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-        return
-    if isinstance(chk, list):
-        buttons = []
-        for i, channel_id in enumerate(chk, start=1):
-            try:
-                chat = await client.get_chat(channel_id)
-                btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=chat.invite_link or f"https://t.me/{chat.username}")]
-                buttons.append(btn)
-            except:
-                continue
+                await db.add_user(message.from_user.id, message.from_user.first_name)
+                await client.send_message(LOG_CHANNEL, script.LOG_TEXT.format(message.from_user.id, message.from_user.mention))
+            except: pass
         
-        # Add a "Try Again" button
-        if len(message.command) == 2:
-            try_again_url = f"https://t.me/{username}?start={message.command[1]}"
-        else:
-            try_again_url = f"https://t.me/{username}?start=true"
-        
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=try_again_url)])
-        
-        await message.reply_text(
-            text=script.FORCE_SUB_TEXT.format(message.from_user.mention),
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-        return
-    if len(message.command) != 2 or message.command[1] == "true":
-        buttons = [[
-            InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
-            InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone')
-        ],[
-            InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
-            InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
-        ],[
-            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
-            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
-        ]]
-        reply_markup = InlineKeyboardMarkup(buttons)
+        # Universal Force Sub Check
         try:
-            await message.reply_photo(
-                photo=random.choice(PICS),
-                caption=script.START_TXT.format(message.from_user.mention, me.mention),
-                reply_markup=reply_markup
-            )
+            chk_u = await is_subscribed_universal(client, message)
+            if chk_u == "kicked":
+                return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
+            if isinstance(chk_u, list):
+                buttons = []
+                for channel_id in chk_u:
+                    try:
+                        chat = await client.get_chat(channel_id)
+                        buttons.append([InlineKeyboardButton("ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")])
+                    except: continue
+                buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
+                return await message.reply_text(
+                    text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜɴɪᴠᴇʀsᴀʟ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
         except Exception as e:
-            await message.reply_text(
-                text=script.START_TXT.format(message.from_user.mention, me.mention),
-                reply_markup=reply_markup,
-                parse_mode=enums.ParseMode.HTML
-            )
-        return
+            logger.error(f"Universal Sub Error: {e}")
+
+        # Main Force Sub Check
+        try:
+            chk = await is_subscribed(client, message)
+            if chk == "kicked":
+                return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
+            if isinstance(chk, list):
+                buttons = []
+                for i, channel_id in enumerate(chk, start=1):
+                    try:
+                        chat = await client.get_chat(channel_id)
+                        buttons.append([InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=chat.invite_link or f"https://t.me/{chat.username}")])
+                    except: continue
+                try_again_url = f"https://t.me/{me.username}?start={message.command[1]}" if len(message.command) == 2 else f"https://t.me/{me.username}?start=true"
+                buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=try_again_url)])
+                return await message.reply_text(
+                    text=script.FORCE_SUB_TEXT.format(message.from_user.mention),
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+        except Exception as e:
+            logger.error(f"Main Sub Error: {e}")
+
+        if len(message.command) != 2 or message.command[1] == "true":
+            buttons = [[
+                InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
+                InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone')
+            ],[
+                InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
+                InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
+            ],[
+                InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
+                InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
+            ]]
+            reply_markup = InlineKeyboardMarkup(buttons)
+            try:
+                await message.reply_photo(
+                    photo=random.choice(PICS),
+                    caption=script.START_TXT.format(message.from_user.mention, me.mention),
+                    reply_markup=reply_markup
+                )
+            except:
+                await message.reply_text(
+                    text=script.START_TXT.format(message.from_user.mention, me.mention),
+                    reply_markup=reply_markup
+                )
+            return
+
+        # Handle File ID
+        data = message.command[1]
+        # ... rest of the logic ...
+    except Exception as e:
+        logger.exception(f"Start Error: {e}")
+        try: await message.reply_text(f"<b>⚠️ Error occurred while processing /start command.\n\nError:</b> <code>{e}</code>")
+        except: pass
 
 @Client.on_message(filters.command("setting") & filters.private & filters.incoming)
 async def settings_command(client, message):
