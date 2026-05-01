@@ -6,7 +6,7 @@ import re
 from pymongo import MongoClient
 from Script import script
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, BotCommand
 from pyrogram.errors.exceptions.bad_request_400 import AccessTokenExpired, AccessTokenInvalid
 from config import API_ID, API_HASH, DB_URI, DB_NAME, CLONE_MODE, UNIVERSAL_FORCE_SUB_CHANNEL
 from utils import is_subscribed_universal
@@ -56,16 +56,30 @@ async def clone(client, message):
         )
         await vj.start()
         bot = await vj.get_me()
+        # Set bot commands so they appear in Telegram menu
+        try:
+            await vj.set_bot_commands([
+                BotCommand("start", "Start the bot"),
+                BotCommand("setcaption", "Set your custom file name prefix"),
+                BotCommand("api", "Set your shortener API key"),
+                BotCommand("base_site", "Set your shortener base site"),
+            ])
+        except: pass
         details = {
             'bot_id': bot.id,
             'is_bot': True,
             'user_id': user_id,
             'name': bot.first_name,
             'token': bot_token,
-            'username': bot.username
+            'username': bot.username,
+            'force_sub_channels': []
         }
         mongo_db.bots.insert_one(details)
-        await msg.edit_text(f"<b>sᴜᴄᴄᴇssғᴜʟʟʏ ᴄʟᴏɴᴇᴅ ʏᴏᴜʀ ʙᴏᴛ: @{bot.username}.</b>")
+        await msg.edit_text(
+            f"<b>✅ sᴜᴄᴄᴇssғᴜʟʟʏ ᴄʟᴏɴᴇᴅ ʏᴏᴜʀ ʙᴏᴛ: @{bot.username}\n\n"
+            f"📋 <b>Commands set automatically!</b>\n\n"
+            f"📢 <b>To add force subscribe channels, go to the main bot and use /setforcesub</b></b>"
+        )
     except BaseException as e:
         await msg.edit_text(f"⚠️ <b>Bot Error:</b>\n\n<code>{e}</code>\n\n**Kindly forward this message to @Brainaxe190 to get assistance.**")
 

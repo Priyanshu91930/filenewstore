@@ -20,6 +20,7 @@ import json
 import base64
 from urllib.parse import quote_plus
 from TechVJ.utils.file_properties import get_name, get_hash, get_media_file_size
+from plugins.clone import mongo_db as clone_mongo_db
 logger = logging.getLogger(__name__)
 
 def is_valid_url(url):
@@ -50,7 +51,7 @@ def formate_file_name(file_name):
     chars = ["[", "]", "(", ")"]
     for c in chars:
         file_name.replace(c, "")
-    file_name = 'anihubYT2 ' + ' '.join(filter(lambda x: not x.startswith('http') and not x.startswith('@') and not x.startswith('www.'), file_name.split()))
+    file_name = '@anihubYT2 ' + ' '.join(filter(lambda x: not x.startswith('http') and not x.startswith('@') and not x.startswith('www.'), file_name.split()))
     return file_name
 
 # Don't Remove Credit Tg - @viralverse0909
@@ -405,6 +406,123 @@ async def base_site_handler(client, m: Message):
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
+
+@Client.on_message(filters.command("setforcesub") & filters.private)
+async def set_force_sub_handler(client, message):
+    """Main bot command for clone bot owners to set force subscribe channels (up to 6).
+    Owner adds clone bot as admin to channels, then forwards a message from each channel here.
+    """
+    user_id = message.from_user.id
+    bot_doc = clone_mongo_db.bots.find_one({"user_id": user_id})
+    if not bot_doc:
+        return await message.reply_text(
+            "<b>❌ You don't have a clone bot yet.\nCreate one first by clicking 🤖 ᴄʟᴏɴᴇ in the main bot.</b>"
+        )
+    bot_username = bot_doc.get("username", "your bot")
+    current = bot_doc.get("force_sub_channels", [])
+    await message.reply_text(
+        f"<b>📢 Force Subscribe Manager\n\n"
+        f"Clone Bot: @{bot_username}\n"
+        f"Current channels: {len(current)}/6\n\n"
+        f"<u>How to add a channel:</u>\n"
+        f"1️⃣ Add @{bot_username} as <b>Admin</b> in your channel\n"
+        f"2️⃣ Forward any message from that channel to me here\n\n"
+        f"Send up to <b>6 forwarded messages</b> now, one at a time.\n"
+        f"Send /done when finished · /clearforcesub to remove all</b>"
+    )
+    channels = list(current)
+    while len(channels) < 6:
+        try:
+            msg = await client.ask(
+                message.chat.id,
+                f"<b>Forward a message from channel {len(channels)+1}/6\n"
+                f"(or /done to save · /clearforcesub to clear all)</b>",
+                timeout=60
+            )
+        except Exception:
+            await message.reply_text("<b>⏰ Timed out. Use /setforcesub to try again.</b>")
+            break
+        if msg.text and msg.text.strip() == "/done":
+            break
+        if msg.text and msg.text.strip() == "/clearforcesub":
+            channels = []
+            break
+        if msg.forward_from_chat:
+            chat = msg.forward_from_chat
+            channel_id = chat.id
+            if channel_id in channels:
+                await message.reply_text("<b>⚠️ This channel is already added! Forward from a different channel.</b>")
+                continue
+            # Verify clone bot is admin in this channel
+            try:
+                member = await client.get_chat_member(channel_id, bot_doc["bot_id"])
+                if member.status not in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                    await message.reply_text(
+                        f"<b>❌ @{bot_username} is not an admin in <code>{chat.title}</code>.\n"
+                        f"Please make it admin first, then forward again.</b>"
+                    )
+                    continue
+            except Exception:
+                await message.reply_text(
+                    f"<b>⚠️ Could not verify @{bot_username} admin status in <code>{chat.title}</code>.\n"
+                    f"Make sure the bot is added as admin, then forward again.</b>"
+                )
+                continue
+            channels.append(channel_id)
+            await message.reply_text(
+                f"<b>✅ Added [{len(channels)}/6]: {chat.title}\n<code>{channel_id}</code>\n\n"
+                f"Forward next channel or send /done</b>"
+            )
+        else:
+            await message.reply_text(
+                "<b>⚠️ Please <u>forward a message</u> from a Telegram channel, not type text.\n"
+                "If your channel is private, just forward any post from it.</b>"
+            )
+    # Save to DB
+    clone_mongo_db.bots.update_one(
+        {"user_id": user_id},
+        {"$set": {"force_sub_channels": channels}}
+    )
+    if channels:
+        await message.reply_text(
+            f"<b>✅ Force subscribe channels saved!\n"
+            f"Total: {len(channels)} channel(s) for @{bot_username}\n\n"
+            f"Users must join all channels before using your bot.\n"
+            f"Use /listforcesub to see them · /clearforcesub to remove all</b>"
+        )
+    else:
+        await message.reply_text("<b>✅ All force subscribe channels cleared for your clone bot.</b>")
+
+@Client.on_message(filters.command("listforcesub") & filters.private)
+async def list_force_sub_handler(client, message):
+    user_id = message.from_user.id
+    bot_doc = clone_mongo_db.bots.find_one({"user_id": user_id})
+    if not bot_doc:
+        return await message.reply_text("<b>❌ You don't have a clone bot yet.</b>")
+    channels = bot_doc.get("force_sub_channels", [])
+    if not channels:
+        return await message.reply_text(
+            f"<b>📢 No force subscribe channels set for @{bot_doc.get('username','your bot')}.\n"
+            f"Use /setforcesub to add channels.</b>"
+        )
+    text = f"<b>📢 Force Subscribe Channels for @{bot_doc.get('username','your bot')}:\n\n</b>"
+    for i, ch_id in enumerate(channels, 1):
+        try:
+            chat = await client.get_chat(ch_id)
+            text += f"{i}. {chat.title} (<code>{ch_id}</code>)\n"
+        except:
+            text += f"{i}. <code>{ch_id}</code>\n"
+    text += f"\n<b>Use /clearforcesub to remove all · /setforcesub to update</b>"
+    await message.reply_text(text)
+
+@Client.on_message(filters.command("clearforcesub") & filters.private)
+async def clear_force_sub_handler(client, message):
+    user_id = message.from_user.id
+    bot_doc = clone_mongo_db.bots.find_one({"user_id": user_id})
+    if not bot_doc:
+        return await message.reply_text("<b>❌ You don't have a clone bot yet.</b>")
+    clone_mongo_db.bots.update_one({"user_id": user_id}, {"$set": {"force_sub_channels": []}})
+    await message.reply_text(f"<b>✅ All force subscribe channels cleared for @{bot_doc.get('username','your bot')}.</b>")
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):

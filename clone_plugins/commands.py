@@ -66,6 +66,42 @@ async def start(client, message):
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
+
+    # ── Clone Bot Force Sub Check ──────────────────────────────────────────
+    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    # Migrate old entries that don't have the field
+    if bot_doc and 'force_sub_channels' not in bot_doc:
+        mongo_db.bots.update_one({'bot_id': me.id}, {'$set': {'force_sub_channels': []}})
+        bot_doc['force_sub_channels'] = []
+    clone_force_channels = bot_doc.get('force_sub_channels', []) if bot_doc else []
+    if clone_force_channels:
+        not_joined = []
+        for channel_id in clone_force_channels:
+            try:
+                member = await client.get_chat_member(channel_id, message.from_user.id)
+                if member.status in [enums.ChatMemberStatus.BANNED]:
+                    return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
+                if member.status == enums.ChatMemberStatus.LEFT:
+                    not_joined.append(channel_id)
+            except:
+                not_joined.append(channel_id)
+        if not_joined:
+            buttons = []
+            for i, channel_id in enumerate(not_joined, start=1):
+                try:
+                    chat = await client.get_chat(channel_id)
+                    link = chat.invite_link or (f"https://t.me/{chat.username}" if chat.username else None)
+                    if link:
+                        buttons.append([InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i} ➔ {chat.title}", url=link)])
+                except: continue
+            try_url = f"https://t.me/{me.username}?start={message.command[1]}" if len(message.command) > 1 else f"https://t.me/{me.username}?start=true"
+            buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=try_url)])
+            return await message.reply_text(
+                text="<b>📢 ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ(s) ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+    # ──────────────────────────────────────────────────────────────────────
+
     if len(message.command) != 2 or message.command[1] == "true":
         buttons = [[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
