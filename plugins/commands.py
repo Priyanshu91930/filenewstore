@@ -106,7 +106,7 @@ async def start(client, message):
         if len(message.command) != 2 or message.command[1] == "true":
             buttons = [[
                 InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
-                InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone')
+                InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', url=f'https://t.me/{me.username}?start=clone')
             ],[
                 InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
                 InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -130,6 +130,12 @@ async def start(client, message):
 
         # Handle File ID
         data = message.command[1]
+        
+        # Handle clone redirect from button
+        if data == "clone":
+            from plugins.clone import clone
+            return await clone(client, message)
+        
         # ... rest of the logic ...
     except Exception as e:
         logger.exception(f"Start Error: {e}")
@@ -423,9 +429,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
 # Ask Doubt on telegram @Brainaxe190
     
     elif query.data == "start":
+        me = await client.get_me()
         buttons = [[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
-            InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone')
+            InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', url=f'https://t.me/{me.username}?start=clone')
         ],[
             InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -451,7 +458,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
 # Ask Doubt on telegram @Brainaxe190
     
     elif query.data == "clone":
+        me = await client.get_me()
         buttons = [[
+            InlineKeyboardButton('🤖 sᴛᴀʀᴛ ᴄʟᴏɴᴇ', url=f'https://t.me/{me.username}?start=clone'),
+        ],[
             InlineKeyboardButton('Hᴏᴍᴇ', callback_data='start'),
             InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='close_data')
         ]]

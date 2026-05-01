@@ -41,13 +41,11 @@ async def clone(client, message):
     if techvj.text == '/cancel':
         await techvj.delete()
         return await message.reply('<b>ᴄᴀɴᴄᴇʟᴇᴅ ᴛʜɪs ᴘʀᴏᴄᴇss 🚫</b>')
-    if techvj.forward_from and techvj.forward_from.id == 93372553:
-        try:
-            bot_token = re.findall(r"\b(\d+:[A-Za-z0-9_-]+)\b", techvj.text)[0]
-        except:
-            return await message.reply('<b>sᴏᴍᴇᴛʜɪɴɢ ᴡᴇɴᴛ ᴡʀᴏɴɢ 😕</b>')
-    else:
-        return await message.reply('<b>ɴᴏᴛ ꜰᴏʀᴡᴀʀᴅᴇᴅ ꜰʀᴏᴍ @BotFather 😑</b>')
+    # Try to extract bot token from forwarded BotFather message or directly pasted text
+    try:
+        bot_token = re.findall(r"\b(\d+:[A-Za-z0-9_-]+)\b", techvj.text)[0]
+    except:
+        return await message.reply('<b>ɴᴏ ᴠᴀʟɪᴅ ʙᴏᴛ ᴛᴏᴋᴇɴ ғᴏᴜɴᴅ 😕\nᴘʟᴇᴀsᴇ ғᴏʀᴡᴀʀᴅ ᴛʜᴇ ᴍᴇssᴀɢᴇ ғʀᴏᴍ @BotFather ᴏʀ ᴘᴀsᴛᴇ ʏᴏᴜʀ ʙᴏᴛ ᴛᴏᴋᴇɴ ᴅɪʀᴇᴄᴛʟʏ.</b>')
     user_id = message.from_user.id
     msg = await message.reply_text("**👨‍💻 ᴡᴀɪᴛ ᴀ ᴍɪɴᴜᴛᴇ ɪ ᴀᴍ ᴄʀᴇᴀᴛɪɴɢ ʏᴏᴜʀ ʙᴏᴛ ❣️**")
     try:
