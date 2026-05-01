@@ -289,7 +289,8 @@ async def start(client, message):
                     try:
                         f_caption=CUSTOM_FILE_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='')
                     except:
-                        return
+                        f_caption = f"@viralverse0909 <code>{title}</code>"
+                reply_markup = None
                 if STREAM_MODE == True:
                     if msg.video or msg.document:
                         log_msg = msg
@@ -303,8 +304,6 @@ async def start(client, message):
                             InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
                         ]]
                         reply_markup=InlineKeyboardMarkup(button)
-                else:
-                    reply_markup = None
                 del_msg = await msg.copy(chat_id=message.from_user.id, caption=f_caption, reply_markup=reply_markup, protect_content=False)
             else:
                 del_msg = await msg.copy(chat_id=message.from_user.id, protect_content=False)
@@ -317,8 +316,9 @@ async def start(client, message):
                     pass
                 await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
             return
-        except:
-            pass
+        except Exception as e:
+            logger.exception(f"File Send Error: {e}")
+            await message.reply_text(f"<b>⚠️ Error sending file.\n\nError:</b> <code>{e}</code>")
         
     except Exception as e:
         logger.exception(f"Start Error: {e}")
