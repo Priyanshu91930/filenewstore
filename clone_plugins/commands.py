@@ -126,6 +126,15 @@ async def settings_command(client, message):
         pre = ""   
 
     pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
+    # Get owner's caption prefix from DB
+    me = await client.get_me()
+    bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    owner_id = int(bot_owner['user_id']) if bot_owner else None
+    caption_prefix = ""
+    if owner_id:
+        owner_data = await get_user(owner_id)
+        caption_prefix = owner_data.get("caption_prefix", "").strip()
+
     try:
         msg = await client.send_cached_media(
             chat_id=message.from_user.id,
@@ -134,7 +143,9 @@ async def settings_command(client, message):
         )
         filetype = msg.media
         file = getattr(msg, filetype.value)
-        title = '@viralverse0909  ' + ' '.join(filter(lambda x: not x.startswith('[') and not x.startswith('@'), file.file_name.split()))
+        # Build title: strip existing @mentions/URLs, then prepend owner's prefix
+        clean_name = ' '.join(filter(lambda x: not x.startswith('[') and not x.startswith('@') and not x.startswith('http') and not x.startswith('www.'), file.file_name.split()))
+        title = (caption_prefix + ' ' + clean_name).strip() if caption_prefix else clean_name
         size=get_size(file.file_size)
         f_caption = f"<code>{title}</code>"
         if CUSTOM_FILE_CAPTION:
@@ -154,6 +165,34 @@ async def settings_command(client, message):
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
+
+@Client.on_message(filters.command('setcaption') & filters.private)
+async def set_caption_handler(client, m: Message):
+    """Allow clone bot owner to set a custom prefix added to all file names.
+    Usage: /setcaption @MyChannel
+    To remove: /setcaption off
+    """
+    me = await client.get_me()
+    bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    if not bot_owner or int(bot_owner['user_id']) != m.from_user.id:
+        return await m.reply("<b>❌ Only the bot owner can use this command.</b>")
+
+    cmd = m.command
+    if len(cmd) == 1:
+        user = await get_user(m.from_user.id)
+        current = user.get("caption_prefix", "") or "<i>Not set</i>"
+        return await m.reply(
+            f"<b>📝 Caption Prefix</b>\n\n"
+            f"Current prefix: <code>{current}</code>\n\n"
+            f"<b>Usage:</b> <code>/setcaption @YourName</code>\n"
+            f"<b>To remove:</b> <code>/setcaption off</code>"
+        )
+    prefix = cmd[1].strip()
+    if prefix.lower() == "off":
+        await update_user_info(m.from_user.id, {"caption_prefix": ""})
+        return await m.reply("<b>✅ Caption prefix removed. Files will be sent without a prefix.</b>")
+    await update_user_info(m.from_user.id, {"caption_prefix": prefix})
+    await m.reply(f"<b>✅ Caption prefix set to:</b> <code>{prefix}</code>\n\nAll files sent by your bot will now start with this name.")
 
 @Client.on_message(filters.command('api') & filters.private)
 async def shortener_api_handler(client, m: Message):
@@ -275,15 +314,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data == "settings":
         user_id = query.from_user.id
         user = await get_user(user_id)
+        prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
         buttons = [[
             InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
             InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
+        ],[
+            InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption')
         ],[
             InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code></b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
@@ -297,5 +339,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data == "set_site":
         await query.message.edit_text(
             text="<b>ᴛᴏ sᴇᴛ ʏᴏᴜʀ ʙᴀsᴇ sɪᴛᴇ, ᴜsᴇ ᴛʜᴇ /base_site ᴄᴏᴍᴍᴀɴᴅ.\n\nᴇx: <code>/base_site domain.com</code></b>",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='settings')]])
+        )
+
+    elif query.data == "set_caption":
+        await query.message.edit_text(
+            text="<b>📝 ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx\n\nᴜsᴇ ᴛʜᴇ /setcaption ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ sᴇᴛ ʏᴏᴜʀ ᴄᴜsᴛᴏᴍ ɴᴀᴍᴇ ᴘʀᴇꜰɪx.\n\nᴇx: <code>/setcaption @YourChannel</code>\n\nᴛᴏ ʀᴇᴍᴏᴠᴇ: <code>/setcaption off</code></b>",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='settings')]])
         )

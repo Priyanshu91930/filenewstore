@@ -42,9 +42,14 @@ async def get_user(user_id):
             "user_id": user_id,
             "shortener_api": None,
             "base_site": None,
+            "caption_prefix": "",
         }
         await col.insert_one(res)
         user = await col.find_one({"user_id": user_id})
+    # Migrate existing users who don't have caption_prefix yet
+    if "caption_prefix" not in user:
+        await col.update_one({"user_id": user_id}, {"$set": {"caption_prefix": ""}})
+        user["caption_prefix"] = ""
     return user
 
 # Don't Remove Credit Tg - @viralverse0909
