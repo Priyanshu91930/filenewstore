@@ -623,7 +623,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bots = list(clone_mongo_db.bots.find({"user_id": user_id}))
         buttons = []
         for bot in bots:
-            buttons.append([InlineKeyboardButton(f"{bot['name']}", url=f"https://t.me/{bot['username']}")])
+            buttons.append([InlineKeyboardButton(f"{bot['name']}", callback_data=f"cust_{bot['bot_id']}")])
         
         buttons.append([InlineKeyboardButton("➕ Add Clone", callback_data="add_clone")])
         buttons.append([InlineKeyboardButton("🔙 Back", callback_data="start")])
@@ -638,6 +638,199 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=enums.ParseMode.HTML
         )
+
+    elif query.data.startswith("cust_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        if not bot:
+            return await query.answer("Bot not found!", show_alert=True)
+            
+        buttons = [
+            [InlineKeyboardButton("START MSG", callback_data=f"startmsg_{bot_id}"), InlineKeyboardButton("FORCE SUB", callback_data=f"forcesub_{bot_id}")],
+            [InlineKeyboardButton("MODERATORS", callback_data=f"mods_{bot_id}"), InlineKeyboardButton("AUTO DELETE", callback_data=f"autodel_{bot_id}")],
+            [InlineKeyboardButton("NO FORWARD", callback_data=f"nofwd_{bot_id}"), InlineKeyboardButton("ACCESS TOKEN", callback_data=f"token_{bot_id}")],
+            [InlineKeyboardButton("MODE", callback_data=f"mode_{bot_id}"), InlineKeyboardButton("DEACTIVATE", callback_data=f"deactivate_{bot_id}")],
+            [InlineKeyboardButton("STATS", callback_data=f"stats_{bot_id}"), InlineKeyboardButton("RESTART", callback_data=f"restart_{bot_id}")],
+            [InlineKeyboardButton("DELETE", callback_data=f"delete_{bot_id}")],
+            [InlineKeyboardButton("BACK", callback_data="clone_manage")]
+        ]
+        
+        await query.message.edit_text(
+            text=f"<b>🪄 <u>Customize Clone</u>\n\n➜ Name: <i>{bot['name']}</i>\n\nConfigure Your Clone Settings Using Given Buttons</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("startmsg_"):
+        bot_id = int(query.data.split("_")[1])
+        buttons = [
+            [InlineKeyboardButton("START TEXT", callback_data=f"stxt_{bot_id}"), InlineKeyboardButton("START PHOTO", callback_data=f"spho_{bot_id}")],
+            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(
+            text="<b><u>Start Message</u>\n\ncustomize your clone start message using the following buttons</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("autodel_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        is_enabled = bot.get("auto_delete_enabled", True)
+        status = "Enabled ✅" if is_enabled else "Disabled ❌"
+        label = "Disable ❌" if is_enabled else "Enable ✅"
+        time = bot.get("auto_delete_time", 5)
+        
+        buttons = [
+            [InlineKeyboardButton("Change time", callback_data=f"cdeltime_{bot_id}"), InlineKeyboardButton("Message", callback_data=f"cdelmsg_{bot_id}"), InlineKeyboardButton(label, callback_data=f"ddel_{bot_id}")],
+            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(
+            text=f"<b><u>Auto Delete</u>\n\nAutomatically delete all messages sent to clone users after {time} minutes\n\n- Status: {status}</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("deactivate_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        is_deact = bot.get("is_deactivated", False)
+        label = "Activate" if is_deact else "Deactivate"
+        status_text = "<b>Status: Deactivated ❌</b>" if is_deact else "<b>Status: Active ✅</b>"
+        
+        buttons = [
+            [InlineKeyboardButton(label, callback_data=f"do_deact_{bot_id}")],
+            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(
+            text=f"<b><u>Deactivate Bot</u></b>\n\n{status_text}\n\nDeactivate Your clone bot without deleting your clone bot and saved data's. if you were deactivated your clone bot will no longer work until activating.\n\nNote: if not your clone is used by anyone for longer 8 days then your bot will automatically deactivate",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("ddel_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        new_status = not bot.get("auto_delete_enabled", True)
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"auto_delete_enabled": new_status}})
+        await query.answer(f"Auto Delete {'Enabled' if new_status else 'Disabled'}")
+        # Refresh the menu
+        query.data = f"autodel_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("do_deact_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        new_status = not bot.get("is_deactivated", False)
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"is_deactivated": new_status}})
+        await query.answer(f"Bot {'Deactivated' if new_status else 'Activated'}")
+        # Refresh the menu
+        query.data = f"deactivate_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("delete_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        if not bot: return await query.answer("Bot not found!")
+        
+        # Confirmation
+        msg = await client.ask(query.message.chat.id, f"<b>⚠️ Are you sure you want to delete @{bot['username']}?\n\nType <code>YES</code> to confirm or /cancel</b>")
+        if msg.text == "YES":
+            clone_mongo_db.bots.delete_one({"bot_id": bot_id})
+            await query.message.edit_text(f"<b>✅ @{bot['username']} has been deleted from the database.</b>")
+            await msg.reply("<b>Bot deleted.</b>")
+        else:
+            await msg.reply("<b>Deletion cancelled.</b>")
+
+    elif query.data.startswith("stxt_"):
+        bot_id = int(query.data.split("_")[1])
+        msg = await client.ask(query.message.chat.id, "<b>Please send the new START TEXT for your clone bot.\n\nUse {mention} for user mention and {mention2} for bot mention.\n\n/cancel to skip.</b>")
+        if msg.text == "/cancel": return await msg.reply("Cancelled.")
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_text": msg.text.html}})
+        await msg.reply("<b>✅ Start Text updated successfully!</b>")
+        query.data = f"startmsg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("spho_"):
+        bot_id = int(query.data.split("_")[1])
+        msg = await client.ask(query.message.chat.id, "<b>Please send the new START PHOTO URL for your clone bot.\n\n/cancel to skip.</b>")
+        if msg.text == "/cancel": return await msg.reply("Cancelled.")
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.text.strip()}})
+        await msg.reply("<b>✅ Start Photo updated successfully!</b>")
+        query.data = f"startmsg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("cdeltime_"):
+        bot_id = int(query.data.split("_")[1])
+        msg = await client.ask(query.message.chat.id, "<b>Please send the new Auto-Delete time in minutes (integer).\n\n/cancel to skip.</b>")
+        if msg.text == "/cancel": return await msg.reply("Cancelled.")
+        try:
+            time = int(msg.text.strip())
+            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"auto_delete_time": time}})
+            await msg.reply(f"<b>✅ Auto-Delete time set to {time} minutes!</b>")
+        except:
+            await msg.reply("<b>❌ Invalid input. Please send a number.</b>")
+        query.data = f"autodel_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("forcesub_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        channels = bot.get("force_sub_channels", [])
+        mode = bot.get("force_sub_mode", "normal")
+        
+        text = f"<b><u>Force Subscribe Management</u></b>\n\n"
+        if channels:
+            text += "<b>Current Channels:</b>\n"
+            for i, c in enumerate(channels, 1):
+                text += f"{i}. <code>{c}</code>\n"
+        else:
+            text += "<i>No channels added yet.</i>\n"
+        
+        text += f"\n<b>Current Mode:</b> <code>{mode.upper()}</code>"
+        
+        buttons = [
+            [InlineKeyboardButton("➕ Add Channel", callback_data=f"add_fsub_{bot_id}"), InlineKeyboardButton("🧹 Clear All", callback_data=f"clear_fsub_{bot_id}")],
+            [InlineKeyboardButton(f"Switch to {'JOIN REQ' if mode=='normal' else 'NORMAL'} Mode", callback_data=f"mode_fsub_{bot_id}")],
+            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(text=text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode=enums.ParseMode.HTML)
+
+    elif query.data.startswith("add_fsub_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        if len(bot.get("force_sub_channels", [])) >= 6:
+            return await query.answer("Max 6 channels allowed!", show_alert=True)
+            
+        msg = await client.ask(query.message.chat.id, "<b>Please forward a message from the channel you want to add as Force Sub.\n\nMake sure your clone bot is ADMIN in that channel!</b>")
+        if msg.forward_from_chat:
+            f_chat_id = msg.forward_from_chat.id
+            # We can't easily check admin status of the clone bot from here without starting it, 
+            # but we can try to get chat info as the main bot if the main bot is also there, 
+            # or just trust the user and let the clone bot handle errors later.
+            # However, for better UX, let's at least store it.
+            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$push": {"force_sub_channels": f_chat_id}})
+            await msg.reply(f"<b>✅ Channel {f_chat_id} added successfully!</b>")
+        else:
+            await msg.reply("<b>❌ Please forward a message from a channel.</b>")
+        query.data = f"forcesub_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("clear_fsub_"):
+        bot_id = int(query.data.split("_")[1])
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"force_sub_channels": []}})
+        await query.answer("All channels cleared!")
+        query.data = f"forcesub_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("mode_fsub_"):
+        bot_id = int(query.data.split("_")[1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        new_mode = "joinreq" if bot.get("force_sub_mode", "normal") == "normal" else "normal"
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"force_sub_mode": new_mode}})
+        await query.answer(f"Mode switched to {new_mode.upper()}")
+        query.data = f"forcesub_{bot_id}"
+        return await cb_handler(client, query)
 
     elif query.data == "add_clone":
         # Simply trigger the /clone command logic

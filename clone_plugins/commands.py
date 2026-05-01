@@ -45,6 +45,12 @@ def get_size(size):
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     me = await client.get_me()
+    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    
+    # Deactivation Check
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
     if not await clonedb.is_user_exist(me.id, message.from_user.id):
         await clonedb.add_user(me.id, message.from_user.id)
     
@@ -134,15 +140,28 @@ async def start(client, message):
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
+        
+        # Custom Start Message
+        start_txt = bot_doc.get("start_text") if bot_doc else None
+        if not start_txt:
+            start_txt = script.CLONE_START_TXT
+        try:
+            start_txt = start_txt.format(mention=message.from_user.mention, mention2=me.mention)
+        except: pass
+            
+        start_photo = bot_doc.get("start_photo") if bot_doc else None
+        if not start_photo:
+            start_photo = random.choice(PICS)
+            
         try:
             await message.reply_photo(
-                photo=random.choice(PICS),
-                caption=script.CLONE_START_TXT.format(message.from_user.mention, me.mention),
+                photo=start_photo,
+                caption=start_txt,
                 reply_markup=reply_markup
             )
         except Exception as e:
             await message.reply_text(
-                text=script.CLONE_START_TXT.format(message.from_user.mention, me.mention),
+                text=start_txt,
                 reply_markup=reply_markup,
                 parse_mode=enums.ParseMode.HTML
             )
@@ -219,10 +238,15 @@ async def settings_command(client, message):
             except:
                 return
         await msg.edit_caption(f_caption)
-        k = await msg.reply(f"<b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{AUTO_DELETE} mins</u> 🫥 <i></b>(Due to Copyright Issues)</i>.\n\n<b><i>Please forward this File/Video to your Saved Messages and Start Download there</i></b>",quote=True)
-        await asyncio.sleep(AUTO_DELETE_TIME)
-        await msg.delete()
-        await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
+        
+        # Dynamic Auto Delete
+        is_autodel = bot_owner.get("auto_delete_enabled", True) if bot_owner else True
+        if is_autodel:
+            del_time = bot_owner.get("auto_delete_time", 5) if bot_owner else 5
+            k = await msg.reply(f"<b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{del_time} mins</u> 🫥 <i></b>(Due to Copyright Issues)</i>.\n\n<b><i>Please forward this File/Video to your Saved Messages and Start Download there</i></b>",quote=True)
+            await asyncio.sleep(del_time * 60)
+            await msg.delete()
+            await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
         return
     except:
         pass
