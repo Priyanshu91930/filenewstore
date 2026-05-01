@@ -12,7 +12,7 @@ from plugins.dbusers import db
 from pyrogram import Client, filters, enums
 from plugins.users_api import get_user, update_user_info
 from pyrogram.errors import ChatAdminRequired, FloodWait
-from pyrogram.types import *
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, CallbackQuery, Message, WebAppInfo
 from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal
 from config import *
 import re
