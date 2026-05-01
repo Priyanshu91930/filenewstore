@@ -79,7 +79,15 @@ async def start(client, message):
                 for channel_id in chk_u:
                     try:
                         chat = await client.get_chat(channel_id)
-                        buttons.append([InlineKeyboardButton("ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")])
+                        link = chat.invite_link
+                        if not link:
+                            try:
+                                inv = await client.create_chat_invite_link(channel_id)
+                                link = inv.invite_link
+                            except:
+                                link = f"https://t.me/{chat.username}" if chat.username else None
+                        if link:
+                            buttons.append([InlineKeyboardButton("ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=link)])
                     except: continue
                 buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
                 return await message.reply_text(
@@ -99,7 +107,15 @@ async def start(client, message):
                 for i, channel_id in enumerate(chk, start=1):
                     try:
                         chat = await client.get_chat(channel_id)
-                        buttons.append([InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=chat.invite_link or f"https://t.me/{chat.username}")])
+                        link = chat.invite_link
+                        if not link:
+                            try:
+                                inv = await client.create_chat_invite_link(channel_id)
+                                link = inv.invite_link
+                            except:
+                                link = f"https://t.me/{chat.username}" if chat.username else None
+                        if link:
+                            buttons.append([InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=link)])
                     except: continue
                 try_again_url = f"https://t.me/{me.username}?start={message.command[1]}" if len(message.command) == 2 else f"https://t.me/{me.username}?start=true"
                 buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=try_again_url)])
@@ -113,13 +129,9 @@ async def start(client, message):
         if len(message.command) != 2 or message.command[1] == "true":
             buttons = [[
                 InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
-                InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', url=f'https://t.me/{me.username}?start=clone')
+                InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone_manage')
             ],[
-                InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
                 InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
-            ],[
-                InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
-                InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
             ]]
             reply_markup = InlineKeyboardMarkup(buttons)
             try:
@@ -585,13 +597,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
         me = await client.get_me()
         buttons = [[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
-            InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', url=f'https://t.me/{me.username}?start=clone')
+            InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone_manage')
         ],[
-            InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
-        ],[
-            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
-            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         await client.edit_message_media(
@@ -610,25 +618,43 @@ async def cb_handler(client: Client, query: CallbackQuery):
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
     
-    elif query.data == "clone":
-        me = await client.get_me()
-        buttons = [[
-            InlineKeyboardButton('🤖 sᴛᴀʀᴛ ᴄʟᴏɴᴇ', url=f'https://t.me/{me.username}?start=clone'),
-        ],[
-            InlineKeyboardButton('Hᴏᴍᴇ', callback_data='start'),
-            InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='close_data')
-        ]]
+    elif query.data == "clone_manage":
+        user_id = query.from_user.id
+        bots = list(clone_mongo_db.bots.find({"user_id": user_id}))
+        buttons = []
+        for bot in bots:
+            buttons.append([InlineKeyboardButton(f"{bot['name']}", url=f"https://t.me/{bot['username']}")])
+        
+        buttons.append([InlineKeyboardButton("➕ Add Clone", callback_data="add_clone")])
+        buttons.append([InlineKeyboardButton("🔙 Back", callback_data="start")])
+        
         await client.edit_message_media(
             query.message.chat.id, 
             query.message.id, 
             InputMediaPhoto(random.choice(PICS))
         )
-        reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=script.CLONE_TXT.format(query.from_user.mention),
-            reply_markup=reply_markup,
+            text="<b>✨ <u>Manage Clone's</u>\n\nYou can now manage and create your very own identical clone bot, mirroring all my awesome features, using the given buttons.</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=enums.ParseMode.HTML
-        )          
+        )
+
+    elif query.data == "add_clone":
+        # Simply trigger the /clone command logic
+        from plugins.clone import clone
+        # We need a fake message object or just call the logic
+        await query.message.delete()
+        # Create a mock message to satisfy clone function
+        class MockMessage:
+            def __init__(self, from_user, chat):
+                self.from_user = from_user
+                self.chat = chat
+            async def reply_text(self, *args, **kwargs):
+                return await client.send_message(self.chat.id, *args, **kwargs)
+            async def reply(self, *args, **kwargs):
+                return await client.send_message(self.chat.id, *args, **kwargs)
+        
+        await clone(client, MockMessage(query.from_user, query.message.chat))
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -661,6 +687,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
         buttons = [[
             InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
             InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
+        ],[
+            InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
+            InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
+        ],[
+            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
+            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
         ],[
             InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
         ]]

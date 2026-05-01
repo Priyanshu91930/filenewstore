@@ -58,8 +58,15 @@ async def start(client, message):
         for i, channel_id in enumerate(chk, start=1):
             try:
                 chat = await client.get_chat(channel_id)
-                btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")]
-                buttons.append(btn)
+                link = chat.invite_link
+                if not link:
+                    try:
+                        inv = await client.create_chat_invite_link(channel_id)
+                        link = inv.invite_link
+                    except:
+                        link = f"https://t.me/{chat.username}" if chat.username else None
+                if link:
+                    buttons.append([InlineKeyboardButton("ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=link)])
             except: continue
         buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
@@ -98,7 +105,13 @@ async def start(client, message):
                         except:
                             link = chat.invite_link or (f"https://t.me/{chat.username}" if chat.username else None)
                     else:
-                        link = chat.invite_link or (f"https://t.me/{chat.username}" if chat.username else None)
+                        link = chat.invite_link
+                        if not link:
+                            try:
+                                inv = await client.create_chat_invite_link(channel_id)
+                                link = inv.invite_link
+                            except:
+                                link = f"https://t.me/{chat.username}" if chat.username else None
                     if link:
                         label = f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i} ➔ {chat.title}"
                         buttons.append([InlineKeyboardButton(label, url=link)])
@@ -118,11 +131,7 @@ async def start(client, message):
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
             InlineKeyboardButton('🤖 ᴄʀᴇᴀᴛᴇ ᴄʟᴏɴᴇ', url=f'https://t.me/{BOT_USERNAME}?start=clone')
         ],[
-            InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
-        ],[
-            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
-            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)
         try:
@@ -148,15 +157,24 @@ async def settings_command(client, message):
 
     user_id = message.from_user.id
     user = await get_user(user_id)
+    prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
     buttons = [[
         InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
         InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
+    ],[
+        InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption')
+    ],[
+        InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
+        InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
+    ],[
+        InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
+        InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
     ],[
         InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
     ]]
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code></b>",
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
@@ -310,11 +328,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
             InlineKeyboardButton('🤖 ᴄʀᴇᴀᴛᴇ ᴄʟᴏɴᴇ', url=f'https://t.me/{BOT_USERNAME}?start=clone')
         ],[
-            InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
-        ],[
-            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
-            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
         ]]
         
         reply_markup = InlineKeyboardMarkup(buttons)
@@ -382,6 +396,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
         ],[
             InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption')
+        ],[
+            InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
+            InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
+        ],[
+            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
+            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
         ],[
             InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
         ]]
