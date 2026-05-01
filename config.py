@@ -72,7 +72,7 @@ WEBSITE_URL_MODE = is_enabled(environ.get('WEBSITE_URL_MODE', 'False'), False) #
 WEBSITE_URL = environ.get("WEBSITE_URL", "") # For More Information Check Video On Yt - @Tech_VJ
 
 # File Stream Config
-STREAM_MODE = is_enabled(environ.get('STREAM_MODE', 'True'), True) # Set True or False
+STREAM_MODE = is_enabled(environ.get('STREAM_MODE', 'False'), False) # Set True or False
 
 # If Stream Mode Is True Then Fill All Required Variable, If False Then Don't Fill.
 MULTI_CLIENT = False

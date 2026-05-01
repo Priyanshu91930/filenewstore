@@ -223,13 +223,15 @@ async def start(client, message):
                             f_caption=f_caption
                     if f_caption is None:
                         f_caption = f"@viralverse0909 {title}"
+                    reply_markup = None
                     if STREAM_MODE == True:
                             if info.video or info.document:
                                 log_msg = info
                                 fileName = {quote_plus(get_name(log_msg))}
                                 stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
                                 download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
-                                if is_valid_url(stream) and is_valid_url(download):
+                                # Telegram only accepts https:// URLs in inline buttons
+                                if is_valid_url(stream) and is_valid_url(download) and stream.startswith("https://") and download.startswith("https://"):
                                     button = [[
                                         InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
                                         InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
@@ -237,8 +239,6 @@ async def start(client, message):
                                         InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
                                     ]]
                                     reply_markup=InlineKeyboardMarkup(button)
-                    else:
-                        reply_markup = None
                     try:
                         msg = await info.copy(chat_id=message.from_user.id, caption=f_caption, protect_content=False, reply_markup=reply_markup)
                     except FloodWait as e:
@@ -304,7 +304,8 @@ async def start(client, message):
                         fileName = {quote_plus(get_name(log_msg))}
                         stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
                         download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
-                        if is_valid_url(stream) and is_valid_url(download):
+                        # Telegram only accepts https:// URLs in inline buttons
+                        if is_valid_url(stream) and is_valid_url(download) and stream.startswith("https://") and download.startswith("https://"):
                             button = [[
                                 InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
                                 InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
