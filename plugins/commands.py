@@ -22,6 +22,12 @@ from urllib.parse import quote_plus
 from TechVJ.utils.file_properties import get_name, get_hash, get_media_file_size
 logger = logging.getLogger(__name__)
 
+def is_valid_url(url):
+    """Check if a URL is a valid http/https URL for use in Telegram buttons."""
+    if not url:
+        return False
+    return url.startswith("http://") or url.startswith("https://")
+
 BATCH_FILES = {}
 
 # Don't Remove Credit Tg - @viralverse0909
@@ -218,18 +224,19 @@ async def start(client, message):
                     if f_caption is None:
                         f_caption = f"@viralverse0909 {title}"
                     if STREAM_MODE == True:
-                        if info.video or info.document:
-                            log_msg = info
-                            fileName = {quote_plus(get_name(log_msg))}
-                            stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
-                            download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
-                            button = [[
-                                InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
-                                InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
-                            ],[
-                                InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
-                            ]]
-                            reply_markup=InlineKeyboardMarkup(button)
+                            if info.video or info.document:
+                                log_msg = info
+                                fileName = {quote_plus(get_name(log_msg))}
+                                stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                                download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                                if is_valid_url(stream) and is_valid_url(download):
+                                    button = [[
+                                        InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
+                                        InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
+                                    ],[
+                                        InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                                    ]]
+                                    reply_markup=InlineKeyboardMarkup(button)
                     else:
                         reply_markup = None
                     try:
@@ -297,13 +304,14 @@ async def start(client, message):
                         fileName = {quote_plus(get_name(log_msg))}
                         stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
                         download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
-                        button = [[
-                            InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
-                            InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
-                        ],[
-                            InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
-                        ]]
-                        reply_markup=InlineKeyboardMarkup(button)
+                        if is_valid_url(stream) and is_valid_url(download):
+                            button = [[
+                                InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
+                                InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
+                            ],[
+                                InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                            ]]
+                            reply_markup=InlineKeyboardMarkup(button)
                 del_msg = await msg.copy(chat_id=message.from_user.id, caption=f_caption, reply_markup=reply_markup, protect_content=False)
             else:
                 del_msg = await msg.copy(chat_id=message.from_user.id, protect_content=False)
