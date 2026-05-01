@@ -478,17 +478,20 @@ async def set_force_sub_handler(client, message):
                 "<b>⚠️ Please <u>forward a message</u> from a Telegram channel, not type text.\n"
                 "If your channel is private, just forward any post from it.</b>"
             )
-    # Save to DB
+    # Save channels to DB
     clone_mongo_db.bots.update_one(
         {"user_id": user_id},
         {"$set": {"force_sub_channels": channels}}
     )
     if channels:
+        # Ask user to choose force sub mode
         await message.reply_text(
-            f"<b>✅ Force subscribe channels saved!\n"
-            f"Total: {len(channels)} channel(s) for @{bot_username}\n\n"
-            f"Users must join all channels before using your bot.\n"
-            f"Use /listforcesub to see them · /clearforcesub to remove all</b>"
+            f"<b>✅ {len(channels)} channel(s) saved for @{bot_username}!\n\n"
+            f"📢 Now choose the <u>Force Subscribe Mode</u>:</b>",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔵 Normal Mode", callback_data=f"fsub_nm_{user_id}")],
+                [InlineKeyboardButton("🟢 Join Request Mode", callback_data=f"fsub_jr_{user_id}")]
+            ])
         )
     else:
         await message.reply_text("<b>✅ All force subscribe channels cleared for your clone bot.</b>")
@@ -526,6 +529,34 @@ async def clear_force_sub_handler(client, message):
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
+    # Force Sub Mode selection (from /setforcesub)
+    if query.data.startswith("fsub_nm_") or query.data.startswith("fsub_jr_"):
+        parts = query.data.split("_")
+        mode = parts[1]          # "nm" or "jr"
+        owner_id = int(parts[2])
+        if query.from_user.id != owner_id:
+            return await query.answer("❌ This button is not for you!", show_alert=True)
+        mode_value = "normal" if mode == "nm" else "joinreq"
+        mode_label = "🔵 Normal Mode" if mode == "nm" else "🟢 Join Request Mode"
+        clone_mongo_db.bots.update_one(
+            {"user_id": owner_id},
+            {"$set": {"force_sub_mode": mode_value}}
+        )
+        bot_doc = clone_mongo_db.bots.find_one({"user_id": owner_id})
+        bot_username = bot_doc.get("username", "your bot") if bot_doc else "your bot"
+        desc = (
+            "Users click <b>Join</b> and instantly join the channel."
+            if mode_value == "normal" else
+            "Users send a <b>join request</b> which the bot <b>auto-approves</b> instantly.\n"
+            "Perfect for keeping subscriber counts high."
+        )
+        await query.message.edit_text(
+            f"<b>✅ Force Sub Mode set to: {mode_label}\n\n"
+            f"🤖 Clone Bot: @{bot_username}\n\n"
+            f"{desc}\n\n"
+            f"Use /listforcesub to review channels · /setforcesub to update</b>"
+        )
+        return await query.answer()
     if query.data == "close_data":
         await query.message.delete()
     elif query.data == "about":

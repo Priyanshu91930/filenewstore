@@ -66,14 +66,14 @@ async def start(client, message):
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
-
-    # ── Clone Bot Force Sub Check ──────────────────────────────────────────
     bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
     # Migrate old entries that don't have the field
     if bot_doc and 'force_sub_channels' not in bot_doc:
-        mongo_db.bots.update_one({'bot_id': me.id}, {'$set': {'force_sub_channels': []}})
+        mongo_db.bots.update_one({'bot_id': me.id}, {'$set': {'force_sub_channels': [], 'force_sub_mode': 'normal'}})
         bot_doc['force_sub_channels'] = []
+        bot_doc['force_sub_mode'] = 'normal'
     clone_force_channels = bot_doc.get('force_sub_channels', []) if bot_doc else []
+    force_sub_mode = bot_doc.get('force_sub_mode', 'normal') if bot_doc else 'normal'
     if clone_force_channels:
         not_joined = []
         for channel_id in clone_force_channels:
@@ -90,17 +90,28 @@ async def start(client, message):
             for i, channel_id in enumerate(not_joined, start=1):
                 try:
                     chat = await client.get_chat(channel_id)
-                    link = chat.invite_link or (f"https://t.me/{chat.username}" if chat.username else None)
+                    if force_sub_mode == 'joinreq':
+                        # Create a join-request invite link
+                        try:
+                            inv = await client.create_chat_invite_link(channel_id, creates_join_request=True)
+                            link = inv.invite_link
+                        except:
+                            link = chat.invite_link or (f"https://t.me/{chat.username}" if chat.username else None)
+                    else:
+                        link = chat.invite_link or (f"https://t.me/{chat.username}" if chat.username else None)
                     if link:
-                        buttons.append([InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i} ➔ {chat.title}", url=link)])
+                        label = f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i} ➔ {chat.title}"
+                        buttons.append([InlineKeyboardButton(label, url=link)])
                 except: continue
             try_url = f"https://t.me/{me.username}?start={message.command[1]}" if len(message.command) > 1 else f"https://t.me/{me.username}?start=true"
             buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=try_url)])
+            mode_hint = " (Click to send join request)" if force_sub_mode == 'joinreq' else ""
             return await message.reply_text(
-                text="<b>📢 ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ(s) ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
+                text=f"<b>📢 ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ(s) ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!{mode_hint}</b>",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
     # ──────────────────────────────────────────────────────────────────────
+
 
     if len(message.command) != 2 or message.command[1] == "true":
         buttons = [[
@@ -273,6 +284,21 @@ async def base_site_handler(client, m: Message):
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
 
+# ── Auto-Approve Join Requests (Join Request Mode) ───────────────────
+@Client.on_chat_join_request()
+async def auto_approve_join_request(client, join_request):
+    """Auto-approve join requests when the clone bot is in Join Request Mode."""
+    try:
+        me = await client.get_me()
+        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        if not bot_doc:
+            return
+        force_sub_mode = bot_doc.get('force_sub_mode', 'normal')
+        if force_sub_mode == 'joinreq':
+            await client.approve_chat_join_request(join_request.chat.id, join_request.from_user.id)
+    except Exception:
+        pass
+# ──────────────────────────────────────────────────────────────────────
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
