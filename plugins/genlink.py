@@ -35,7 +35,7 @@ async def incoming_gen_link(bot, message):
     chk_u = await is_subscribed_universal(bot, message)
     if chk_u == "kicked":
         return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-    if isinstance(chk_u, list):
+    if type(chk_u) == list:
         buttons = []
         for i, channel_id in enumerate(chk_u, start=1):
             try:
@@ -53,7 +53,7 @@ async def incoming_gen_link(bot, message):
     chk = await is_subscribed(bot, message)
     if chk == "kicked":
         return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-    if isinstance(chk, list):
+    if type(chk) == list:
         buttons = []
         for i, channel_id in enumerate(chk, start=1):
             try:
@@ -92,7 +92,7 @@ async def gen_link_s(bot, message):
     chk_u = await is_subscribed_universal(bot, message)
     if chk_u == "kicked":
         return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-    if isinstance(chk_u, list):
+    if type(chk_u) == list:
         buttons = []
         for i, channel_id in enumerate(chk_u, start=1):
             try:
@@ -110,7 +110,7 @@ async def gen_link_s(bot, message):
     chk = await is_subscribed(bot, message)
     if chk == "kicked":
         return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-    if isinstance(chk, list):
+    if type(chk) == list:
         buttons = []
         for i, channel_id in enumerate(chk, start=1):
             try:

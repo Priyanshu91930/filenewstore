@@ -59,7 +59,7 @@ async def start(client, message):
     if chk == "kicked":
         await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
         return
-    if isinstance(chk, list):
+    if type(chk) == list:
         buttons = []
         for i, channel_id in enumerate(chk, start=1):
             try:
