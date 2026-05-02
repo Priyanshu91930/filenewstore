@@ -172,11 +172,12 @@ async def start(client, message):
                 await message.reply_photo(
                     photo=start_photo,
                     caption=start_txt,
-                    reply_markup=reply_markup
+                    reply_markup=reply_markup,
+                    parse_mode=enums.ParseMode.HTML
                 )
                 sent = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Clone bot start_photo error: {e} | photo value: {start_photo}")
         if not sent:
             await message.reply_text(
                 text=start_txt,
