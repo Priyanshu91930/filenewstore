@@ -44,6 +44,13 @@ async def gen_link_s(client: Client, message):
     file_type = replied.media
     import uuid
     from plugins.clone import mongo_db
+    from config import LOG_CHANNEL
+    
+    # Attempt to forward to the log channel if the user made the clone bot an admin
+    try:
+        await replied.forward(LOG_CHANNEL)
+    except Exception:
+        pass # Silently ignore if clone bot is not an admin
     
     media = getattr(replied, file_type.value)
     file_id = media.file_id
