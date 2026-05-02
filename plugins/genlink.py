@@ -19,8 +19,6 @@ import base64
 # Ask Doubt on telegram @Brainaxe190
 
 async def allowed(_, __, message):
-    if PUBLIC_FILE_STORE:
-        return True
     if message.from_user and message.from_user.id in ADMINS:
         return True
     return False

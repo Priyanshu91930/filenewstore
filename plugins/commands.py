@@ -369,7 +369,7 @@ async def start(client, message):
         try: await message.reply_text(f"<b>⚠️ Error occurred while processing /start command.\n\nError:</b> <code>{e}</code>")
         except: pass
 
-@Client.on_message(filters.command("setting") & filters.private & filters.incoming)
+@Client.on_message(filters.command("setting") & filters.private & filters.incoming & filters.user(ADMINS))
 async def settings_command(client, message):
     # Force Subscribe Check
     chk_u = await is_subscribed_universal(client, message)
@@ -399,7 +399,7 @@ async def settings_command(client, message):
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
 
-@Client.on_message(filters.command('api') & filters.private)
+@Client.on_message(filters.command('api') & filters.private & filters.user(ADMINS))
 async def shortener_api_handler(client, m: Message):
     user_id = m.from_user.id
     user = await get_user(user_id)
@@ -418,7 +418,7 @@ async def shortener_api_handler(client, m: Message):
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
 
-@Client.on_message(filters.command("base_site") & filters.private)
+@Client.on_message(filters.command("base_site") & filters.private & filters.user(ADMINS))
 async def base_site_handler(client, m: Message):
     user_id = m.from_user.id
     user = await get_user(user_id)
