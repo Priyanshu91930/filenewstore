@@ -172,46 +172,6 @@ async def start(client, message):
             )
         return
 
-@Client.on_message(filters.command("setting") & filters.private & filters.incoming)
-async def settings_command(client, message):
-    me = await client.get_me()
-    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
-    if bot_doc and bot_doc.get("is_deactivated", False):
-        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
-
-    # Force Subscribe Check
-    chk_u = await is_subscribed_universal(client, message)
-    if chk_u == "kicked" or type(chk_u) == list:
-        return await start(client, message)
-
-    user_id = message.from_user.id
-    user = await get_user(user_id)
-    prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
-    buttons = [[
-        InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
-        InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
-    ],[
-        InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption')
-    ],[
-        InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
-        InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
-    ],[
-        InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
-        InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
-    ],[
-        InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
-    ]]
-    reply_markup = InlineKeyboardMarkup(buttons)
-    await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
-        reply_markup=reply_markup,
-        parse_mode=enums.ParseMode.HTML
-    )
-
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
-    
     data = message.command[1]
     try:
         pre, file_id = data.split('_', 1)
@@ -230,8 +190,7 @@ async def settings_command(client, message):
         file_id = decoded_id
 
     # Get owner's caption prefix from DB
-    me = await client.get_me()
-    bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    bot_owner = bot_doc
     owner_id = int(bot_owner['user_id']) if bot_owner else None
     caption_prefix = ""
     if owner_id:
@@ -269,10 +228,43 @@ async def settings_command(client, message):
         return
     except:
         pass
-        
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
+
+@Client.on_message(filters.command("setting") & filters.private & filters.incoming)
+async def settings_command(client, message):
+    me = await client.get_me()
+    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    # Force Subscribe Check
+    chk_u = await is_subscribed_universal(client, message)
+    if chk_u == "kicked" or type(chk_u) == list:
+        return await start(client, message)
+
+    user_id = message.from_user.id
+    user = await get_user(user_id)
+    prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
+    buttons = [[
+        InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
+        InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
+    ],[
+        InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption')
+    ],[
+        InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
+        InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
+    ],[
+        InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
+        InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
+    ],[
+        InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
+    ]]
+    reply_markup = InlineKeyboardMarkup(buttons)
+    await message.reply_text(
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+        reply_markup=reply_markup,
+        parse_mode=enums.ParseMode.HTML
+    )
+
 
 @Client.on_message(filters.command('setcaption') & filters.private)
 async def set_caption_handler(client, m: Message):
