@@ -926,15 +926,32 @@ async def cb_handler(client: Client, query: CallbackQuery):
         token_mode = bot.get("token_verify", False)
         status_txt = "Enabled ✅" if token_mode else "Disabled ❌"
         
+        domain = bot.get("shortener_site", "None")
+        api = bot.get("shortener_api", "None")
+        validity = bot.get("token_timeout", 86400) // 3600
+        tutorial = bot.get("token_tutorial", "None")
+        
         buttons = [
             [InlineKeyboardButton("Shorteners", callback_data=f"tok_api_{bot_id}"), InlineKeyboardButton("Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("Tutorial", callback_data=f"tok_tut_{bot_id}")],
             [InlineKeyboardButton(f"{'Disable ❌' if token_mode else 'Enable ✅'} Token", callback_data=f"token_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
         ]
+        
+        text = (
+            f"<b><u>Access Token</u></b>\n\n"
+            f"Users need to pass a shortened link to gain special access to messages from all clone shareable links. This access will be valid for the next custom validity period.\n\n"
+            f"<b>- Status:</b> {status_txt}\n"
+            f"<b>- Domain:</b> <code>{domain}</code>\n"
+            f"<b>- API Key:</b> <code>{api}</code>\n"
+            f"<b>- Validity:</b> {validity} hours\n"
+            f"<b>- Tutorial:</b> {tutorial}"
+        )
+        
         await query.message.edit_text(
-            text=f"<b><u>Access Token</u></b>\n\nUsers need to pass a shortened link to gain special access to messages from all clone shareable links. This access will be valid for the next custom validity period.\n\n<b>- Status: {status_txt}</b>",
+            text=text,
             reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.HTML
+            parse_mode=enums.ParseMode.HTML,
+            disable_web_page_preview=True
         )
 
     elif query.data.startswith("token_"):
