@@ -15,6 +15,18 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 mongo_client = MongoClient(DB_URI)
 mongo_db = mongo_client["cloned_vjbotz"]
 
+# Global registry: bot_id -> running Pyrogram Client instance
+running_clones = {}
+
+async def stop_clone(bot_id: int):
+    """Stop a running clone client by bot_id."""
+    vj = running_clones.pop(bot_id, None)
+    if vj:
+        try:
+            await vj.stop()
+        except Exception:
+            pass
+
 @Client.on_message(filters.command("clone") & filters.private)
 async def clone(client, message):
     if CLONE_MODE == False:
@@ -57,6 +69,8 @@ async def clone(client, message):
         )
         await vj.start()
         bot = await vj.get_me()
+        # Track the running instance
+        running_clones[bot.id] = vj
         # Set bot commands so they appear in Telegram menu
         try:
             await vj.set_bot_commands([
@@ -112,6 +126,10 @@ async def restart_bots():
     bots = list(mongo_db.bots.find())
     for bot in bots:
         bot_token = bot['token']
+        bot_id = bot['bot_id']
+        # Skip if already running
+        if bot_id in running_clones:
+            continue
         try:
             vj = Client(
                 f"clone_{bot_token[:10]}", API_ID, API_HASH,
@@ -120,5 +138,6 @@ async def restart_bots():
                 in_memory=True
             )
             await vj.start()
+            running_clones[bot_id] = vj
         except:
             pass

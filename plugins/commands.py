@@ -736,9 +736,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
         # Confirmation
         msg = await client.ask(query.message.chat.id, f"<b>⚠️ Are you sure you want to delete @{bot['username']}?\n\nType <code>YES</code> to confirm or /cancel</b>")
         if msg.text == "YES":
+            # Stop the running client first
+            from plugins.clone import stop_clone
+            await stop_clone(bot_id)
+            # Then remove from DB
             clone_mongo_db.bots.delete_one({"bot_id": bot_id})
-            await query.message.edit_text(f"<b>✅ @{bot['username']} has been deleted from the database.</b>")
-            await msg.reply("<b>Bot deleted.</b>")
+            await query.message.edit_text(f"<b>✅ @{bot['username']} has been stopped and deleted.</b>")
+            await msg.reply("<b>Bot stopped and deleted successfully. ✅</b>")
         else:
             await msg.reply("<b>Deletion cancelled.</b>")
 
