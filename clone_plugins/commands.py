@@ -20,8 +20,14 @@ from utils import is_subscribed_universal
 import re
 import json
 import base64
+import time
+import string
+from shortzy import Shortzy
 
 logger = logging.getLogger(__name__)
+
+CLONE_TOKENS = {}
+CLONE_VERIFIED = {}
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -176,6 +182,24 @@ async def start(client, message):
         return
 
     data = message.command[1]
+    
+    if data.startswith("verify-"):
+        try:
+            _, userid, token = data.split("-", 2)
+        except:
+            return await message.reply_text("<b>Invalid format!</b>", protect_content=True)
+            
+        if str(message.from_user.id) != str(userid):
+            return await message.reply_text("<b>Invalid link or Expired link!</b>", protect_content=True)
+        
+        key = f"{me.id}_{userid}"
+        if key in CLONE_TOKENS and token in CLONE_TOKENS[key] and not CLONE_TOKENS[key][token]:
+            CLONE_TOKENS[key][token] = True
+            CLONE_VERIFIED[key] = time.time()
+            return await message.reply_text(f"<b>Hey {message.from_user.mention}, You are successfully verified!\nNow you have unlimited access for the validity period.</b>", protect_content=True)
+        else:
+            return await message.reply_text("<b>Invalid link or Expired link!</b>", protect_content=True)
+
     try:
         pre, file_id = data.split('_', 1)
     except:
@@ -199,6 +223,43 @@ async def start(client, message):
     if owner_id:
         owner_data = await get_user(owner_id)
         caption_prefix = owner_data.get("caption_prefix", "").strip()
+
+    # Token Verification Check
+    token_mode = bot_owner.get("token_verify", False) if bot_owner else False
+    if token_mode:
+        site = bot_owner.get("shortener_site", "")
+        api = bot_owner.get("shortener_api", "")
+        timeout = bot_owner.get("token_timeout", 86400)
+        tut_url = bot_owner.get("token_tutorial", "https://t.me")
+        
+        key = f"{me.id}_{message.from_user.id}"
+        is_verified = False
+        if key in CLONE_VERIFIED:
+            if time.time() < CLONE_VERIFIED[key] + timeout:
+                is_verified = True
+        
+        if not is_verified and site and api:
+            token = ''.join(random.choices(string.ascii_letters + string.digits, k=7))
+            CLONE_TOKENS[key] = {token: False}
+            verify_link = f"https://t.me/{me.username}?start=verify-{message.from_user.id}-{token}"
+            
+            try:
+                shortzy = Shortzy(api_key=api, base_site=site)
+                short_link = await shortzy.convert(verify_link)
+            except Exception as e:
+                logger.error(f"Clone shortener error: {e}")
+                short_link = verify_link
+                
+            btn = [[
+                InlineKeyboardButton("Verify", url=short_link)
+            ],[
+                InlineKeyboardButton("How To Open Link & Verify", url=tut_url)
+            ]]
+            return await message.reply_text(
+                text="<b>You are not verified!\nKindly verify to continue!</b>",
+                protect_content=True,
+                reply_markup=InlineKeyboardMarkup(btn)
+            )
 
     try:
         msg = await client.send_cached_media(
