@@ -815,7 +815,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
         channels = bot.get("force_sub_channels", [])
         mode = bot.get("force_sub_mode", "normal")
-        channel_names = bot.get("channel_names", {})
+        channel_names = bot.get("channel_names") or {}
         
         text = f"<b><u>Force Subscribe Management</u></b>\n\n"
         if channels:
@@ -844,7 +844,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
         msg = await client.ask(query.message.chat.id, "<b>Please forward a message from the channel you want to add as Force Sub.\n\nMake sure your clone bot is ADMIN in that channel!</b>")
         if msg.forward_from_chat:
             f_chat_id = msg.forward_from_chat.id
-            f_chat_title = msg.forward_from_chat.title or str(f_chat_id)
+            f_chat_title = msg.forward_from_chat.title
+            
+            if not f_chat_title:
+                try:
+                    chat = await client.get_chat(f_chat_id)
+                    f_chat_title = chat.title
+                except:
+                    pass
+            
+            f_chat_title = f_chat_title or str(f_chat_id)
             
             clone_mongo_db.bots.update_one(
                 {"bot_id": bot_id}, 
