@@ -786,27 +786,21 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if msg.text and msg.text.strip() == "/cancel": return await msg.reply("Cancelled.")
         
         if msg.photo:
-            # Download the photo and upload to Telegraph to get a public URL
-            # (Telegram file_ids only work for the bot that received the file)
             try:
-                import aiohttp, io
-                file_path = await client.download_media(msg.photo.file_id, in_memory=True)
-                file_path.seek(0)
-                
-                async with aiohttp.ClientSession() as session:
-                    data = aiohttp.FormData()
-                    data.add_field("file", file_path, filename="photo.jpg", content_type="image/jpeg")
-                    async with session.post("https://telegra.ph/upload", data=data) as resp:
-                        result = await resp.json()
-                        photo_url = "https://telegra.ph" + result[0]["src"]
-                        
-                clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_url}})
-                await msg.reply(f"<b>✅ Start Photo updated successfully!</b>")
+                # Forward the photo to LOG_CHANNEL so it gets cached under the main bot's context.
+                # Clone bots share the same API_ID/API_HASH so they can use any file_id
+                # the main bot received — including ones forwarded from users.
+                cached_msg = await client.send_photo(
+                    chat_id=LOG_CHANNEL,
+                    photo=msg.photo.file_id,
+                    caption="📸 Clone Start Photo Cache"
+                )
+                photo_file_id = cached_msg.photo.file_id
+                clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_file_id}})
+                await msg.reply("<b>✅ Start Photo updated successfully!</b>")
             except Exception as e:
-                logger.error(f"Telegraph upload error: {e}")
-                # Fallback: save file_id (may not work for all clones but better than nothing)
-                clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.photo.file_id}})
-                await msg.reply("<b>✅ Start Photo saved! (Note: Use a URL for best compatibility)</b>")
+                logger.error(f"Start photo cache error: {e}")
+                await msg.reply(f"<b>❌ Failed to save photo: {e}</b>")
         elif msg.text:
             clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.text.strip()}})
             await msg.reply("<b>✅ Start Photo URL updated successfully!</b>")
