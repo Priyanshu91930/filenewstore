@@ -14,9 +14,10 @@ from clone_plugins.dbusers import clonedb
 async def pm_broadcast(bot, message):
     me = await bot.get_me()
     owner = mongo_db.bots.find_one({'bot_id': me.id})
-    ownerid = int(owner['user_id'])
-    if ownerid != message.from_user.id:
-        await message.reply_text("ᴏɴʟʏ ᴏᴡɴᴇʀ ᴄᴏᴍᴍᴀɴᴅ❗")
+    owner_id = int(owner.get("user_id", 0)) if owner else 0
+    mods = owner.get("moderators", []) if owner else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        await message.reply_text("❌ ᴏɴʟʏ ᴏᴡɴᴇʀ ᴀɴᴅ ᴍᴏᴅᴇʀᴀᴛᴏʀs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ❗")
         return
         
     if owner and owner.get("is_deactivated", False):
