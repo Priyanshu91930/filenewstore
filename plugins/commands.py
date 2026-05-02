@@ -815,12 +815,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
         channels = bot.get("force_sub_channels", [])
         mode = bot.get("force_sub_mode", "normal")
+        channel_names = bot.get("channel_names", {})
         
         text = f"<b><u>Force Subscribe Management</u></b>\n\n"
         if channels:
             text += "<b>Current Channels:</b>\n"
             for i, c in enumerate(channels, 1):
-                text += f"{i}. <code>{c}</code>\n"
+                title = channel_names.get(str(c), str(c))
+                text += f"{i}. <code>{title}</code>\n"
         else:
             text += "<i>No channels added yet.</i>\n"
         
@@ -842,12 +844,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
         msg = await client.ask(query.message.chat.id, "<b>Please forward a message from the channel you want to add as Force Sub.\n\nMake sure your clone bot is ADMIN in that channel!</b>")
         if msg.forward_from_chat:
             f_chat_id = msg.forward_from_chat.id
-            # We can't easily check admin status of the clone bot from here without starting it, 
-            # but we can try to get chat info as the main bot if the main bot is also there, 
-            # or just trust the user and let the clone bot handle errors later.
-            # However, for better UX, let's at least store it.
-            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$push": {"force_sub_channels": f_chat_id}})
-            await msg.reply(f"<b>✅ Channel {f_chat_id} added successfully!</b>")
+            f_chat_title = msg.forward_from_chat.title or str(f_chat_id)
+            
+            clone_mongo_db.bots.update_one(
+                {"bot_id": bot_id}, 
+                {
+                    "$push": {"force_sub_channels": f_chat_id},
+                    "$set": {f"channel_names.{f_chat_id}": f_chat_title}
+                }
+            )
+            await msg.reply(f"<b>✅ Channel '{f_chat_title}' added successfully!</b>")
         else:
             await msg.reply("<b>❌ Please forward a message from a channel.</b>")
         query.data = f"forcesub_{bot_id}"
