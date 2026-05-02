@@ -757,9 +757,17 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("spho_"):
         bot_id = int(query.data.split("_")[-1])
-        msg = await client.ask(query.message.chat.id, "<b>Please send the new START PHOTO URL for your clone bot.\n\n/cancel to skip.</b>")
+        msg = await client.ask(query.message.chat.id, "<b>Please send the new START PHOTO for your clone bot (Upload an image or send a URL).\n\n/cancel to skip.</b>")
         if msg.text == "/cancel": return await msg.reply("Cancelled.")
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.text.strip()}})
+        
+        if msg.photo:
+            photo_id = msg.photo.file_id
+            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_id}})
+        elif msg.text:
+            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.text.strip()}})
+        else:
+            return await msg.reply("<b>❌ Invalid input. Please send a photo or a URL.</b>")
+            
         await msg.reply("<b>✅ Start Photo updated successfully!</b>")
         query.data = f"startmsg_{bot_id}"
         return await cb_handler(client, query)
