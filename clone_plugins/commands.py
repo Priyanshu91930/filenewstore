@@ -188,9 +188,11 @@ async def start(client, message):
     data = message.command[1]
     
     if data.startswith("verify-"):
-        try:
-            _, userid, token = data.split("-", 2)
-        except:
+        parts = data.split("-", 3)
+        if len(parts) >= 3:
+            _, userid, token = parts[:3]
+            file_data = parts[3] if len(parts) == 4 else None
+        else:
             return await message.reply_text("<b>Invalid format!</b>", protect_content=True)
             
         if str(message.from_user.id) != str(userid):
@@ -200,7 +202,11 @@ async def start(client, message):
         if key in CLONE_TOKENS and token in CLONE_TOKENS[key] and not CLONE_TOKENS[key][token]:
             CLONE_TOKENS[key][token] = True
             CLONE_VERIFIED[key] = time.time()
-            return await message.reply_text(f"<b>Hey {message.from_user.mention}, You are successfully verified!\nNow you have unlimited access for the validity period.</b>", protect_content=True)
+            await message.reply_text(f"<b>Hey {message.from_user.mention}, You are successfully verified!\nNow you have unlimited access for the validity period.</b>", protect_content=True)
+            if file_data:
+                message.command[1] = file_data
+                return await start(client, message)
+            return
         else:
             return await message.reply_text("<b>Invalid link or Expired link!</b>", protect_content=True)
 
@@ -243,12 +249,15 @@ async def start(client, message):
                 is_verified = True
         
         if not is_verified and site and api:
+            # Clean URL to prevent Shortzy crashes
+            clean_site = site.replace("https://", "").replace("http://", "").strip("/")
+            
             token = ''.join(random.choices(string.ascii_letters + string.digits, k=7))
             CLONE_TOKENS[key] = {token: False}
-            verify_link = f"https://t.me/{me.username}?start=verify-{message.from_user.id}-{token}"
+            verify_link = f"https://t.me/{me.username}?start=verify-{message.from_user.id}-{token}-{data}"
             
             try:
-                shortzy = Shortzy(api_key=api, base_site=site)
+                shortzy = Shortzy(api_key=api, base_site=clean_site)
                 short_link = await shortzy.convert(verify_link)
             except Exception as e:
                 logger.error(f"Clone shortener error: {e}")
