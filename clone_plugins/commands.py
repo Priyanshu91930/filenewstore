@@ -153,13 +153,18 @@ async def start(client, message):
         if not start_photo:
             start_photo = random.choice(PICS)
             
-        try:
-            await message.reply_photo(
-                photo=start_photo,
-                caption=start_txt,
-                reply_markup=reply_markup
-            )
-        except Exception as e:
+        sent = False
+        if start_photo:
+            try:
+                await message.reply_photo(
+                    photo=start_photo,
+                    caption=start_txt,
+                    reply_markup=reply_markup
+                )
+                sent = True
+            except Exception:
+                pass
+        if not sent:
             await message.reply_text(
                 text=start_txt,
                 reply_markup=reply_markup,

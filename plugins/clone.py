@@ -50,9 +50,10 @@ async def clone(client, message):
     msg = await message.reply_text("**👨‍💻 ᴡᴀɪᴛ ᴀ ᴍɪɴᴜᴛᴇ ɪ ᴀᴍ ᴄʀᴇᴀᴛɪɴɢ ʏᴏᴜʀ ʙᴏᴛ ❣️**")
     try:
         vj = Client(
-            f"{bot_token}", API_ID, API_HASH,
+            f"clone_{bot_token[:10]}", API_ID, API_HASH,
             bot_token=bot_token,
-            plugins={"root": "clone_plugins"}
+            plugins={"root": "clone_plugins"},
+            in_memory=True
         )
         await vj.start()
         bot = await vj.get_me()
@@ -113,9 +114,10 @@ async def restart_bots():
         bot_token = bot['token']
         try:
             vj = Client(
-                f"{bot_token}", API_ID, API_HASH,
+                f"clone_{bot_token[:10]}", API_ID, API_HASH,
                 bot_token=bot_token,
                 plugins={"root": "clone_plugins"},
+                in_memory=True
             )
             await vj.start()
         except:
