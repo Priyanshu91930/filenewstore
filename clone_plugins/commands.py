@@ -103,6 +103,10 @@ async def start(client, message):
                 if member.status == enums.ChatMemberStatus.LEFT:
                     not_joined.append(channel_id)
             except:
+                if force_sub_mode == 'joinreq':
+                    req = mongo_db.join_reqs.find_one({"bot_id": me.id, "user_id": message.from_user.id, "channel_id": channel_id})
+                    if req:
+                        continue
                 not_joined.append(channel_id)
         if not_joined:
             buttons = []
@@ -439,8 +443,22 @@ async def base_site_handler(client, m: Message):
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
 
-# ── Auto-Approve Join Requests (Join Request Mode) ───────────────────
-# Removed per user request so that bot owners can manually accept join requests later.
+# ── Track Join Requests (Join Request Mode) ───────────────────
+@Client.on_chat_join_request()
+async def join_reqs_handler(client, join_request):
+    """Record join requests without auto-approving them so owners can manually accept later."""
+    try:
+        me = await client.get_me()
+        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        if not bot_doc: return
+        force_sub_mode = bot_doc.get('force_sub_mode', 'normal')
+        if force_sub_mode == 'joinreq':
+            mongo_db.join_reqs.update_one(
+                {"bot_id": me.id, "user_id": join_request.from_user.id, "channel_id": join_request.chat.id},
+                {"$set": {"requested": True}},
+                upsert=True
+            )
+    except: pass
 # ──────────────────────────────────────────────────────────────────────
 
 @Client.on_callback_query()
