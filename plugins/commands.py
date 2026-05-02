@@ -670,7 +670,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         buttons = [
             [InlineKeyboardButton("START MSG", callback_data=f"startmsg_{bot_id}"), InlineKeyboardButton("FORCE SUB", callback_data=f"forcesub_{bot_id}")],
             [InlineKeyboardButton("MODERATORS", callback_data=f"mods_{bot_id}"), InlineKeyboardButton("AUTO DELETE", callback_data=f"autodel_{bot_id}")],
-            [InlineKeyboardButton("NO FORWARD", callback_data=f"nofwd_{bot_id}"), InlineKeyboardButton("ACCESS TOKEN", callback_data=f"token_{bot_id}")],
+            [InlineKeyboardButton("NO FORWARD", callback_data=f"nofwd_{bot_id}"), InlineKeyboardButton("ACCESS TOKEN", callback_data=f"tokencfg_{bot_id}")],
             [InlineKeyboardButton("MODE", callback_data=f"mode_{bot_id}"), InlineKeyboardButton("DEACTIVATE", callback_data=f"deactivate_{bot_id}")],
             [InlineKeyboardButton("STATS", callback_data=f"stats_{bot_id}"), InlineKeyboardButton("RESTART", callback_data=f"restart_{bot_id}")],
             [InlineKeyboardButton("DELETE", callback_data=f"delete_{bot_id}")],
@@ -920,23 +920,67 @@ async def cb_handler(client: Client, query: CallbackQuery):
             parse_mode=enums.ParseMode.HTML
         )
 
+    elif query.data.startswith("tokencfg_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        token_mode = bot.get("token_verify", False)
+        status_txt = "Enabled ✅" if token_mode else "Disabled ❌"
+        
+        buttons = [
+            [InlineKeyboardButton("Shorteners", callback_data=f"tok_api_{bot_id}"), InlineKeyboardButton("Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("Tutorial", callback_data=f"tok_tut_{bot_id}")],
+            [InlineKeyboardButton(f"{'Disable ❌' if token_mode else 'Enable ✅'} Token", callback_data=f"token_{bot_id}")],
+            [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(
+            text=f"<b><u>Access Token</u></b>\n\nUsers need to pass a shortened link to gain special access to messages from all clone shareable links. This access will be valid for the next custom validity period.\n\n<b>- Status: {status_txt}</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
     elif query.data.startswith("token_"):
         bot_id = int(query.data.split("_")[-1])
         bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
         token_mode = bot.get("token_verify", False)
         new_status = not token_mode
         clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_verify": new_status}})
-        status_txt = "✅ Enabled" if new_status else "❌ Disabled"
-        await query.answer(f"Access Token {status_txt}", show_alert=True)
-        buttons = [
-            [InlineKeyboardButton(f"{'Disable ❌' if new_status else 'Enable ✅'} Token", callback_data=f"token_{bot_id}")],
-            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
-        ]
-        await query.message.edit_text(
-            text=f"<b><u>Access Token</u></b>\n\nWhen enabled, users must verify an access token before getting files.\n\n<b>Status: {status_txt}</b>",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.HTML
-        )
+        await query.answer(f"Access Token {'Enabled' if new_status else 'Disabled'}", show_alert=True)
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("tok_val_"):
+        bot_id = int(query.data.split("_")[-1])
+        msg = await client.ask(query.message.chat.id, "<b>Send the token validity time in HOURS (e.g. 24).\n\n/cancel to skip.</b>")
+        if msg.text == "/cancel": return await msg.reply("Cancelled.")
+        try:
+            val = int(msg.text.strip())
+            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_timeout": val * 3600}})
+            await msg.reply(f"<b>✅ Token Validity set to {val} hours!</b>")
+        except:
+            await msg.reply("<b>❌ Invalid time. Must be a number.</b>")
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("tok_api_"):
+        bot_id = int(query.data.split("_")[-1])
+        msg = await client.ask(query.message.chat.id, "<b>Send your Shortener Base Site and API Key separated by space.\nFormat: <code>domain.com api_key</code>\n\n/cancel to skip.</b>")
+        if msg.text == "/cancel": return await msg.reply("Cancelled.")
+        try:
+            site, api = msg.text.strip().split(" ", 1)
+            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"shortener_site": site, "shortener_api": api}})
+            await msg.reply(f"<b>✅ Shortener configured to {site}!</b>")
+        except:
+            await msg.reply("<b>❌ Invalid format. Make sure you sent Domain and API Key separated by a space.</b>")
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("tok_tut_"):
+        bot_id = int(query.data.split("_")[-1])
+        msg = await client.ask(query.message.chat.id, "<b>Send the Tutorial Link URL for how to bypass your shortener.\n\n/cancel to skip.</b>")
+        if msg.text == "/cancel": return await msg.reply("Cancelled.")
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_tutorial": msg.text.strip()}})
+        await msg.reply(f"<b>✅ Tutorial link updated!</b>")
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
 
     elif query.data.startswith("mode_") and not query.data.startswith("mode_fsub_"):
         bot_id = int(query.data.split("_")[-1])
