@@ -55,7 +55,7 @@ Welcome to {} 🤖, your personal advanced File Store Bot!
 ⏳ Automatic File Deletion Support
 ⚡ Blazing Fast UI Performance
 
-✨ <i>Want to create your own bot like this? Visit my <a href='https://t.me/viralverse0909'>Parent Bot</a> and start cloning!</i></b>"""
+✨ <i>Want to create your own bot like this? Visit my <a href='https://t.me/filesstoreclone_bot'>Parent Bot</a> and start cloning!</i></b>"""
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ

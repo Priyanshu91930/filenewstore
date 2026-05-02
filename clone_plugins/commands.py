@@ -146,7 +146,7 @@ async def start(client, message):
         if not start_txt:
             start_txt = script.CLONE_START_TXT
         try:
-            start_txt = start_txt.format(mention=message.from_user.mention, mention2=me.mention)
+            start_txt = start_txt.format(message.from_user.mention, me.mention, mention=message.from_user.mention, mention2=me.mention)
         except: pass
             
         start_photo = bot_doc.get("start_photo") if bot_doc else None
