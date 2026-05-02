@@ -64,8 +64,7 @@ async def clone(client, message):
         vj = Client(
             f"clone_{bot_token[:10]}", API_ID, API_HASH,
             bot_token=bot_token,
-            plugins={"root": "clone_plugins"},
-            in_memory=True
+            plugins={"root": "clone_plugins"}
         )
         await vj.start()
         bot = await vj.get_me()
@@ -136,8 +135,7 @@ async def restart_bots():
             vj = Client(
                 f"clone_{bot_token[:10]}", API_ID, API_HASH,
                 bot_token=bot_token,
-                plugins={"root": "clone_plugins"},
-                in_memory=True
+                plugins={"root": "clone_plugins"}
             )
             await vj.start()
             running_clones[bot_id] = vj
