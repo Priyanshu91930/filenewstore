@@ -440,19 +440,7 @@ async def base_site_handler(client, m: Message):
 # Ask Doubt on telegram @Brainaxe190
 
 # ── Auto-Approve Join Requests (Join Request Mode) ───────────────────
-@Client.on_chat_join_request()
-async def auto_approve_join_request(client, join_request):
-    """Auto-approve join requests when the clone bot is in Join Request Mode."""
-    try:
-        me = await client.get_me()
-        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
-        if not bot_doc:
-            return
-        force_sub_mode = bot_doc.get('force_sub_mode', 'normal')
-        if force_sub_mode == 'joinreq':
-            await client.approve_chat_join_request(join_request.chat.id, join_request.from_user.id)
-    except Exception:
-        pass
+# Removed per user request so that bot owners can manually accept join requests later.
 # ──────────────────────────────────────────────────────────────────────
 
 @Client.on_callback_query()
