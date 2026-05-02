@@ -832,6 +832,144 @@ async def cb_handler(client: Client, query: CallbackQuery):
         query.data = f"forcesub_{bot_id}"
         return await cb_handler(client, query)
 
+    elif query.data.startswith("mods_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        mods = bot.get("moderators", [])
+        mods_text = "\n".join([f"• <code>{m}</code>" for m in mods]) if mods else "<i>No moderators added.</i>"
+        buttons = [
+            [InlineKeyboardButton("➕ Add Moderator", callback_data=f"add_mod_{bot_id}"),
+             InlineKeyboardButton("🧹 Clear All", callback_data=f"clear_mod_{bot_id}")],
+            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(
+            text=f"<b><u>Moderators</u></b>\n\nModerators can use admin commands in your clone bot.\n\n<b>Current Moderators:</b>\n{mods_text}",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("add_mod_"):
+        bot_id = int(query.data.split("_")[-1])
+        msg = await client.ask(query.message.chat.id, "<b>Send the User ID of the moderator to add.\n\n/cancel to skip.</b>")
+        if msg.text == "/cancel": return await msg.reply("Cancelled.")
+        try:
+            mod_id = int(msg.text.strip())
+            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$addToSet": {"moderators": mod_id}})
+            await msg.reply(f"<b>✅ User <code>{mod_id}</code> added as moderator!</b>")
+        except:
+            await msg.reply("<b>❌ Invalid User ID. Please send a number.</b>")
+        query.data = f"mods_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("clear_mod_"):
+        bot_id = int(query.data.split("_")[-1])
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"moderators": []}})
+        await query.answer("All moderators cleared!")
+        query.data = f"mods_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("nofwd_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        is_nofwd = bot.get("no_forward", False)
+        new_status = not is_nofwd
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"no_forward": new_status}})
+        status_txt = "✅ Enabled" if new_status else "❌ Disabled"
+        await query.answer(f"No Forward {status_txt}", show_alert=True)
+        buttons = [
+            [InlineKeyboardButton(f"{'Disable ❌' if new_status else 'Enable ✅'} No Forward", callback_data=f"nofwd_{bot_id}")],
+            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(
+            text=f"<b><u>No Forward</u></b>\n\nWhen enabled, files sent by the bot cannot be forwarded by users.\n\n<b>Status: {status_txt}</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("token_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        token_mode = bot.get("token_verify", False)
+        new_status = not token_mode
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_verify": new_status}})
+        status_txt = "✅ Enabled" if new_status else "❌ Disabled"
+        await query.answer(f"Access Token {status_txt}", show_alert=True)
+        buttons = [
+            [InlineKeyboardButton(f"{'Disable ❌' if new_status else 'Enable ✅'} Token", callback_data=f"token_{bot_id}")],
+            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(
+            text=f"<b><u>Access Token</u></b>\n\nWhen enabled, users must verify an access token before getting files.\n\n<b>Status: {status_txt}</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("mode_") and not query.data.startswith("mode_fsub_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        current_mode = bot.get("bot_mode", "public")
+        buttons = [
+            [InlineKeyboardButton("🌐 Public Mode", callback_data=f"setmode_public_{bot_id}"),
+             InlineKeyboardButton("🔒 Private Mode", callback_data=f"setmode_private_{bot_id}")],
+            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
+        ]
+        await query.message.edit_text(
+            text=f"<b><u>Bot Mode</u></b>\n\n🌐 <b>Public</b>: Anyone can use the bot.\n🔒 <b>Private</b>: Only moderators and owner can generate links.\n\n<b>Current Mode: {current_mode.upper()}</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("setmode_"):
+        parts = query.data.split("_")
+        mode = parts[1]
+        bot_id = int(parts[2])
+        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"bot_mode": mode}})
+        await query.answer(f"Mode set to {mode.upper()}!", show_alert=True)
+        query.data = f"mode_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("stats_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        total_users = clone_mongo_db.users.count_documents({"bot_id": bot_id}) if bot else 0
+        status = "🔴 Deactivated" if bot.get("is_deactivated") else "🟢 Active"
+        name = bot.get("name", "Unknown")
+        username = bot.get("username", "Unknown")
+        buttons = [[InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]]
+        await query.message.edit_text(
+            text=f"<b><u>Bot Statistics</u></b>\n\n🤖 <b>Name:</b> {name}\n👤 <b>Username:</b> @{username}\n👥 <b>Total Users:</b> <code>{total_users}</code>\n📊 <b>Status:</b> {status}",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
+    elif query.data.startswith("restart_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        if not bot:
+            return await query.answer("Bot not found!", show_alert=True)
+        await query.answer("⏳ Restarting bot...", show_alert=True)
+        try:
+            from pyrogram import Client as PyroClient
+            # Stop existing client if running, then restart
+            bot_token = bot["token"]
+            vj = PyroClient(
+                f"clone_{bot_token[:10]}",
+                API_ID, API_HASH,
+                bot_token=bot_token,
+                plugins={"root": "clone_plugins"},
+                in_memory=True
+            )
+            await vj.start()
+            await query.answer(f"✅ @{bot['username']} restarted!", show_alert=True)
+        except Exception as e:
+            await query.answer(f"❌ Restart failed: {str(e)[:100]}", show_alert=True)
+        buttons = [[InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]]
+        await query.message.edit_text(
+            text=f"<b>Restart triggered for @{bot.get('username', 'bot')}.\n\nNote: If the bot was already running, it will continue. If stopped, it has been restarted.</b>",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+
     elif query.data == "add_clone":
         # Simply trigger the /clone command logic
         from plugins.clone import clone

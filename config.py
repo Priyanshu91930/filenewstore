@@ -22,7 +22,7 @@ API_ID = int(environ.get("API_ID", "27686895"))
 API_HASH = environ.get("API_HASH", "0e996bd3891969ec5dfebf8bb3e39e94")
 BOT_TOKEN = environ.get("BOT_TOKEN", "8456336413:AAFArfdOHON1b2FbABTbV-ncetvwFsUM_Jc")
 
-PICS = (environ.get('PICS', 'https://graph.org/file/62cc5d0eab924500744ba-491316d2e084513277.jpg')).split() # Bot Start Picture
+PICS = (environ.get('PICS', 'https://graph.org/file/6a869326b7756a622bd48-6213fc97b75f7bfb30.jpg')).split() # Bot Start Picture
 ADMINS = [int(admin) if id_pattern.search(admin) else admin for admin in environ.get('ADMINS', '1246987713').split()]
 BOT_USERNAME = environ.get("BOT_USERNAME", "filesstoreclone_bot") # without @
 PORT = environ.get("PORT", "8080")
