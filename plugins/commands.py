@@ -154,6 +154,28 @@ async def start(client, message):
         if data == "clone":
             from plugins.clone import clone
             return await clone(client, message)
+            
+        if data.startswith("manageclone_"):
+            bot_id = int(data.split("_")[-1])
+            bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+            if not bot or int(bot.get("user_id", 0)) != message.from_user.id:
+                return await message.reply("<b>❌ You don't own this bot!</b>")
+                
+            buttons = [
+                [InlineKeyboardButton("START MSG", callback_data=f"startmsg_{bot_id}"), InlineKeyboardButton("FORCE SUB", callback_data=f"forcesub_{bot_id}")],
+                [InlineKeyboardButton("MODERATORS", callback_data=f"mods_{bot_id}"), InlineKeyboardButton("AUTO DELETE", callback_data=f"autodel_{bot_id}")],
+                [InlineKeyboardButton("NO FORWARD", callback_data=f"nofwd_{bot_id}"), InlineKeyboardButton("ACCESS TOKEN", callback_data=f"token_{bot_id}")],
+                [InlineKeyboardButton("MODE", callback_data=f"mode_{bot_id}"), InlineKeyboardButton("DEACTIVATE", callback_data=f"deactivate_{bot_id}")],
+                [InlineKeyboardButton("STATS", callback_data=f"stats_{bot_id}"), InlineKeyboardButton("RESTART", callback_data=f"restart_{bot_id}")],
+                [InlineKeyboardButton("DELETE", callback_data=f"delete_{bot_id}")],
+                [InlineKeyboardButton("BACK", callback_data="clone_manage")]
+            ]
+            
+            return await message.reply_text(
+                text=f"<b>🪄 <u>Customize Clone</u>\n\n➜ Name: <i>{bot['name']}</i>\n\nConfigure Your Clone Settings Using Given Buttons</b>",
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML
+            )
         
         # ... rest of the logic ...
         try:

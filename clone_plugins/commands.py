@@ -258,6 +258,12 @@ async def settings_command(client, message):
     ],[
         InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
     ]]
+    
+    if bot_doc and int(bot_doc['user_id']) == message.from_user.id:
+        from TechVJ.bot import StreamBot
+        main_bot_username = (await StreamBot.get_me()).username
+        buttons.insert(0, [InlineKeyboardButton('🔒 Fᴏʀᴄᴇ Sᴜʙ Sᴇᴛᴛɪɴɢs', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
+
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
         text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
@@ -454,6 +460,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ],[
             InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
         ]]
+        
+        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        if bot_doc and int(bot_doc['user_id']) == query.from_user.id:
+            from TechVJ.bot import StreamBot
+            main_bot_username = (await StreamBot.get_me()).username
+            buttons.insert(0, [InlineKeyboardButton('🔒 Fᴏʀᴄᴇ Sᴜʙ Sᴇᴛᴛɪɴɢs', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
+
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
             text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
