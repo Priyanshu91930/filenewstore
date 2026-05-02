@@ -16,6 +16,12 @@ import base64
 
 @Client.on_message(filters.command(['link']))
 async def gen_link_s(client: Client, message):
+    from plugins.clone import mongo_db
+    me = await client.get_me()
+    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
     # Universal Force Sub Check for Clones
     chk = await is_subscribed_universal(client, message)
     if chk == "kicked":

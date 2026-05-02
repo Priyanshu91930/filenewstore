@@ -18,6 +18,10 @@ async def pm_broadcast(bot, message):
     if ownerid != message.from_user.id:
         await message.reply_text("ᴏɴʟʏ ᴏᴡɴᴇʀ ᴄᴏᴍᴍᴀɴᴅ❗")
         return
+        
+    if owner and owner.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
     b_msg = await bot.ask(chat_id = message.from_user.id, text = "Now Send Me Your Broadcast Message")
     try:
         users = await clonedb.get_all_users(me.id)

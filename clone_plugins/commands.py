@@ -174,9 +174,14 @@ async def start(client, message):
 
 @Client.on_message(filters.command("setting") & filters.private & filters.incoming)
 async def settings_command(client, message):
+    me = await client.get_me()
+    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
     # Force Subscribe Check
     chk_u = await is_subscribed_universal(client, message)
-    if chk_u == "kicked" or isinstance(chk_u, list):
+    if chk_u == "kicked" or type(chk_u) == list:
         return await start(client, message)
 
     user_id = message.from_user.id
@@ -268,6 +273,10 @@ async def set_caption_handler(client, m: Message):
     """
     me = await client.get_me()
     bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    
+    if bot_owner and bot_owner.get("is_deactivated", False):
+        return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
     if not bot_owner or int(bot_owner['user_id']) != m.from_user.id:
         return await m.reply("<b>❌ Only the bot owner can use this command.</b>")
 
@@ -290,6 +299,11 @@ async def set_caption_handler(client, m: Message):
 
 @Client.on_message(filters.command('api') & filters.private)
 async def shortener_api_handler(client, m: Message):
+    me = await client.get_me()
+    bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_owner and bot_owner.get("is_deactivated", False):
+        return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
     user_id = m.from_user.id
     user = await get_user(user_id)
     cmd = m.command
@@ -311,6 +325,11 @@ async def shortener_api_handler(client, m: Message):
 
 @Client.on_message(filters.command("base_site") & filters.private)
 async def base_site_handler(client, m: Message):
+    me = await client.get_me()
+    bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_owner and bot_owner.get("is_deactivated", False):
+        return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
     user_id = m.from_user.id
     user = await get_user(user_id)
     cmd = m.command
