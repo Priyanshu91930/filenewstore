@@ -42,19 +42,30 @@ async def gen_link_s(client: Client, message):
         return await message.reply('<b>Reply to a media file to get a shareable link.</b>')
 
     file_type = replied.media
-    if file_type not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.AUDIO, enums.MessageMediaType.DOCUMENT]:
-        return await message.reply("<b>Reply to a supported media file (video, audio, or document).</b>")
-
+    import uuid
+    from plugins.clone import mongo_db
+    
     media = getattr(replied, file_type.value)
     file_id = media.file_id
-    string = 'file_' + file_id
+    
+    # Generate a short unique ID (8 chars is enough and safely fits within 64 byte limit)
+    short_id = str(uuid.uuid4())[:8]
+    bot_username = (await client.get_me()).username
+    
+    # Store in DB so we can retrieve the massive file_id later
+    mongo_db.clone_files.insert_one({
+        "_id": short_id,
+        "bot_username": bot_username,
+        "file_id": file_id
+    })
+
+    string = 'file_' + short_id
     outstr = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
 
     user_id = message.from_user.id
     user = await get_user(user_id)
 
-    # Link points to the clone bot itself, using its own file_id
-    bot_username = (await client.get_me()).username
+    # Link points to the clone bot itself, using the short_id
     share_link = f"https://t.me/{bot_username}?start={outstr}"
 
     if user["base_site"] and user["shortener_api"]:

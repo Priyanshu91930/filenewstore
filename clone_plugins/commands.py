@@ -219,7 +219,16 @@ async def settings_command(client, message):
         file_id = data
         pre = ""   
 
-    pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
+    pre, decoded_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
+    
+    # Try fetching the file_id from DB using the short ID
+    file_doc = mongo_db.clone_files.find_one({"_id": decoded_id})
+    if file_doc:
+        file_id = file_doc["file_id"]
+    else:
+        # Fallback to older links where raw file_id was encoded
+        file_id = decoded_id
+
     # Get owner's caption prefix from DB
     me = await client.get_me()
     bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
