@@ -121,7 +121,10 @@ async def start(client, message):
                     if link:
                         label = f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i} ➔ {chat.title}"
                         buttons.append([InlineKeyboardButton(label, url=link)])
-                except: continue
+                    else:
+                        buttons.append([InlineKeyboardButton(f"⚠️ Bot Not Admin in Channel {i}", url=f"https://t.me/{me.username}")])
+                except: 
+                    buttons.append([InlineKeyboardButton(f"⚠️ Bot Not Admin in Channel {i}", url=f"https://t.me/{me.username}")])
             try_url = f"https://t.me/{me.username}?start={message.command[1]}" if len(message.command) > 1 else f"https://t.me/{me.username}?start=true"
             buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=try_url)])
             mode_hint = " (Click to send join request)" if force_sub_mode == 'joinreq' else ""
