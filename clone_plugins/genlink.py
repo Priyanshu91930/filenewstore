@@ -20,6 +20,12 @@ async def gen_link_s(client: Client, message):
     if bot_doc and bot_doc.get("is_deactivated", False):
         return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
+    # Owner/Moderator check
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can generate links!</b>")
+
     # Universal Force Sub Check for Clones
     chk = await is_subscribed_universal(client, message)
     if chk == "kicked":
@@ -44,13 +50,6 @@ async def gen_link_s(client: Client, message):
     file_type = replied.media
     import uuid
     from plugins.clone import mongo_db
-    from config import LOG_CHANNEL
-    
-    # Attempt to forward to the log channel if the user made the clone bot an admin
-    try:
-        await replied.forward(LOG_CHANNEL)
-    except Exception:
-        pass # Silently ignore if clone bot is not an admin
     
     media = getattr(replied, file_type.value)
     file_id = media.file_id

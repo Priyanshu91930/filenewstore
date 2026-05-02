@@ -236,6 +236,12 @@ async def settings_command(client, message):
     if bot_doc and bot_doc.get("is_deactivated", False):
         return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
+    # Owner/Moderator check
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can access settings.</b>")
+
     # Force Subscribe Check
     chk_u = await is_subscribed_universal(client, message)
     if chk_u == "kicked" or type(chk_u) == list:
@@ -311,6 +317,12 @@ async def shortener_api_handler(client, m: Message):
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
+    # Owner/Moderator check
+    owner_id = int(bot_owner.get("user_id", 0)) if bot_owner else 0
+    mods = bot_owner.get("moderators", []) if bot_owner else []
+    if m.from_user.id != owner_id and m.from_user.id not in mods:
+        return await m.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+
     user_id = m.from_user.id
     user = await get_user(user_id)
     cmd = m.command
@@ -336,6 +348,12 @@ async def base_site_handler(client, m: Message):
     bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    # Owner/Moderator check
+    owner_id = int(bot_owner.get("user_id", 0)) if bot_owner else 0
+    mods = bot_owner.get("moderators", []) if bot_owner else []
+    if m.from_user.id != owner_id and m.from_user.id not in mods:
+        return await m.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
     user_id = m.from_user.id
     user = await get_user(user_id)
