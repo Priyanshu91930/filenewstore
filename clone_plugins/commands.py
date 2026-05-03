@@ -299,11 +299,14 @@ async def start(client, message):
                 InlineKeyboardButton("How To Open Link & Verify", url=tut_url)
             ]]
             logger.info("Sending verification message...")
-            return await message.reply_text(
+            v_msg = await client.send_message(
+                chat_id=message.from_user.id,
                 text="<b>You are not verified!\nKindly verify to continue!</b>",
-                protect_content=True,
-                reply_markup=InlineKeyboardMarkup(btn)
+                reply_markup=InlineKeyboardMarkup(btn),
+                parse_mode=enums.ParseMode.HTML
             )
+            logger.info(f"Verification message sent. ID: {v_msg.id}")
+            return
 
     logger.info("Proceeding to send_cached_media...")
     try:
