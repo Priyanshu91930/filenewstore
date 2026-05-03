@@ -70,15 +70,16 @@ async def clone(client, message):
         bot = await vj.get_me()
         # Track the running instance
         running_clones[bot.id] = vj
-            # NOTE: Telegram command names CANNOT have spaces!
+        # Set bot commands so they appear in Telegram menu
+        try:
             await vj.set_bot_commands([
                 BotCommand("start", "Start the bot"),
                 BotCommand("batch", "Generate multi-file links (Interactive)"),
                 BotCommand("link", "Reply to a file to get a shareable link"),
                 BotCommand("broadcast", "Send a message to all bot users"),
                 BotCommand("setting", "Manage your bot settings"),
-                BotCommand("api", "Set your shortener API key"),
-                BotCommand("base_site", "Set your shortener base site"),
+                BotCommand("shortner_api", "Set your shortener API key"),
+                BotCommand("shortner_domain", "Set your shortener base site"),
                 BotCommand("setcaption", "Set your custom file name prefix"),
             ])
         except Exception as e:
