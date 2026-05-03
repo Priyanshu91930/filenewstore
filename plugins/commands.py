@@ -48,9 +48,11 @@ def get_size(size):
     return "%.2f %s" % (size, units[i])
 
 def formate_file_name(file_name):
+    if file_name is None:
+        file_name = ""
     chars = ["[", "]", "(", ")"]
     for c in chars:
-        file_name.replace(c, "")
+        file_name = file_name.replace(c, "")
     file_name = '@anihubYT2 ' + ' '.join(filter(lambda x: not x.startswith('http') and not x.startswith('@') and not x.startswith('www.'), file_name.split()))
     return file_name
 

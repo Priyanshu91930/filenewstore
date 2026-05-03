@@ -264,10 +264,10 @@ async def start(client, message):
     token_mode = bot_owner.get("token_verify", False) if bot_owner else False
     logger.info(f"Token verify mode: {token_mode}")
     if token_mode:
-        site = bot_owner.get("shortener_site", "")
-        api = bot_owner.get("shortener_api", "")
+        site = bot_owner.get("shortener_site") or ""
+        api = bot_owner.get("shortener_api") or ""
         timeout = bot_owner.get("token_timeout", 86400)
-        tut_url = bot_owner.get("token_tutorial", "https://t.me")
+        tut_url = bot_owner.get("token_tutorial") or "https://t.me"
         
         key = f"{me.id}_{message.from_user.id}"
         is_verified = False
