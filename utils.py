@@ -104,7 +104,12 @@ async def is_subscribed_universal(bot, message):
         if member.status == "kicked":
             return "kicked"
     except UserNotParticipant:
-        return [UNIVERSAL_FORCE_SUB_CHANNEL]
+        try:
+            # Verify the channel is actually accessible before requiring it
+            await bot.get_chat(UNIVERSAL_FORCE_SUB_CHANNEL)
+            return [UNIVERSAL_FORCE_SUB_CHANNEL]
+        except:
+            return True
     except Exception as e:
         logger.error(f"Error checking universal membership: {e}")
         return True
