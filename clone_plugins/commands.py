@@ -288,6 +288,7 @@ async def start(client, message):
             try:
                 shortzy = Shortzy(api_key=api, base_site=clean_site)
                 short_link = await shortzy.convert(verify_link)
+                logger.info(f"Shortlink generated: {short_link}")
             except Exception as e:
                 logger.error(f"Clone shortener error: {e}")
                 short_link = verify_link
@@ -297,6 +298,7 @@ async def start(client, message):
             ],[
                 InlineKeyboardButton("How To Open Link & Verify", url=tut_url)
             ]]
+            logger.info("Sending verification message...")
             return await message.reply_text(
                 text="<b>You are not verified!\nKindly verify to continue!</b>",
                 protect_content=True,
