@@ -76,6 +76,7 @@ async def clone(client, message):
                 BotCommand("start", "Start the bot"),
                 BotCommand("batch", "Generate multi-file links (Interactive)"),
                 BotCommand("link", "Reply to a file to get a shareable link"),
+                BotCommand("broadcast", "Send a message to all bot users"),
                 BotCommand("setting", "Manage your bot settings"),
                 BotCommand("api", "Set your shortener API key"),
                 BotCommand("base_site", "Set your shortener base site"),
