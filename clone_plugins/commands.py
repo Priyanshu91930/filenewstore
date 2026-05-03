@@ -61,11 +61,13 @@ async def start(client, message):
         await clonedb.add_user(me.id, message.from_user.id)
     
     # Universal Force Sub Check for Clones
+    logger.info(f"Checking universal fsub for user {message.from_user.id}")
     chk = await is_subscribed_universal(client, message)
     if chk == "kicked":
         await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
         return
     if type(chk) == list:
+        logger.info(f"User {message.from_user.id} needs to join universal channels: {chk}")
         buttons = []
         for i, channel_id in enumerate(chk, start=1):
             try:
@@ -85,6 +87,7 @@ async def start(client, message):
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
+    logger.info(f"Universal check passed for {message.from_user.id}")
     bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
     # Migrate old entries that don't have the field
     if bot_doc and 'force_sub_channels' not in bot_doc:
@@ -94,6 +97,7 @@ async def start(client, message):
     clone_force_channels = bot_doc.get('force_sub_channels', []) if bot_doc else []
     force_sub_mode = bot_doc.get('force_sub_mode', 'normal') if bot_doc else 'normal'
     if clone_force_channels:
+        logger.info(f"Checking clone-specific fsub for user {message.from_user.id}")
         not_joined = []
         for channel_id in clone_force_channels:
             try:
@@ -109,6 +113,7 @@ async def start(client, message):
                         continue
                 not_joined.append(channel_id)
         if not_joined:
+            logger.info(f"User {message.from_user.id} needs to join clone channels: {not_joined}")
             buttons = []
             for i, channel_id in enumerate(not_joined, start=1):
                 try:
@@ -144,6 +149,7 @@ async def start(client, message):
             )
     # ──────────────────────────────────────────────────────────────────────
 
+    logger.info(f"Starting file delivery for user {message.from_user.id}")
 
     if len(message.command) != 2 or message.command[1] == "true":
         buttons = [[
