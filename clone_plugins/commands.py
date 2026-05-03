@@ -293,19 +293,33 @@ async def start(client, message):
                 logger.error(f"Clone shortener error: {e}")
                 short_link = verify_link
                 
+            # Ensure tut_url is a valid URL string
+            if not tut_url or not str(tut_url).startswith("http"):
+                tut_url = "https://t.me/viralverse0909"
+            
             btn = [[
-                InlineKeyboardButton("Verify", url=short_link)
+                InlineKeyboardButton("Verify", url=str(short_link))
             ],[
-                InlineKeyboardButton("How To Open Link & Verify", url=tut_url)
+                InlineKeyboardButton("How To Open Link & Verify", url=str(tut_url))
             ]]
-            logger.info("Sending verification message...")
-            v_msg = await client.send_message(
-                chat_id=message.from_user.id,
-                text="<b>You are not verified!\nKindly verify to continue!</b>",
-                reply_markup=InlineKeyboardMarkup(btn),
-                parse_mode=enums.ParseMode.HTML
-            )
-            logger.info(f"Verification message sent. ID: {v_msg.id}")
+            
+            try:
+                logger.info(f"Sending verification message to {message.from_user.id}...")
+                v_msg = await asyncio.wait_for(
+                    client.send_message(
+                        chat_id=message.from_user.id,
+                        text="<b>You are not verified!\nKindly verify to continue!</b>",
+                        reply_markup=InlineKeyboardMarkup(btn)
+                    ),
+                    timeout=15
+                )
+                logger.info(f"Verification message sent. ID: {v_msg.id}")
+            except asyncio.TimeoutError:
+                logger.error("CRITICAL: send_message timed out after 15 seconds!")
+                await message.reply_text("<b>⚠️ Verification service is slow. Please try again in a moment.</b>")
+            except Exception as e:
+                logger.error(f"Failed to send verification message: {e}")
+                await message.reply_text(f"<b>❌ Error: {e}</b>")
             return
 
     logger.info("Proceeding to send_cached_media...")
