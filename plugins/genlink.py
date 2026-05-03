@@ -190,57 +190,57 @@ async def gen_link_batch(bot, message):
             reply_markup=InlineKeyboardMarkup(buttons)
         )
     username = (await bot.get_me()).username
-    if " " not in message.text:
-        return await message.reply("Use correct format.\nExample /batch https://t.me/vj_botz/10 https://t.me/vj_botz/20.")
-    links = message.text.strip().split(" ")
-    if len(links) != 3:
-        return await message.reply("Use correct format.\nExample /batch https://t.me/vj_botz/10 https://t.me/vj_botz/20.")
-    cmd, first, last = links
-    regex = re.compile("(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
-    match = regex.match(first)
-    if not match:
-        return await message.reply('Invalid link')
-    f_chat_id = match.group(4)
-    f_msg_id = int(match.group(5))
-    if f_chat_id.isnumeric():
-        f_chat_id = int(("-100" + f_chat_id))
+    # Interactive Batch Flow
+    f_msg = await bot.ask(message.chat.id, "<b>Forward the FIRST message from the channel or send the message link.\n\n/cancel to stop.</b>")
+    if f_msg.text == "/cancel": return await f_msg.reply("Cancelled.")
 
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
-    
-    match = regex.match(last)
-    if not match:
-        return await message.reply('Invalid link')
-    l_chat_id = match.group(4)
-    l_msg_id = int(match.group(5))
-    if l_chat_id.isnumeric():
-        l_chat_id = int(("-100" + l_chat_id))
+    # Parse First Message
+    regex = re.compile("(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
+    if f_msg.forward_from_chat:
+        f_chat_id = f_msg.forward_from_chat.id
+        f_msg_id = f_msg.forward_from_message_id
+    elif f_msg.text:
+        match = regex.match(f_msg.text.strip())
+        if not match: return await f_msg.reply("<b>Invalid link!</b>")
+        f_chat_id = match.group(4)
+        f_msg_id = int(match.group(5))
+        if f_chat_id.isnumeric(): f_chat_id = int("-100" + f_chat_id)
+    else:
+        return await f_msg.reply("<b>Please forward a message or send a link!</b>")
+
+    # Ask for Last Message
+    l_msg = await bot.ask(message.chat.id, "<b>Forward the LAST message from the channel or send the message link.\n\n/cancel to stop.</b>")
+    if l_msg.text == "/cancel": return await l_msg.reply("Cancelled.")
+
+    # Parse Last Message
+    if l_msg.forward_from_chat:
+        l_chat_id = l_msg.forward_from_chat.id
+        l_msg_id = l_msg.forward_from_message_id
+    elif l_msg.text:
+        match = regex.match(l_msg.text.strip())
+        if not match: return await l_msg.reply("<b>Invalid link!</b>")
+        l_chat_id = match.group(4)
+        l_msg_id = int(match.group(5))
+        if l_chat_id.isnumeric(): l_chat_id = int("-100" + l_chat_id)
+    else:
+        return await l_msg.reply("<b>Please forward a message or send a link!</b>")
 
     if f_chat_id != l_chat_id:
-        return await message.reply("Chat ids not matched.")
+        return await l_msg.reply("<b>Chat IDs do not match! Both messages must be from the same channel.</b>")
+
     try:
         chat_id = (await bot.get_chat(f_chat_id)).id
-    except ChannelInvalid:
-        return await message.reply('This may be a private channel / group. Make me an admin over there to index the files.')
-    except (UsernameInvalid, UsernameNotModified):
-        return await message.reply('Invalid Link specified.')
     except Exception as e:
-        return await message.reply(f'Errors - {e}')
+        return await l_msg.reply(f"<b>Error: {e}\nMake sure I am admin in that channel.</b>")
+
+    sts = await l_msg.reply("**ɢᴇɴᴇʀᴀᴛɪɴɢ ʟɪɴᴋ ғᴏʀ ʏᴏᴜʀ ᴍᴇssᴀɢᴇ**.\n**ᴛʜɪs ᴍᴀʏ ᴛᴀᴋᴇ ᴛɪᴍᴇ ᴅᴇᴘᴇɴᴅɪɴɢ ᴜᴘᴏɴ ɴᴜᴍʙᴇʀ ᴏғ ᴍᴇssᴀɢᴇs**")
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
     
-    sts = await message.reply("**ɢᴇɴᴇʀᴀᴛɪɴɢ ʟɪɴᴋ ғᴏʀ ʏᴏᴜʀ ᴍᴇssᴀɢᴇ**.\n**ᴛʜɪs ᴍᴀʏ ᴛᴀᴋᴇ ᴛɪᴍᴇ ᴅᴇᴘᴇɴᴅɪɴɢ ᴜᴘᴏɴ ɴᴜᴍʙᴇʀ ᴏғ ᴍᴇssᴀɢᴇs**")
-
     FRMT = "**ɢᴇɴᴇʀᴀᴛɪɴɢ ʟɪɴᴋ...**\n**ᴛᴏᴛᴀʟ ᴍᴇssᴀɢᴇs:** {total}\n**ᴅᴏɴᴇ:** {current}\n**ʀᴇᴍᴀɪɴɪɴɢ:** {rem}\n**sᴛᴀᴛᴜs:** {sts}"
-
     outlist = []
-
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
 
     # file store without db channel
     og_msg = 0
