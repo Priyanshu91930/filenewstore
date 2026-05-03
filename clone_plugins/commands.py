@@ -218,12 +218,15 @@ async def start(client, message):
             return await message.reply_text("<b>Invalid link or Expired link!</b>", protect_content=True)
 
     try:
-        pre, file_id = data.split('_', 1)
+        decoded_string = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("ascii")
+        pre, decoded_id = decoded_string.split("_", 1)
     except:
-        file_id = data
-        pre = ""   
-
-    pre, decoded_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
+        # Fallback for old unencoded links
+        try:
+            pre, decoded_id = data.split('_', 1)
+        except:
+            decoded_id = data
+            pre = ""
     
     # Try fetching the file_id from DB using the short ID
     file_doc = mongo_db.clone_files.find_one({"_id": decoded_id})
