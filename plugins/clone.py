@@ -74,13 +74,15 @@ async def clone(client, message):
         try:
             await vj.set_bot_commands([
                 BotCommand("start", "Start the bot"),
+                BotCommand("batch", "Generate multi-file links (Interactive)"),
                 BotCommand("link", "Reply to a file to get a shareable link"),
                 BotCommand("setting", "Manage your bot settings"),
                 BotCommand("api", "Set your shortener API key"),
                 BotCommand("base_site", "Set your shortener base site"),
                 BotCommand("setcaption", "Set your custom file name prefix"),
             ])
-        except: pass
+        except Exception as e:
+            logger.error(f"Error setting bot commands for clone: {e}")
         details = {
             'bot_id': bot.id,
             'is_bot': True,
