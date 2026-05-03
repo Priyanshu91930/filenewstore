@@ -111,6 +111,9 @@ async def is_subscribed_universal(bot, message):
         except:
             return True
     except Exception as e:
+        # If the channel is invalid or bot is not in it, just skip the check silently to avoid log spam
+        if "CHANNEL_INVALID" in str(e) or "CHAT_ADMIN_REQUIRED" in str(e):
+            return True
         logger.error(f"Error checking universal membership: {e}")
         return True
     return True
