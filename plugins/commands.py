@@ -782,30 +782,37 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("spho_"):
         bot_id = int(query.data.split("_")[-1])
-        msg = await client.ask(query.message.chat.id, "<b>Please send the new START PHOTO for your clone bot (Upload an image or send a URL).\n\n/cancel to skip.</b>")
+        msg = await client.ask(query.message.chat.id, "<b>Please send the new START PHOTO for your clone bot.\n\n📎 Upload a photo OR send a direct image URL (http/https).\n\n/cancel to skip.</b>")
         if msg.text and msg.text.strip() == "/cancel": return await msg.reply("Cancelled.")
         
         if msg.photo:
             try:
-                # Forward the photo to LOG_CHANNEL so it gets cached under the main bot's context.
-                # Clone bots share the same API_ID/API_HASH so they can use any file_id
-                # the main bot received — including ones forwarded from users.
-                cached_msg = await client.send_photo(
-                    chat_id=LOG_CHANNEL,
-                    photo=msg.photo.file_id,
-                    caption="📸 Clone Start Photo Cache"
-                )
-                photo_file_id = cached_msg.photo.file_id
-                clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_file_id}})
-                await msg.reply("<b>✅ Start Photo updated successfully!</b>")
+                import aiohttp
+                # Download photo bytes from Telegram
+                photo_bytes = await client.download_media(msg.photo.file_id, in_memory=True)
+                photo_bytes.seek(0)
+                
+                # Upload to graph.org (Telegraph's image host) to get a permanent public URL
+                async with aiohttp.ClientSession() as session:
+                    form = aiohttp.FormData()
+                    form.add_field("photo", photo_bytes, filename="start.jpg", content_type="image/jpeg")
+                    async with session.post("https://graph.org/upload", data=form) as resp:
+                        result = await resp.json()
+                        if isinstance(result, list) and result[0].get("src"):
+                            photo_url = "https://graph.org" + result[0]["src"]
+                        else:
+                            raise Exception(f"Unexpected response: {result}")
+                
+                clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_url}})
+                await msg.reply(f"<b>✅ Start Photo updated successfully!\n\nURL: <code>{photo_url}</code></b>")
             except Exception as e:
-                logger.error(f"Start photo cache error: {e}")
-                await msg.reply(f"<b>❌ Failed to save photo: {e}</b>")
-        elif msg.text:
+                logger.error(f"Graph.org upload error: {e}")
+                await msg.reply(f"<b>❌ Upload failed: {e}\n\nPlease send a direct image URL instead.</b>")
+        elif msg.text and msg.text.strip().startswith("http"):
             clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.text.strip()}})
             await msg.reply("<b>✅ Start Photo URL updated successfully!</b>")
         else:
-            return await msg.reply("<b>❌ Invalid input. Please send a photo or a URL.</b>")
+            return await msg.reply("<b>❌ Invalid input. Please upload a photo or send an http/https URL.</b>")
             
         query.data = f"startmsg_{bot_id}"
         return await cb_handler(client, query)

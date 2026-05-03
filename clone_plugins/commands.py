@@ -163,6 +163,12 @@ async def start(client, message):
         except: pass
             
         start_photo = bot_doc.get("start_photo") if bot_doc else None
+        
+        # Only use the stored photo if it's a URL (http/https).
+        # Telegram file_ids from other bots don't work cross-bot.
+        if start_photo and not start_photo.startswith("http"):
+            start_photo = None  # Reset - will fall back to PICS
+        
         if not start_photo:
             start_photo = random.choice(PICS)
             
