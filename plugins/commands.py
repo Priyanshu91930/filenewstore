@@ -792,21 +792,27 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 photo_bytes = await client.download_media(msg.photo.file_id, in_memory=True)
                 photo_bytes.seek(0)
                 
-                # Upload to graph.org (Telegraph's image host) to get a permanent public URL
+                # Upload to telegra.ph (Telegraph's image host) to get a permanent public URL
                 async with aiohttp.ClientSession() as session:
                     form = aiohttp.FormData()
-                    form.add_field("photo", photo_bytes, filename="start.jpg", content_type="image/jpeg")
-                    async with session.post("https://graph.org/upload", data=form) as resp:
+                    form.add_field("file", photo_bytes, filename="start.jpg")
+                    async with session.post("https://telegra.ph/upload", data=form) as resp:
                         result = await resp.json()
                         if isinstance(result, list) and result[0].get("src"):
-                            photo_url = "https://graph.org" + result[0]["src"]
+                            photo_url = "https://telegra.ph" + result[0]["src"]
                         else:
-                            raise Exception(f"Unexpected response: {result}")
+                            # Fallback to graph.org if telegra.ph fails
+                            async with session.post("https://graph.org/upload", data=form) as resp2:
+                                result2 = await resp2.json()
+                                if isinstance(result2, list) and result2[0].get("src"):
+                                    photo_url = "https://graph.org" + result2[0]["src"]
+                                else:
+                                    raise Exception(f"Upload failed on both providers. Response: {result}")
                 
                 clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_url}})
                 await msg.reply(f"<b>✅ Start Photo updated successfully!\n\nURL: <code>{photo_url}</code></b>")
             except Exception as e:
-                logger.error(f"Graph.org upload error: {e}")
+                logger.error(f"Media upload error: {e}")
                 await msg.reply(f"<b>❌ Upload failed: {e}\n\nPlease send a direct image URL instead.</b>")
         elif msg.text and msg.text.strip().startswith("http"):
             clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.text.strip()}})
