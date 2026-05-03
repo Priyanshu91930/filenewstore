@@ -1080,17 +1080,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data.startswith("stats_"):
         bot_id = int(query.data.split("_")[-1])
         bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
-        if not bot:
-            return await query.answer("Bot not found!", show_alert=True)
-            
-        # Clone users are stored in a collection named after the bot_id (as a string)
-        total_users = clone_mongo_db[str(bot_id)].count_documents({})
-        
+        from clone_plugins.dbusers import clonedb
+        total_users = await clonedb.total_users_count(bot_id) if bot else 0
         status = "🔴 Deactivated" if bot.get("is_deactivated") else "🟢 Active"
         name = bot.get("name", "Unknown")
         username = bot.get("username", "Unknown")
         buttons = [[InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]]
-        
         await query.message.edit_text(
             text=f"<b><u>Bot Statistics</u></b>\n\n🤖 <b>Name:</b> {name}\n👤 <b>Username:</b> @{username}\n👥 <b>Total Users:</b> <code>{total_users}</code>\n📊 <b>Status:</b> {status}",
             reply_markup=InlineKeyboardMarkup(buttons),
