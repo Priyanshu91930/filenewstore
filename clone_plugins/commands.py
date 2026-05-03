@@ -199,8 +199,10 @@ async def start(client, message):
         return
 
     data = message.command[1]
+    logger.info(f"Processing payload data: {data}")
     
     if data.startswith("verify-"):
+        logger.info("Detected verification payload")
         parts = data.split("-", 3)
         if len(parts) >= 3:
             _, userid, token = parts[:3]
@@ -217,6 +219,7 @@ async def start(client, message):
             CLONE_VERIFIED[key] = time.time()
             await message.reply_text(f"<b>Hey {message.from_user.mention}, You are successfully verified!\nNow you have unlimited access for the validity period.</b>", protect_content=True)
             if file_data:
+                logger.info(f"Verification success, redirecting to file: {file_data}")
                 message.command[1] = file_data
                 return await start(client, message)
             return
@@ -226,7 +229,9 @@ async def start(client, message):
     try:
         decoded_string = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("ascii")
         pre, decoded_id = decoded_string.split("_", 1)
-    except:
+        logger.info(f"Decoded data: pre={pre}, id={decoded_id}")
+    except Exception as e:
+        logger.info(f"Decoding failed (using raw data): {e}")
         # Fallback for old unencoded links
         try:
             pre, decoded_id = data.split('_', 1)
@@ -235,12 +240,15 @@ async def start(client, message):
             pre = ""
     
     # Try fetching the file_id from DB using the short ID
+    logger.info(f"Searching DB for decoded_id: {decoded_id}")
     file_doc = mongo_db.clone_files.find_one({"_id": decoded_id})
     if file_doc:
         file_id = file_doc["file_id"]
+        logger.info(f"Found file in DB. file_id exists.")
     else:
         # Fallback to older links where raw file_id was encoded
         file_id = decoded_id
+        logger.info("File not found in DB, using decoded_id as file_id")
 
     # Get owner's caption prefix from DB
     bot_owner = bot_doc
@@ -249,6 +257,8 @@ async def start(client, message):
     if owner_id:
         owner_data = await get_user(owner_id)
         caption_prefix = owner_data.get("caption_prefix", "").strip()
+    
+    logger.info(f"Final file_id to send: {file_id[:20]}...")
 
     # Token Verification Check
     token_mode = bot_owner.get("token_verify", False) if bot_owner else False
