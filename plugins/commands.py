@@ -971,7 +971,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         buttons = [
             [InlineKeyboardButton("Shorteners", callback_data=f"tok_api_{bot_id}"), InlineKeyboardButton("Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("Tutorial", callback_data=f"tok_tut_{bot_id}")],
-            [InlineKeyboardButton(f"{'Disable ❌' if token_mode else 'Enable ✅'} Token", callback_data=f"token_{bot_id}")],
+            [InlineKeyboardButton(f"{'Disable ❌' if token_mode else 'Enable ✅'} Token", callback_data=f"token_{bot_id}"), InlineKeyboardButton("🗑 Reset All", callback_data=f"tok_reset_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
         ]
         
@@ -1034,6 +1034,22 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if msg.text == "/cancel": return await msg.reply("Cancelled.")
         clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_tutorial": msg.text.strip()}})
         await msg.reply(f"<b>✅ Tutorial link updated!</b>")
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("tok_reset_"):
+        bot_id = int(query.data.split("_")[-1])
+        clone_mongo_db.bots.update_one(
+            {"bot_id": bot_id},
+            {"$set": {
+                "token_verify": False,
+                "shortener_site": "",
+                "shortener_api": "",
+                "token_timeout": 86400,
+                "token_tutorial": ""
+            }}
+        )
+        await query.answer("✅ All Access Token settings have been reset!", show_alert=True)
         query.data = f"tokencfg_{bot_id}"
         return await cb_handler(client, query)
 
