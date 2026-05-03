@@ -255,7 +255,7 @@ async def start(client, message):
     owner_id = int(bot_owner['user_id']) if bot_owner else None
     caption_prefix = ""
     if owner_id:
-        owner_data = await get_user(owner_id)
+        owner_data = await get_user(me.id, owner_id)
         caption_prefix = owner_data.get("caption_prefix", "").strip()
     
     logger.info(f"Final file_id to send: {file_id[:20]}...")
@@ -384,7 +384,7 @@ async def settings_command(client, message):
         return await start(client, message)
 
     user_id = message.from_user.id
-    user = await get_user(user_id)
+    user = await get_user(me.id, user_id)
     prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
     buttons = [[
         InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
@@ -431,7 +431,7 @@ async def set_caption_handler(client, m: Message):
 
     cmd = m.command
     if len(cmd) == 1:
-        user = await get_user(m.from_user.id)
+        user = await get_user(me.id, m.from_user.id)
         current = user.get("caption_prefix", "") or "<i>Not set</i>"
         return await m.reply(
             f"<b>📝 Caption Prefix</b>\n\n"
@@ -441,9 +441,9 @@ async def set_caption_handler(client, m: Message):
         )
     prefix = cmd[1].strip()
     if prefix.lower() == "off":
-        await update_user_info(m.from_user.id, {"caption_prefix": ""})
+        await update_user_info(me.id, m.from_user.id, {"caption_prefix": ""})
         return await m.reply("<b>✅ Caption prefix removed. Files will be sent without a prefix.</b>")
-    await update_user_info(m.from_user.id, {"caption_prefix": prefix})
+    await update_user_info(me.id, m.from_user.id, {"caption_prefix": prefix})
     await m.reply(f"<b>✅ Caption prefix set to:</b> <code>{prefix}</code>\n\nAll files sent by your bot will now start with this name.")
 
 @Client.on_message(filters.command('api') & filters.private)
@@ -460,7 +460,7 @@ async def shortener_api_handler(client, m: Message):
         return await m.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
     user_id = m.from_user.id
-    user = await get_user(user_id)
+    user = await get_user(me.id, user_id)
     cmd = m.command
 
     if len(cmd) == 1:
@@ -469,7 +469,7 @@ async def shortener_api_handler(client, m: Message):
 
     elif len(cmd) == 2:    
         api = cmd[1].strip()
-        await update_user_info(user_id, {"shortener_api": api})
+        await update_user_info(me.id, user_id, {"shortener_api": api})
         await m.reply("Shortener API updated successfully to " + api)
     else:
         await m.reply("You are not authorized to use this command.")
@@ -492,7 +492,7 @@ async def base_site_handler(client, m: Message):
         return await m.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
     user_id = m.from_user.id
-    user = await get_user(user_id)
+    user = await get_user(me.id, user_id)
     cmd = m.command
     text = f"/base_site (base_site)\n\nCurrent base site: None\n\n EX: /base_site shortnerdomain.com\n\nIf You Want To Remove Base Site Then Copy This And Send To Bot - `/base_site None`"
     
@@ -502,7 +502,7 @@ async def base_site_handler(client, m: Message):
         base_site = cmd[1].strip()
         if not domain(base_site):
             return await m.reply(text=text, disable_web_page_preview=True)
-        await update_user_info(user_id, {"base_site": base_site})
+        await update_user_info(me.id, user_id, {"base_site": base_site})
         await m.reply("Base Site updated successfully")
     else:
         await m.reply("You are not authorized to use this command.")

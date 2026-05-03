@@ -69,7 +69,7 @@ async def gen_link_s(client: Client, message):
     outstr = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
 
     user_id = message.from_user.id
-    user = await get_user(user_id)
+    user = await get_user(me.id, user_id)
 
     # Link points to the clone bot itself, using the short_id
     share_link = f"https://t.me/{bot_username}?start={outstr}"
@@ -200,7 +200,7 @@ async def gen_link_batch(client: Client, message):
     share_link = f"https://t.me/{bot_username}?start={outstr}"
     
     user_id = message.from_user.id
-    user = await get_user(user_id)
+    user = await get_user(me.id, user_id)
     if user["base_site"] and user["shortener_api"]:
         short_link = await get_short_link(user, share_link)
         await sts.edit(f"<b>⭕ ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʙᴀᴛᴄʜ ʟɪɴᴋ:\n\n🖇️ sʜᴏʀᴛ ʟɪɴᴋ :- {short_link}\n\n🔗 ᴏʀɪɢɪɴᴀʟ ʟɪɴᴋ :- {share_link}</b>")
