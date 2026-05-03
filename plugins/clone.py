@@ -70,8 +70,7 @@ async def clone(client, message):
         bot = await vj.get_me()
         # Track the running instance
         running_clones[bot.id] = vj
-        # Set bot commands so they appear in Telegram menu
-        try:
+            # NOTE: Telegram command names CANNOT have spaces!
             await vj.set_bot_commands([
                 BotCommand("start", "Start the bot"),
                 BotCommand("batch", "Generate multi-file links (Interactive)"),
