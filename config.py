@@ -48,7 +48,7 @@ AUTO_DELETE_TIME = int(environ.get("AUTO_DELETE_TIME", "1800")) # Time in Second
 # Channel Information
 LOG_CHANNEL = int(environ.get("LOG_CHANNEL", "-1003591540042"))
 FORCE_SUB_CHANNELS = [int(ch) for ch in environ.get("FORCE_SUB_CHANNELS", "").split()]
-UNIVERSAL_FORCE_SUB_CHANNEL = int(environ.get("UNIVERSAL_FORCE_SUB_CHANNEL", "-1002891071453")) # This channel will be forced for all clones
+UNIVERSAL_FORCE_SUB_CHANNEL = int(environ.get("UNIVERSAL_FORCE_SUB_CHANNEL", "-1003632363697")) # This channel will be forced for all clones
 
 # File Caption Information
 CUSTOM_FILE_CAPTION = environ.get("CUSTOM_FILE_CAPTION", f"{script.CAPTION}")
