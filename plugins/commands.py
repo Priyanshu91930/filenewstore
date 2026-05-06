@@ -21,6 +21,7 @@ import base64
 from urllib.parse import quote_plus
 from TechVJ.utils.file_properties import get_name, get_hash, get_media_file_size
 from plugins.clone import mongo_db as clone_mongo_db
+from clone_plugins.dbusers import clonedb
 logger = logging.getLogger(__name__)
 
 def is_valid_url(url):
@@ -379,9 +380,37 @@ async def start(client, message):
                 pass
         
     except Exception as e:
-        logger.exception(f"Start Error: {e}")
         try: await message.reply_text(f"<b>⚠️ Error occurred while processing /start command.\n\nError:</b> <code>{e}</code>")
         except: pass
+
+@Client.on_message(filters.command("stats") & filters.user(ADMINS) & filters.private)
+async def stats_handler(client, message):
+    m = await message.reply_text("<b>Calculating statistics...</b>")
+    
+    # 1. Main Bot Users
+    main_users = await db.total_users_count()
+    
+    # 2. Total Clones
+    total_clones = clone_mongo_db.bots.count_documents({})
+    
+    # 3. Total Users Across Clones
+    total_clone_users = 0
+    try:
+        collections = await clonedb.db.list_collection_names()
+        for col in collections:
+            # Clonedb stores users in collections named by bot_id (numeric)
+            if col.isdigit(): 
+                count = await clonedb.db[col].count_documents({})
+                total_clone_users += count
+    except Exception as e:
+        logger.error(f"Error counting clone users: {e}")
+            
+    await m.edit_text(
+        f"<b>📊 <u>Bot Statistics</u>\n\n"
+        f"👤 Main Bot Users: <code>{main_users}</code>\n"
+        f"🤖 Total Clones Made: <code>{total_clones}</code>\n"
+        f"👥 Total Users in Clones: <code>{total_clone_users}</code></b>"
+    )
 
 @Client.on_message(filters.command("setting") & filters.private & filters.incoming & filters.user(ADMINS))
 async def settings_command(client, message):

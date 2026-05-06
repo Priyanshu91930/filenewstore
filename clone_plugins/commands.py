@@ -50,7 +50,7 @@ def get_size(size):
 
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
-    me = await client.get_me()
+    me = client.me or await client.get_me()
     bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
     
     # Deactivation Check
@@ -367,7 +367,7 @@ async def start(client, message):
 
 @Client.on_message(filters.command("setting") & filters.private & filters.incoming)
 async def settings_command(client, message):
-    me = await client.get_me()
+    me = client.me or await client.get_me()
     bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
     if bot_doc and bot_doc.get("is_deactivated", False):
         return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
@@ -420,7 +420,7 @@ async def set_caption_handler(client, m: Message):
     Usage: /setcaption @MyChannel
     To remove: /setcaption off
     """
-    me = await client.get_me()
+    me = client.me or await client.get_me()
     bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
     
     if bot_owner and bot_owner.get("is_deactivated", False):
@@ -448,7 +448,7 @@ async def set_caption_handler(client, m: Message):
 
 @Client.on_message(filters.command('api') & filters.private)
 async def shortener_api_handler(client, m: Message):
-    me = await client.get_me()
+    me = client.me or await client.get_me()
     bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
@@ -480,7 +480,7 @@ async def shortener_api_handler(client, m: Message):
 
 @Client.on_message(filters.command("base_site") & filters.private)
 async def base_site_handler(client, m: Message):
-    me = await client.get_me()
+    me = client.me or await client.get_me()
     bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
@@ -516,7 +516,7 @@ async def base_site_handler(client, m: Message):
 async def join_reqs_handler(client, join_request):
     """Record join requests without auto-approving them so owners can manually accept later."""
     try:
-        me = await client.get_me()
+        me = client.me or await client.get_me()
         bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
         if not bot_doc: return
         force_sub_mode = bot_doc.get('force_sub_mode', 'normal')
@@ -531,7 +531,7 @@ async def join_reqs_handler(client, join_request):
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
-    me = await client.get_me()
+    me = client.me or await client.get_me()
     if query.data == "close_data":
         await query.message.delete()
     elif query.data == "start":
@@ -600,7 +600,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data == "settings":
         user_id = query.from_user.id
-        user = await get_user(user_id)
+        user = await get_user(me.id, user_id)
         prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
         buttons = [[
             InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
