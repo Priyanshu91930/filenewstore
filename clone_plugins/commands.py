@@ -543,10 +543,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ]]
         
         reply_markup = InlineKeyboardMarkup(buttons)
+        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        photo = bot_doc.get("start_photo") if bot_doc else None
+        if photo and not photo.startswith("http"): photo = None
+        if not photo: photo = random.choice(PICS)
+
         await client.edit_message_media(
             query.message.chat.id, 
             query.message.id, 
-            InputMediaPhoto(random.choice(PICS))
+            InputMediaPhoto(photo)
         )
         await query.message.edit_text(
             text=script.CLONE_START_TXT.format(query.from_user.mention, me.mention),
@@ -563,10 +568,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('Hᴏᴍᴇ', callback_data='start'),
             InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='close_data')
         ]]
+        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        photo = bot_doc.get("start_photo") if bot_doc else None
+        if photo and not photo.startswith("http"): photo = None
+        if not photo: photo = random.choice(PICS)
+
         await client.edit_message_media(
             query.message.chat.id, 
             query.message.id, 
-            InputMediaPhoto(random.choice(PICS))
+            InputMediaPhoto(photo)
         )
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
@@ -580,10 +590,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('Hᴏᴍᴇ', callback_data='start'),
             InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='close_data')
         ]]
+        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        photo = bot_doc.get("start_photo") if bot_doc else None
+        if photo and not photo.startswith("http"): photo = None
+        if not photo: photo = random.choice(PICS)
+
         await client.edit_message_media(
             query.message.chat.id, 
             query.message.id, 
-            InputMediaPhoto(random.choice(PICS))
+            InputMediaPhoto(photo)
         )
         owner = mongo_db.bots.find_one({'bot_id': me.id})
         ownerid = int(owner['user_id'])
@@ -618,6 +633,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ]]
         
         bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        photo = bot_doc.get("start_photo") if bot_doc else None
+        if photo and not photo.startswith("http"): photo = None
+        if not photo: photo = random.choice(PICS)
+
+        await client.edit_message_media(
+            query.message.chat.id, 
+            query.message.id, 
+            InputMediaPhoto(photo)
+        )
         if bot_doc and int(bot_doc['user_id']) == query.from_user.id:
             from TechVJ.bot import StreamBot
             main_bot_username = (await StreamBot.get_me()).username
