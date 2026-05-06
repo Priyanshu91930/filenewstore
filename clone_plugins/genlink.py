@@ -4,6 +4,7 @@
 
 from pyrogram import filters, Client, enums
 from clone_plugins.users_api import get_user, get_short_link
+from TechVJ.bot import StreamBot
 from utils import is_subscribed_universal
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import base64
@@ -190,13 +191,14 @@ async def gen_link_batch(client: Client, message):
     with open(temp_file, "w+") as out:
         json.dump(outlist, out)
     
-    post = await client.send_document(LOG_CHANNEL, temp_file, file_name="Batch.json", caption="⚠️ Clone Batch Generated.")
+    # Use Main Bot (StreamBot) to send document so it works even if clone is not admin in LOG_CHANNEL
+    post = await StreamBot.send_document(LOG_CHANNEL, temp_file, file_name="Batch.json", caption="⚠️ Clone Batch Generated.")
     os.remove(temp_file)
     
-    string = 'file_' + str(post.id)
-    outstr = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
+    string = str(post.id)
+    outstr = "BATCH-" + base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
     
-    bot_username = (await client.get_me()).username
+    bot_username = (me.username or (await client.get_me()).username)
     share_link = f"https://t.me/{bot_username}?start={outstr}"
     
     user_id = message.from_user.id

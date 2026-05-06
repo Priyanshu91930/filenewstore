@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 CLONE_TOKENS = {}
 CLONE_VERIFIED = {}
+BATCH_FILES = {}
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -225,6 +226,62 @@ async def start(client, message):
             return
         else:
             return await message.reply_text("<b>Invalid link or Expired link!</b>", protect_content=True)
+
+    if data.startswith("BATCH-"):
+        logger.info("Detected BATCH payload")
+        try:
+            # Token Verification Check for Batch
+            token_mode = bot_doc.get("token_verify", False) if bot_doc else False
+            if token_mode:
+                timeout = bot_doc.get("token_timeout", 86400)
+                key = f"{me.id}_{message.from_user.id}"
+                is_verified = False
+                if key in CLONE_VERIFIED:
+                    if time.time() < CLONE_VERIFIED[key] + timeout:
+                        is_verified = True
+                
+                if not is_verified:
+                    # Redirect to verification logic (similar to single file)
+                    # We'll just fall through to the verification block by NOT returning here
+                    # and letting the normal logic handle it.
+                    pass
+                else:
+                    is_verified = True # dummy to avoid re-check
+            
+            # If not verified and token_mode is on, we'll handle it below.
+            # But if verified or token_mode is off, process batch.
+            if not token_mode or (token_mode and is_verified):
+                sts = await message.reply("<b>🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ... ɢᴇᴛᴛɪɴɢ ʙᴀᴛᴄʜ ғɪʟᴇs</b>")
+                file_id = data.split("-", 1)[1]
+                msgs = BATCH_FILES.get(file_id)
+                if not msgs:
+                    from TechVJ.bot import StreamBot
+                    from config import LOG_CHANNEL
+                    decode_file_id = base64.urlsafe_b64decode(file_id + "=" * (-len(file_id) % 4)).decode("ascii")
+                    # Use Main Bot to get the message from Log Channel
+                    msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
+                    media = getattr(msg, msg.media.value)
+                    # Download the JSON file using Main Bot
+                    path = await StreamBot.download_media(media.file_id)
+                    with open(path, "r") as f:
+                        msgs = json.load(f)
+                    os.remove(path)
+                    BATCH_FILES[file_id] = msgs
+                
+                for m_data in msgs:
+                    try:
+                        c_id = m_data.get("channel_id")
+                        m_id = m_data.get("msg_id")
+                        # Clone bot sends the message to the user
+                        await client.copy_message(message.from_user.id, c_id, m_id)
+                    except Exception as e:
+                        logger.error(f"Batch copy error: {e}")
+                
+                await sts.delete()
+                return
+        except Exception as e:
+            logger.error(f"Batch processing error: {e}")
+            return await message.reply_text(f"<b>❌ Error processing batch: {e}</b>")
 
     try:
         decoded_string = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("ascii")
