@@ -64,7 +64,7 @@ def formate_file_name(file_name):
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     try:
-        me = await client.get_me()
+        me = client.me
         if not await db.is_user_exist(message.from_user.id):
             try:
                 await db.add_user(message.from_user.id, message.from_user.first_name)
@@ -305,7 +305,10 @@ async def start(client, message):
                         await x.delete()
                     except:
                         pass
-                await k.edit_text("<b>Your All Files/Videos is successfully deleted!!!</b>")
+                try:
+                    await k.edit_text("<b>Your All Files/Videos is successfully deleted!!!</b>")
+                except:
+                    pass
             return
 
 # Don't Remove Credit Tg - @viralverse0909
@@ -363,11 +366,17 @@ async def start(client, message):
                     await del_msg.delete()
                 except:
                     pass
-                await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
+                try:
+                    await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
+                except:
+                    pass
             return
         except Exception as e:
             logger.exception(f"File Send Error: {e}")
-            await message.reply_text(f"<b>⚠️ Error sending file.\n\nError:</b> <code>{e}</code>")
+            try:
+                await message.reply_text(f"<b>⚠️ Error sending file.\n\nError:</b> <code>{e}</code>")
+            except:
+                pass
         
     except Exception as e:
         logger.exception(f"Start Error: {e}")
@@ -609,7 +618,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InputMediaPhoto(random.choice(PICS))
         )
         reply_markup = InlineKeyboardMarkup(buttons)
-        me2 = (await client.get_me()).mention
+        me2 = client.me.mention
         await query.message.edit_text(
             text=script.ABOUT_TXT.format(me2),
             reply_markup=reply_markup,
@@ -621,7 +630,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 # Ask Doubt on telegram @Brainaxe190
     
     elif query.data == "start":
-        me = await client.get_me()
+        me = client.me
         buttons = [[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
             InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone_manage')
@@ -634,7 +643,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             query.message.id, 
             InputMediaPhoto(random.choice(PICS))
         )
-        me2 = (await client.get_me()).mention
+        me2 = client.me.mention
         await query.message.edit_text(
             text=script.START_TXT.format(query.from_user.mention, me2),
             reply_markup=reply_markup,
