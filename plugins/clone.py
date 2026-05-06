@@ -44,7 +44,8 @@ async def clone(client, message):
                 btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")]
                 buttons.append(btn)
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{client.me.username}?start=clone")])
+        me = client.me or await client.get_me()
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=clone")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜɴɪᴠᴇʀsᴀʟ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴄʀᴇᴀᴛᴇ ᴀ ᴄʜᴀɴɴᴇʟ ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)

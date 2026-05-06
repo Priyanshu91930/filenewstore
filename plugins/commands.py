@@ -64,7 +64,7 @@ def formate_file_name(file_name):
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     try:
-        me = client.me
+        me = client.me or await client.get_me()
         if not await db.is_user_exist(message.from_user.id):
             try:
                 await db.add_user(message.from_user.id, message.from_user.first_name)
@@ -618,7 +618,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InputMediaPhoto(random.choice(PICS))
         )
         reply_markup = InlineKeyboardMarkup(buttons)
-        me2 = client.me.mention
+        me = client.me or await client.get_me()
+        me2 = me.mention
         await query.message.edit_text(
             text=script.ABOUT_TXT.format(me2),
             reply_markup=reply_markup,
@@ -630,7 +631,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 # Ask Doubt on telegram @Brainaxe190
     
     elif query.data == "start":
-        me = client.me
+        me = client.me or await client.get_me()
         buttons = [[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
             InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone_manage')
@@ -643,7 +644,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             query.message.id, 
             InputMediaPhoto(random.choice(PICS))
         )
-        me2 = client.me.mention
+        me = client.me or await client.get_me()
+        me2 = me.mention
         await query.message.edit_text(
             text=script.START_TXT.format(query.from_user.mention, me2),
             reply_markup=reply_markup,

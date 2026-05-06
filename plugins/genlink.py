@@ -41,7 +41,8 @@ async def incoming_gen_link(bot, message):
                 btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")]
                 buttons.append(btn)
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{bot.me.username}?start=true")])
+        me = bot.me or await bot.get_me()
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜɴɪᴠᴇʀsᴀʟ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
@@ -59,12 +60,14 @@ async def incoming_gen_link(bot, message):
                 btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=chat.invite_link or f"https://t.me/{chat.username}")]
                 buttons.append(btn)
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{bot.me.username}?start=true")])
+        me = bot.me or await bot.get_me()
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴊᴏɪɴᴇᴅ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟꜱ ʏᴇᴛ. ᴘʟᴇᴀꜱᴇ ᴊᴏɪɴ ᴛʜᴇᴍ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
-    username = bot.me.username
+    me = bot.me or await bot.get_me()
+    username = me.username
     file_type = message.media
     post = await message.copy(LOG_CHANNEL)
     file_id = str(post.id)
@@ -98,7 +101,8 @@ async def gen_link_s(bot, message):
                 btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")]
                 buttons.append(btn)
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{bot.me.username}?start=true")])
+        me = bot.me or await bot.get_me()
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜɴɪᴠᴇʀsᴀʟ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
@@ -116,12 +120,14 @@ async def gen_link_s(bot, message):
                 btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=chat.invite_link or f"https://t.me/{chat.username}")]
                 buttons.append(btn)
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{bot.me.username}?start=true")])
+        me = bot.me or await bot.get_me()
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴊᴏɪɴᴇᴅ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟꜱ ʏᴇᴛ. ᴘʟᴇᴀꜱᴇ ᴊᴏɪɴ ᴛʜᴇᴍ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
-    username = bot.me.username
+    me = bot.me or await bot.get_me()
+    username = me.username
     replied = message.reply_to_message
     if not replied:
         return await message.reply('Reply to a message to get a shareable link.')
@@ -166,7 +172,8 @@ async def gen_link_batch(bot, message):
                 btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")]
                 buttons.append(btn)
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{bot.me.username}?start=true")])
+        me = bot.me or await bot.get_me()
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜɴɪᴠᴇʀsᴀʟ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
@@ -184,12 +191,14 @@ async def gen_link_batch(bot, message):
                 btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=chat.invite_link or f"https://t.me/{chat.username}")]
                 buttons.append(btn)
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{bot.me.username}?start=true")])
+        me = bot.me or await bot.get_me()
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴊᴏɪɴᴇᴅ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟꜱ ʏᴇᴛ. ᴘʟᴇᴀꜱᴇ ᴊᴏɪɴ ᴛʜᴇᴍ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
-    username = bot.me.username
+    me = bot.me or await bot.get_me()
+    username = me.username
     # Interactive Batch Flow
     f_msg = await bot.ask(message.chat.id, "<b>Forward the FIRST message from the channel or send the message link.\n\n/cancel to stop.</b>")
     if f_msg.text == "/cancel": return await f_msg.reply("Cancelled.")
