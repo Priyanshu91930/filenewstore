@@ -777,7 +777,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("ddel_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         new_status = not bot.get("auto_delete_enabled", True)
         await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"auto_delete_enabled": new_status}})
         await query.answer(f"Auto Delete {'Enabled' if new_status else 'Disabled'}")
@@ -880,7 +880,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("forcesub_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         channels = bot.get("force_sub_channels", [])
         mode = bot.get("force_sub_mode", "normal")
         channel_names = bot.get("channel_names") or {}
@@ -905,7 +905,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("add_fsub_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         if len(bot.get("force_sub_channels", [])) >= 6:
             return await query.answer("Max 6 channels allowed!", show_alert=True)
             
@@ -945,7 +945,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("mode_fsub_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         new_mode = "joinreq" if bot.get("force_sub_mode", "normal") == "normal" else "normal"
         clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"force_sub_mode": new_mode}})
         await query.answer(f"Mode switched to {new_mode.upper()}")
@@ -954,7 +954,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("mods_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         mods = bot.get("moderators", [])
         mods_text = "\n".join([f"• <code>{m}</code>" for m in mods]) if mods else "<i>No moderators added.</i>"
         buttons = [
@@ -990,7 +990,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("nofwd_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         is_nofwd = bot.get("no_forward", False)
         new_status = not is_nofwd
         clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"no_forward": new_status}})
@@ -1008,7 +1008,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("tokencfg_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         token_mode = bot.get("token_verify", False)
         status_txt = "Enabled ✅" if token_mode else "Disabled ❌"
         
@@ -1042,7 +1042,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("token_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         token_mode = bot.get("token_verify", False)
         new_status = not token_mode
         clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_verify": new_status}})
@@ -1103,7 +1103,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("mode_") and not query.data.startswith("mode_fsub_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         current_mode = bot.get("bot_mode", "public")
         buttons = [
             [InlineKeyboardButton("🌐 Public Mode", callback_data=f"setmode_public_{bot_id}"),
@@ -1127,7 +1127,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("stats_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         from clone_plugins.dbusers import clonedb
         total_users = await clonedb.total_users_count(bot_id) if bot else 0
         status = "🔴 Deactivated" if bot.get("is_deactivated") else "🟢 Active"
@@ -1142,7 +1142,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("restart_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         if not bot:
             return await query.answer("Bot not found!", show_alert=True)
         await query.answer("⏳ Restarting bot...", show_alert=True)
