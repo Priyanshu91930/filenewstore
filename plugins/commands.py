@@ -20,7 +20,7 @@ import json
 import base64
 from urllib.parse import quote_plus
 from TechVJ.utils.file_properties import get_name, get_hash, get_media_file_size
-from plugins.clone import mongo_db as clone_mongo_db
+from plugins.clone import async_mongo_db as clone_mongo_db
 from clone_plugins.dbusers import clonedb
 logger = logging.getLogger(__name__)
 
@@ -163,7 +163,7 @@ async def start(client, message):
             
         if data.startswith("manageclone_"):
             bot_id = int(data.split("_")[-1])
-            bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+            bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
             if not bot or int(bot.get("user_id", 0)) != message.from_user.id:
                 return await message.reply("<b>❌ You don't own this bot!</b>")
                 
@@ -391,7 +391,7 @@ async def stats_handler(client, message):
     main_users = await db.total_users_count()
     
     # 2. Total Clones
-    total_clones = clone_mongo_db.bots.count_documents({})
+    total_clones = await clone_mongo_db.bots.count_documents({})
     
     # 3. Total Users Across Clones
     total_clone_users = 0
@@ -490,7 +490,7 @@ async def set_force_sub_handler(client, message):
     Owner adds clone bot as admin to channels, then forwards a message from each channel here.
     """
     user_id = message.from_user.id
-    bot_doc = clone_mongo_db.bots.find_one({"user_id": user_id})
+    bot_doc = await clone_mongo_db.bots.find_one({"user_id": user_id})
     if not bot_doc:
         return await message.reply_text(
             "<b>❌ You don't have a clone bot yet.\nCreate one first by clicking 🤖 ᴄʟᴏɴᴇ in the main bot.</b>"
@@ -556,7 +556,7 @@ async def set_force_sub_handler(client, message):
                 "If your channel is private, just forward any post from it.</b>"
             )
     # Save channels to DB
-    clone_mongo_db.bots.update_one(
+    await clone_mongo_db.bots.update_one(
         {"user_id": user_id},
         {"$set": {"force_sub_channels": channels}}
     )
@@ -576,7 +576,7 @@ async def set_force_sub_handler(client, message):
 @Client.on_message(filters.command("listforcesub") & filters.private)
 async def list_force_sub_handler(client, message):
     user_id = message.from_user.id
-    bot_doc = clone_mongo_db.bots.find_one({"user_id": user_id})
+    bot_doc = await clone_mongo_db.bots.find_one({"user_id": user_id})
     if not bot_doc:
         return await message.reply_text("<b>❌ You don't have a clone bot yet.</b>")
     channels = bot_doc.get("force_sub_channels", [])
@@ -598,10 +598,10 @@ async def list_force_sub_handler(client, message):
 @Client.on_message(filters.command("clearforcesub") & filters.private)
 async def clear_force_sub_handler(client, message):
     user_id = message.from_user.id
-    bot_doc = clone_mongo_db.bots.find_one({"user_id": user_id})
+    bot_doc = await clone_mongo_db.bots.find_one({"user_id": user_id})
     if not bot_doc:
         return await message.reply_text("<b>❌ You don't have a clone bot yet.</b>")
-    clone_mongo_db.bots.update_one({"user_id": user_id}, {"$set": {"force_sub_channels": []}})
+    await clone_mongo_db.bots.update_one({"user_id": user_id}, {"$set": {"force_sub_channels": []}})
     await message.reply_text(f"<b>✅ All force subscribe channels cleared for @{bot_doc.get('username','your bot')}.</b>")
 
 @Client.on_callback_query()
@@ -615,11 +615,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
             return await query.answer("❌ This button is not for you!", show_alert=True)
         mode_value = "normal" if mode == "nm" else "joinreq"
         mode_label = "🔵 Normal Mode" if mode == "nm" else "🟢 Join Request Mode"
-        clone_mongo_db.bots.update_one(
+        await clone_mongo_db.bots.update_one(
             {"user_id": owner_id},
             {"$set": {"force_sub_mode": mode_value}}
         )
-        bot_doc = clone_mongo_db.bots.find_one({"user_id": owner_id})
+        bot_doc = await clone_mongo_db.bots.find_one({"user_id": owner_id})
         bot_username = bot_doc.get("username", "your bot") if bot_doc else "your bot"
         desc = (
             "Users click <b>Join</b> and instantly join the channel."
@@ -687,7 +687,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
     
     elif query.data == "clone_manage":
         user_id = query.from_user.id
-        bots = list(clone_mongo_db.bots.find({"user_id": user_id}))
+        bots = [b async for b in clone_mongo_db.bots.find({"user_id": user_id})]
         buttons = []
         for bot in bots:
             buttons.append([InlineKeyboardButton(f"{bot['name']}", callback_data=f"cust_{bot['bot_id']}")])
@@ -708,7 +708,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("cust_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         if not bot:
             return await query.answer("Bot not found!", show_alert=True)
             
@@ -742,7 +742,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("autodel_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         is_enabled = bot.get("auto_delete_enabled", True)
         status = "Enabled ✅" if is_enabled else "Disabled ❌"
         label = "Disable ❌" if is_enabled else "Enable ✅"
@@ -760,7 +760,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("deactivate_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         is_deact = bot.get("is_deactivated", False)
         label = "Activate" if is_deact else "Deactivate"
         status_text = "<b>Status: Deactivated ❌</b>" if is_deact else "<b>Status: Active ✅</b>"
@@ -779,7 +779,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot_id = int(query.data.split("_")[-1])
         bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
         new_status = not bot.get("auto_delete_enabled", True)
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"auto_delete_enabled": new_status}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"auto_delete_enabled": new_status}})
         await query.answer(f"Auto Delete {'Enabled' if new_status else 'Disabled'}")
         # Refresh the menu
         query.data = f"autodel_{bot_id}"
@@ -787,9 +787,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("do_deact_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         new_status = not bot.get("is_deactivated", False)
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"is_deactivated": new_status}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"is_deactivated": new_status}})
         await query.answer(f"Bot {'Deactivated' if new_status else 'Activated'}")
         # Refresh the menu
         query.data = f"deactivate_{bot_id}"
@@ -797,7 +797,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("delete_"):
         bot_id = int(query.data.split("_")[-1])
-        bot = clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         if not bot: return await query.answer("Bot not found!")
         
         # Confirmation

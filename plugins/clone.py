@@ -3,7 +3,7 @@
 # Ask Doubt on telegram @Brainaxe190
 
 import re
-from pymongo import MongoClient
+import motor.motor_asyncio
 from Script import script
 from pyrogram import Client, filters
 from pyrogram.types import Message, BotCommand
@@ -11,7 +11,17 @@ from pyrogram.errors.exceptions.bad_request_400 import AccessTokenExpired, Acces
 from config import API_ID, API_HASH, DB_URI, DB_NAME, CLONE_MODE, UNIVERSAL_FORCE_SUB_CHANNEL
 from utils import is_subscribed_universal
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import logging
 
+logger = logging.getLogger(__name__)
+
+# Async DB Client
+async_mongo_client = motor.motor_asyncio.AsyncIOMotorClient(DB_URI)
+async_mongo_db = async_mongo_client["cloned_vjbotz"]
+
+# Maintain synchronous for backward compatibility in some scripts if needed, 
+# but we should move away from it.
+from pymongo import MongoClient
 mongo_client = MongoClient(DB_URI)
 mongo_db = mongo_client["cloned_vjbotz"]
 
@@ -38,7 +48,7 @@ async def clone(client, message):
         return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
     if isinstance(chk, list):
         buttons = []
-        for i, channel_id in enumerate(chk, start=1):
+        for channel_id in chk:
             try:
                 chat = await client.get_chat(channel_id)
                 btn = [InlineKeyboardButton(f"ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")]
@@ -92,9 +102,10 @@ async def clone(client, message):
             'name': bot.first_name,
             'token': bot_token,
             'username': bot.username,
-            'force_sub_channels': []
+            'force_sub_channels': [],
+            'force_sub_mode': 'normal'
         }
-        mongo_db.bots.insert_one(details)
+        await async_mongo_db.bots.insert_one(details)
         await msg.edit_text(
             f"<b>✅ sᴜᴄᴄᴇssғᴜʟʟʏ ᴄʟᴏɴᴇᴅ ʏᴏᴜʀ ʙᴏᴛ: @{bot.username}\n\n"
             f"📋 <b>Commands set automatically!</b>\n\n"
@@ -109,27 +120,31 @@ async def delete_cloned_bot(client, message):
         return 
     try:
         techvj = await client.ask(message.chat.id, "**Send Me Bot Token To Delete**")
-        bot_token = re.findall(r'\d[0-9]{8,10}:[0-9A-Za-z_-]{35}', techvj.text, re.IGNORECASE)
-        bot_token = bot_token[0] if bot_token else None
-        bot_id = re.findall(r'\d[0-9]{8,10}', techvj.text)
-        cloned_bot = mongo_db.bots.find_one({"token": bot_token})
+        bot_token_find = re.findall(r"\b(\d+:[A-Za-z0-9_-]+)\b", techvj.text)
+        bot_token = bot_token_find[0] if bot_token_find else None
+        
+        if not bot_token:
+             return await message.reply_text("**⚠️ Invalid Bot Token.**")
+
+        cloned_bot = await async_mongo_db.bots.find_one({"token": bot_token})
         if cloned_bot:
-            if bot_id:
-                await stop_clone(int(bot_id[0]))
-            mongo_db.bots.delete_one({"token": bot_token})
+            bot_id = cloned_bot['bot_id']
+            await stop_clone(int(bot_id))
+            await async_mongo_db.bots.delete_one({"token": bot_token})
+            # Also clean up users collection for this bot
+            try:
+                await async_mongo_db[str(bot_id)].drop()
+            except: pass
             await message.reply_text("**🤖 ᴛʜᴇ ᴄʟᴏɴᴇᴅ ʙᴏᴛ ʜᴀs ʙᴇᴇɴ sᴛᴏᴘᴘᴇᴅ ᴀɴᴅ ʀᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ᴛʜᴇ ᴅᴀᴛᴀʙᴀsᴇ. ☠️**")
         else:
             await message.reply_text("**⚠️ ᴛʜᴇ ʙᴏᴛ ᴛᴏᴋᴇɴ ᴘʀᴏᴠɪᴅᴇᴅ ɪs ɴᴏᴛ ɪɴ ᴛʜᴇ ᴄʟᴏɴᴇᴅ ʟɪsᴛ.**")
-    except:
+    except Exception as e:
+        logger.error(f"Error deleting bot: {e}")
         await message.reply_text("An error occurred while deleting the cloned bot.")
 
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
-
 async def restart_bots():
-    bots = list(mongo_db.bots.find())
-    for bot in bots:
+    cursor = async_mongo_db.bots.find()
+    async for bot in cursor:
         bot_token = bot['token']
         bot_id = bot['bot_id']
         # Skip if already running

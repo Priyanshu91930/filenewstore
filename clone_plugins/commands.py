@@ -11,7 +11,7 @@ from validators import domain
 from clone_plugins.dbusers import clonedb
 from clone_plugins.users_api import get_user, update_user_info
 from pyrogram import Client, filters, enums
-from plugins.clone import mongo_db
+from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait
 from config import BOT_USERNAME, ADMINS
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto
@@ -52,7 +52,7 @@ def get_size(size):
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     me = client.me or await client.get_me()
-    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
     
     # Deactivation Check
     if bot_doc and bot_doc.get("is_deactivated", False):
@@ -62,85 +62,71 @@ async def start(client, message):
         await clonedb.add_user(me.id, message.from_user.id)
     
     # Universal Force Sub Check for Clones
-    logger.info(f"Checking universal fsub for user {message.from_user.id}")
     chk = await is_subscribed_universal(client, message)
     if chk == "kicked":
-        await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-        return
+        return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
+    
     if type(chk) == list:
-        logger.info(f"User {message.from_user.id} needs to join universal channels: {chk}")
         buttons = []
-        for i, channel_id in enumerate(chk, start=1):
+        for channel_id in chk:
             try:
                 chat = await client.get_chat(channel_id)
-                link = chat.invite_link
-                if not link:
-                    try:
-                        inv = await client.create_chat_invite_link(channel_id)
-                        link = inv.invite_link
-                    except:
-                        link = f"https://t.me/{chat.username}" if chat.username else None
-                if link:
-                    buttons.append([InlineKeyboardButton("ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=link)])
+                link = chat.invite_link or f"https://t.me/{chat.username}"
+                buttons.append([InlineKeyboardButton("ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=link)])
             except: continue
         buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
-    logger.info(f"Universal check passed for {message.from_user.id}")
-    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
-    # Migrate old entries that don't have the field
-    if bot_doc and 'force_sub_channels' not in bot_doc:
-        mongo_db.bots.update_one({'bot_id': me.id}, {'$set': {'force_sub_channels': [], 'force_sub_mode': 'normal'}})
-        bot_doc['force_sub_channels'] = []
-        bot_doc['force_sub_mode'] = 'normal'
+
     clone_force_channels = bot_doc.get('force_sub_channels', []) if bot_doc else []
     force_sub_mode = bot_doc.get('force_sub_mode', 'normal') if bot_doc else 'normal'
+    
     if clone_force_channels:
-        logger.info(f"Checking clone-specific fsub for user {message.from_user.id}")
         not_joined = []
-        for channel_id in clone_force_channels:
+        
+        async def check_sub(ch_id):
             try:
-                member = await client.get_chat_member(channel_id, message.from_user.id)
-                if member.status in [enums.ChatMemberStatus.BANNED]:
-                    return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
+                member = await client.get_chat_member(ch_id, message.from_user.id)
+                if member.status == enums.ChatMemberStatus.BANNED:
+                    return "kicked"
                 if member.status == enums.ChatMemberStatus.LEFT:
-                    not_joined.append(channel_id)
+                    return ch_id
             except:
                 if force_sub_mode == 'joinreq':
-                    req = mongo_db.join_reqs.find_one({"bot_id": me.id, "user_id": message.from_user.id, "channel_id": channel_id})
-                    if req:
-                        continue
-                not_joined.append(channel_id)
+                    req = await mongo_db.join_reqs.find_one({"bot_id": me.id, "user_id": message.from_user.id, "channel_id": ch_id})
+                    if req: return None
+                return ch_id
+            return None
+
+        results = await asyncio.gather(*[check_sub(ch) for ch in clone_force_channels])
+        if "kicked" in results:
+            return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
+        
+        not_joined = [r for r in results if r is not None]
+
         if not_joined:
-            logger.info(f"User {message.from_user.id} needs to join clone channels: {not_joined}")
             buttons = []
             for i, channel_id in enumerate(not_joined, start=1):
                 try:
                     chat = await client.get_chat(channel_id)
                     if force_sub_mode == 'joinreq':
-                        # Create a join-request invite link
                         try:
                             inv = await client.create_chat_invite_link(channel_id, creates_join_request=True)
                             link = inv.invite_link
                         except:
                             link = chat.invite_link or (f"https://t.me/{chat.username}" if chat.username else None)
                     else:
-                        link = chat.invite_link
-                        if not link:
-                            try:
-                                inv = await client.create_chat_invite_link(channel_id)
-                                link = inv.invite_link
-                            except:
-                                link = f"https://t.me/{chat.username}" if chat.username else None
+                        link = chat.invite_link or f"https://t.me/{chat.username}"
+                    
                     if link:
-                        label = f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i} ➔ {chat.title}"
-                        buttons.append([InlineKeyboardButton(label, url=link)])
+                        buttons.append([InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i} ➔ {chat.title}", url=link)])
                     else:
                         buttons.append([InlineKeyboardButton(f"⚠️ Bot Not Admin in Channel {i}", url=f"https://t.me/{me.username}")])
                 except: 
                     buttons.append([InlineKeyboardButton(f"⚠️ Bot Not Admin in Channel {i}", url=f"https://t.me/{me.username}")])
+            
             try_url = f"https://t.me/{me.username}?start={message.command[1]}" if len(message.command) > 1 else f"https://t.me/{me.username}?start=true"
             buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=try_url)])
             mode_hint = " (Click to send join request)" if force_sub_mode == 'joinreq' else ""
@@ -298,7 +284,7 @@ async def start(client, message):
     
     # Try fetching the file_id from DB using the short ID
     logger.info(f"Searching DB for decoded_id: {decoded_id}")
-    file_doc = mongo_db.clone_files.find_one({"_id": decoded_id})
+    file_doc = await mongo_db.clone_files.find_one({"_id": decoded_id})
     if file_doc:
         file_id = file_doc["file_id"]
         logger.info(f"Found file in DB. file_id exists.")
@@ -413,11 +399,15 @@ async def start(client, message):
         if is_autodel:
             del_time = bot_owner.get("auto_delete_time", 5) if bot_owner else 5
             k = await msg.reply(f"<b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{del_time} mins</u> 🫥 <i></b>(Due to Copyright Issues)</i>.\n\n<b><i>Please forward this File/Video to your Saved Messages and Start Download there</i></b>",quote=True)
-            await asyncio.sleep(del_time * 60)
-            try:
-                await msg.delete()
-                await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
-            except: pass
+            
+            async def auto_delete_task(m, warning_msg, delay):
+                await asyncio.sleep(delay * 60)
+                try:
+                    await m.delete()
+                    await warning_msg.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
+                except: pass
+            
+            asyncio.create_task(auto_delete_task(msg, k, del_time))
         return
     except Exception as e:
         logger.error(f"Clone bot caption/auto-delete error: {e}")
@@ -425,7 +415,7 @@ async def start(client, message):
 @Client.on_message(filters.command("setting") & filters.private & filters.incoming)
 async def settings_command(client, message):
     me = client.me or await client.get_me()
-    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
     if bot_doc and bot_doc.get("is_deactivated", False):
         return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
@@ -478,7 +468,7 @@ async def set_caption_handler(client, m: Message):
     To remove: /setcaption off
     """
     me = client.me or await client.get_me()
-    bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    bot_owner = await mongo_db.bots.find_one({'bot_id': me.id})
     
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
@@ -506,7 +496,7 @@ async def set_caption_handler(client, m: Message):
 @Client.on_message(filters.command('api') & filters.private)
 async def shortener_api_handler(client, m: Message):
     me = client.me or await client.get_me()
-    bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    bot_owner = await mongo_db.bots.find_one({'bot_id': me.id})
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
@@ -538,7 +528,7 @@ async def shortener_api_handler(client, m: Message):
 @Client.on_message(filters.command("base_site") & filters.private)
 async def base_site_handler(client, m: Message):
     me = client.me or await client.get_me()
-    bot_owner = mongo_db.bots.find_one({'bot_id': me.id})
+    bot_owner = await mongo_db.bots.find_one({'bot_id': me.id})
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
@@ -574,11 +564,11 @@ async def join_reqs_handler(client, join_request):
     """Record join requests without auto-approving them so owners can manually accept later."""
     try:
         me = client.me or await client.get_me()
-        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         if not bot_doc: return
         force_sub_mode = bot_doc.get('force_sub_mode', 'normal')
         if force_sub_mode == 'joinreq':
-            mongo_db.join_reqs.update_one(
+            await mongo_db.join_reqs.update_one(
                 {"bot_id": me.id, "user_id": join_request.from_user.id, "channel_id": join_request.chat.id},
                 {"$set": {"requested": True}},
                 upsert=True
@@ -600,7 +590,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ]]
         
         reply_markup = InlineKeyboardMarkup(buttons)
-        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         photo = bot_doc.get("start_photo") if bot_doc else None
         if photo and not photo.startswith("http"): photo = None
         if not photo: photo = random.choice(PICS)
@@ -625,7 +615,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('Hᴏᴍᴇ', callback_data='start'),
             InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='close_data')
         ]]
-        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         photo = bot_doc.get("start_photo") if bot_doc else None
         if photo and not photo.startswith("http"): photo = None
         if not photo: photo = random.choice(PICS)
@@ -657,7 +647,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             query.message.id, 
             InputMediaPhoto(photo)
         )
-        owner = mongo_db.bots.find_one({'bot_id': me.id})
+        owner = await mongo_db.bots.find_one({'bot_id': me.id})
         ownerid = int(owner['user_id'])
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
@@ -689,7 +679,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
         ]]
         
-        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         photo = bot_doc.get("start_photo") if bot_doc else None
         if photo and not photo.startswith("http"): photo = None
         if not photo: photo = random.choice(PICS)
