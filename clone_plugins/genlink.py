@@ -8,6 +8,10 @@ from TechVJ.bot import StreamBot
 from utils import is_subscribed_universal
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import base64
+import uuid
+import json
+import os
+import re
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -17,50 +21,77 @@ import base64
 async def gen_link_s(client: Client, message):
     from plugins.clone import mongo_db
     me = await client.get_me()
-    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
     if bot_doc and bot_doc.get("is_deactivated", False):
         return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
-    # Owner/Moderator check
+    # Bot Mode Check (Public/Private)
+    bot_mode = bot_doc.get("bot_mode", "public") if bot_doc else "public"
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
-        return await message.reply("<b>❌ Only the bot owner and moderators can generate links!</b>")
+    
+    if bot_mode == "private" and message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ This bot is in Private Mode. Only the bot owner and moderators can generate links!</b>")
 
-    # Universal Force Sub Check for Clones
-    chk = await is_subscribed_universal(client, message)
-    if chk == "kicked":
+    # Universal Force Sub Check
+    chk_u = await is_subscribed_universal(client, message)
+    if chk_u == "kicked":
         return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-    if type(chk) == list:
+    
+    if type(chk_u) == list:
         buttons = []
-        for i, channel_id in enumerate(chk, start=1):
+        for channel_id in chk_u:
             try:
                 chat = await client.get_chat(channel_id)
                 buttons.append([InlineKeyboardButton("ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")])
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{(await client.get_me()).username}?start=true")])
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
+
+    # Clone-specific Force Sub Check
+    clone_force_channels = bot_doc.get('force_sub_channels', []) if bot_doc else []
+    if clone_force_channels:
+        not_joined = []
+        for ch_id in clone_force_channels:
+            try:
+                member = await client.get_chat_member(ch_id, message.from_user.id)
+                if member.status == enums.ChatMemberStatus.BANNED:
+                    return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs!</b>")
+                if member.status == enums.ChatMemberStatus.LEFT:
+                    not_joined.append(ch_id)
+            except:
+                not_joined.append(ch_id)
+        
+        if not_joined:
+            buttons = []
+            for i, ch_id in enumerate(not_joined, 1):
+                try:
+                    chat = await client.get_chat(ch_id)
+                    buttons.append([InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=chat.invite_link or f"https://t.me/{chat.username}")])
+                except: pass
+            buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
+            return await message.reply_text(
+                text="<b>ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋs!</b>",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
 
     replied = message.reply_to_message
     if not replied:
         return await message.reply('<b>Reply to a media file to get a shareable link.</b>')
 
     file_type = replied.media
-    import uuid
-    from plugins.clone import mongo_db
-    
     media = getattr(replied, file_type.value)
     file_id = media.file_id
     
-    # Generate a short unique ID (8 chars is enough and safely fits within 64 byte limit)
+    # Generate a short unique ID (8 chars is enough)
     short_id = str(uuid.uuid4())[:8]
-    bot_username = (await client.get_me()).username
+    bot_username = me.username
     
-    # Store in DB so we can retrieve the massive file_id later
-    mongo_db.clone_files.insert_one({
+    # Store in DB
+    await mongo_db.clone_files.insert_one({
         "_id": short_id,
         "bot_username": bot_username,
         "file_id": file_id
@@ -86,35 +117,64 @@ async def gen_link_s(client: Client, message):
 async def gen_link_batch(client: Client, message):
     from plugins.clone import mongo_db
     from config import LOG_CHANNEL
-    import re, os, json, asyncio
     
     me = await client.get_me()
-    bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
     if bot_doc and bot_doc.get("is_deactivated", False):
         return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
-    # Owner/Moderator check
+    # Bot Mode Check (Public/Private)
+    bot_mode = bot_doc.get("bot_mode", "public") if bot_doc else "public"
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
-        return await message.reply("<b>❌ Only the bot owner and moderators can generate links!</b>")
+    
+    if bot_mode == "private" and message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ This bot is in Private Mode. Only the bot owner and moderators can generate links!</b>")
 
-    # Universal Force Sub Check for Clones
-    chk = await is_subscribed_universal(client, message)
-    if chk == "kicked":
+    # Universal Force Sub Check
+    chk_u = await is_subscribed_universal(client, message)
+    if chk_u == "kicked":
         return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs, sᴏ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴍᴇ!</b>")
-    if type(chk) == list:
+    
+    if type(chk_u) == list:
         buttons = []
-        for i, channel_id in enumerate(chk, start=1):
+        for channel_id in chk_u:
             try:
                 chat = await client.get_chat(channel_id)
                 buttons.append([InlineKeyboardButton("ᴊᴏɪɴ ᴜɴɪᴠᴇʀsᴀʟ ᴄʜᴀɴɴᴇʟ", url=chat.invite_link or f"https://t.me/{chat.username}")])
             except: continue
-        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{(await client.get_me()).username}?start=true")])
+        buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
         return await message.reply_text(
             text="<b>ʜᴇʏ, ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ʙᴏᴛ!</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
+
+    # Clone-specific Force Sub Check
+    clone_force_channels = bot_doc.get('force_sub_channels', []) if bot_doc else []
+    if clone_force_channels:
+        not_joined = []
+        for ch_id in clone_force_channels:
+            try:
+                member = await client.get_chat_member(ch_id, message.from_user.id)
+                if member.status == enums.ChatMemberStatus.BANNED:
+                    return await message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ғʀᴏᴍ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs!</b>")
+                if member.status == enums.ChatMemberStatus.LEFT:
+                    not_joined.append(ch_id)
+            except:
+                not_joined.append(ch_id)
+        
+        if not_joined:
+            buttons = []
+            for i, ch_id in enumerate(not_joined, 1):
+                try:
+                    chat = await client.get_chat(ch_id)
+                    buttons.append([InlineKeyboardButton(f"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ {i}", url=chat.invite_link or f"https://t.me/{chat.username}")])
+                except: pass
+            buttons.append([InlineKeyboardButton("🔄 ᴛʀʏ ᴀɢᴀɪɴ", url=f"https://t.me/{me.username}?start=true")])
+            return await message.reply_text(
+                text="<b>ᴘʟᴇᴀsᴇ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟs ᴛᴏ ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋs!</b>",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
 
     # Interactive Batch Flow
     f_msg = await client.ask(message.chat.id, "<b>Forward the FIRST message from the channel or send the message link.\n\n/cancel to stop.</b>")
@@ -164,9 +224,6 @@ async def gen_link_batch(client: Client, message):
 
     outlist = []
     tot = 0
-    # Use get_chat_history since iter_messages is not standard in Client
-    # We need to get from f_msg_id to l_msg_id.
-    # IDs are typically sequential.
     total_count = l_msg_id - f_msg_id + 1
     
     for m_id in range(f_msg_id, l_msg_id + 1):
@@ -191,14 +248,14 @@ async def gen_link_batch(client: Client, message):
     with open(temp_file, "w+") as out:
         json.dump(outlist, out)
     
-    # Use Main Bot (StreamBot) to send document so it works even if clone is not admin in LOG_CHANNEL
+    # Use Main Bot (StreamBot) to send document
     post = await StreamBot.send_document(LOG_CHANNEL, temp_file, file_name="Batch.json", caption="⚠️ Clone Batch Generated.")
     os.remove(temp_file)
     
     string = str(post.id)
     outstr = "BATCH-" + base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
     
-    bot_username = (me.username or (await client.get_me()).username)
+    bot_username = me.username
     share_link = f"https://t.me/{bot_username}?start={outstr}"
     
     user_id = message.from_user.id
@@ -208,8 +265,3 @@ async def gen_link_batch(client: Client, message):
         await sts.edit(f"<b>⭕ ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʙᴀᴛᴄʜ ʟɪɴᴋ:\n\n🖇️ sʜᴏʀᴛ ʟɪɴᴋ :- {short_link}\n\n🔗 ᴏʀɪɢɪɴᴀʟ ʟɪɴᴋ :- {share_link}</b>")
     else:
         await sts.edit(f"<b>⭕ ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʙᴀᴛᴄʜ ʟɪɴᴋ:\n\n🔗 ᴏʀɪɢɪɴᴀʟ ʟɪɴᴋ :- {share_link}</b>")
-
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
-
