@@ -75,7 +75,8 @@ async def clone(client, message):
         vj = Client(
             f"clone_{bot_token[:10]}", API_ID, API_HASH,
             bot_token=bot_token,
-            plugins={"root": "clone_plugins"}
+            plugins={"root": "clone_plugins"},
+            in_memory=True
         )
         await vj.start()
         bot = await vj.get_me()
@@ -147,14 +148,15 @@ async def restart_bots():
     async for bot in cursor:
         bot_token = bot['token']
         bot_id = bot['bot_id']
-        # Skip if already running
+        # Stop and remove any stale running instance first to avoid duplicate handlers
         if bot_id in running_clones:
-            continue
+            await stop_clone(bot_id)
         try:
             vj = Client(
                 f"clone_{bot_token[:10]}", API_ID, API_HASH,
                 bot_token=bot_token,
-                plugins={"root": "clone_plugins"}
+                plugins={"root": "clone_plugins"},
+                in_memory=True
             )
             await vj.start()
             running_clones[bot_id] = vj

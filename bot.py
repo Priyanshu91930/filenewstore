@@ -51,9 +51,6 @@ from TechVJ.bot.clients import initialize_clients
 # Ask Doubt on telegram @Brainaxe190
 
 
-ppath = "plugins/*.py"
-files = glob.glob(ppath)
-StreamBot.start()
 loop = asyncio.get_event_loop()
 
 # Don't Remove Credit Tg - @viralverse0909
@@ -63,6 +60,7 @@ loop = asyncio.get_event_loop()
 
 async def start():
     print('Initializing Brainaxe Bot')
+    await StreamBot.start()
     bot_info = await StreamBot.get_me()
     StreamBot.username = bot_info.username
     await initialize_clients()

@@ -17,7 +17,7 @@ import re
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
 
-@Client.on_message(filters.command(['link']))
+@Client.on_message(filters.command(['link']) & filters.private & filters.incoming)
 async def gen_link_s(client: Client, message):
     from plugins.clone import mongo_db
     me = await client.get_me()
@@ -82,9 +82,16 @@ async def gen_link_s(client: Client, message):
     if not replied:
         return await message.reply('<b>Reply to a media file to get a shareable link.</b>')
 
+    # Validate that the replied message actually has media
     file_type = replied.media
-    media = getattr(replied, file_type.value)
-    file_id = media.file_id
+    if not file_type:
+        return await message.reply('<b>❌ The replied message has no media. Please reply to a file, video, audio, or document.</b>')
+
+    try:
+        media = getattr(replied, file_type.value)
+        file_id = media.file_id
+    except Exception as e:
+        return await message.reply(f'<b>❌ Could not read media: {e}</b>')
     
     # Generate a short unique ID (8 chars is enough)
     short_id = str(uuid.uuid4())[:8]
@@ -113,7 +120,7 @@ async def gen_link_s(client: Client, message):
         await message.reply(f"<b>⭕ ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ:\n\n🔗 ᴏʀɪɢɪɴᴀʟ ʟɪɴᴋ :- {share_link}</b>")
 
 
-@Client.on_message(filters.command(['batch']) & filters.private)
+@Client.on_message(filters.command(['batch']) & filters.private & filters.incoming)
 async def gen_link_batch(client: Client, message):
     from plugins.clone import mongo_db
     from config import LOG_CHANNEL
@@ -177,8 +184,11 @@ async def gen_link_batch(client: Client, message):
             )
 
     # Interactive Batch Flow
-    f_msg = await client.ask(message.chat.id, "<b>Forward the FIRST message from the channel or send the message link.\n\n/cancel to stop.</b>")
-    if f_msg.text == "/cancel": return await f_msg.reply("Cancelled.")
+    try:
+        f_msg = await client.ask(message.chat.id, "<b>Forward the FIRST message from the channel or send the message link.\n\n/cancel to stop.</b>", timeout=120)
+    except Exception as ask_err:
+        return await message.reply(f"<b>❌ Batch session timed out or failed: {ask_err}\n\nPlease try /batch again.</b>")
+    if hasattr(f_msg, 'text') and f_msg.text == "/cancel": return await f_msg.reply("Cancelled.")
 
     # Parse First Message
     regex = re.compile("(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
@@ -195,8 +205,11 @@ async def gen_link_batch(client: Client, message):
         return await f_msg.reply("<b>Please forward a message or send a link!</b>")
 
     # Ask for Last Message
-    l_msg = await client.ask(message.chat.id, "<b>Forward the LAST message from the channel or send the message link.\n\n/cancel to stop.</b>")
-    if l_msg.text == "/cancel": return await l_msg.reply("Cancelled.")
+    try:
+        l_msg = await client.ask(message.chat.id, "<b>Forward the LAST message from the channel or send the message link.\n\n/cancel to stop.</b>", timeout=120)
+    except Exception as ask_err:
+        return await message.reply(f"<b>❌ Batch session timed out or failed: {ask_err}\n\nPlease try /batch again.</b>")
+    if hasattr(l_msg, 'text') and l_msg.text == "/cancel": return await l_msg.reply("Cancelled.")
 
     # Parse Last Message
     if l_msg.forward_from_chat:
