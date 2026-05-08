@@ -5,81 +5,114 @@
 import sys
 import glob
 import importlib
+import traceback
 from pathlib import Path
 from pyrogram import idle
 import logging
 import logging.config
 
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
+# Force stdout to flush immediately — critical for Docker log visibility
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
-# Get logging configurations
-logging.config.fileConfig('logging.conf')
-logging.getLogger().setLevel(logging.INFO)
-logging.getLogger("pyrogram").setLevel(logging.ERROR)
+# ── Logging Setup ────────────────────────────────────────────────────────────
+# Override console handler to DEBUG so all logs appear in Docker
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+# Load file config on top (for file handler only)
+try:
+    logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
+except Exception as _lc_err:
+    print(f"[WARNING] Could not load logging.conf: {_lc_err}")
 
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
+logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger("pyrogram").setLevel(logging.WARNING)
+logging.getLogger("motor").setLevel(logging.WARNING)
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+# ────────────────────────────────────────────────────────────────────────────
 
+logger = logging.getLogger(__name__)
+logger.info("=== Bot startup initiated ===")
 
-from pyrogram import Client, __version__
-from pyrogram.raw.all import layer
-from config import LOG_CHANNEL, ON_HEROKU, CLONE_MODE, PORT
-from typing import Union, Optional, AsyncGenerator
-from pyrogram import types
-from Script import script 
-from datetime import date, datetime 
-import pytz
-from aiohttp import web
-from TechVJ.server import web_server
+try:
+    from pyrogram import Client, __version__
+    from pyrogram.raw.all import layer
+    logger.info(f"Pyrogram version: {__version__} | Layer: {layer}")
 
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
+    from config import LOG_CHANNEL, ON_HEROKU, CLONE_MODE, PORT
+    from typing import Union, Optional, AsyncGenerator
+    from pyrogram import types
+    from Script import script
+    from datetime import date, datetime
+    import pytz
+    from aiohttp import web
+    from TechVJ.server import web_server
 
-import asyncio
-from pyrogram import idle
-from plugins.clone import restart_bots
-from TechVJ.bot import StreamBot
-from TechVJ.utils.keepalive import ping_server
-from TechVJ.bot.clients import initialize_clients
-
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
-
+    import asyncio
+    from pyrogram import idle
+    from plugins.clone import restart_bots
+    from TechVJ.bot import StreamBot
+    from TechVJ.utils.keepalive import ping_server
+    from TechVJ.bot.clients import initialize_clients
+    logger.info("All imports successful")
+except Exception as import_err:
+    print(f"[CRITICAL] Import failed: {import_err}")
+    traceback.print_exc()
+    sys.exit(1)
 
 loop = asyncio.get_event_loop()
 
-# Don't Remove Credit Tg - @viralverse0909
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @Brainaxe190
-
 
 async def start():
-    print('Initializing Brainaxe Bot')
-    await StreamBot.start()
-    bot_info = await StreamBot.get_me()
-    StreamBot.username = bot_info.username
-    await initialize_clients()
-    if ON_HEROKU:
-        asyncio.create_task(ping_server())
-    me = await StreamBot.get_me()
-    tz = pytz.timezone('Asia/Kolkata')
-    today = date.today()
-    now = datetime.now(tz)
-    time = now.strftime("%H:%M:%S %p")
-    app = web.AppRunner(await web_server())
-    await StreamBot.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(today, time))
-    await app.setup()
-    bind_address = "0.0.0.0"
-    await web.TCPSite(app, bind_address, PORT).start()
-    if CLONE_MODE == True:
-        await restart_bots()
-    print("Bot Started Powered By @viralverse0909")
-    await idle()
+    logger.info("=== async start() called ===")
+    try:
+        logger.info("Starting StreamBot...")
+        await StreamBot.start()
+        logger.info("StreamBot started successfully")
+
+        bot_info = await StreamBot.get_me()
+        StreamBot.username = bot_info.username
+        logger.info(f"Main bot: @{bot_info.username} (id={bot_info.id})")
+
+        logger.info("Initializing multi-clients...")
+        await initialize_clients()
+        logger.info("Clients initialized")
+
+        if ON_HEROKU:
+            logger.info("Heroku detected — starting ping server task")
+            asyncio.create_task(ping_server())
+
+        tz = pytz.timezone('Asia/Kolkata')
+        today = date.today()
+        now = datetime.now(tz)
+        time_str = now.strftime("%H:%M:%S %p")
+
+        logger.info(f"Setting up web server on port {PORT}...")
+        app = web.AppRunner(await web_server())
+        await app.setup()
+        await web.TCPSite(app, "0.0.0.0", PORT).start()
+        logger.info(f"Web server running on port {PORT}")
+
+        logger.info(f"Sending restart message to LOG_CHANNEL={LOG_CHANNEL}")
+        await StreamBot.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(today, time_str))
+
+        if CLONE_MODE:
+            logger.info("CLONE_MODE=True — restarting clone bots...")
+            await restart_bots()
+            logger.info("Clone bots started")
+
+        logger.info("=== Bot fully started! Entering idle... ===")
+        print("Bot Started Powered By @viralverse0909")
+        await idle()
+
+    except Exception as e:
+        logger.critical(f"FATAL ERROR in start(): {e}")
+        traceback.print_exc()
+        raise
+
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -89,7 +122,11 @@ if __name__ == '__main__':
     try:
         loop.run_until_complete(start())
     except KeyboardInterrupt:
-        logging.info('Service Stopped Bye 👋')
+        logger.info('Service Stopped Bye 👋')
+    except Exception as fatal:
+        logger.critical(f"Bot crashed: {fatal}")
+        traceback.print_exc()
+        sys.exit(1)
 
 
 # Don't Remove Credit Tg - @viralverse0909
