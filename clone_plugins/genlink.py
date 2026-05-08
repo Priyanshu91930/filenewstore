@@ -2,6 +2,7 @@
 # Subscribe YouTube Channel For Amazing Bot @Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
 
+import pyromod  # patches Client with .ask() — must be imported before use
 from pyrogram import filters, Client, enums
 from clone_plugins.users_api import get_user, get_short_link
 from TechVJ.bot import StreamBot
@@ -19,7 +20,7 @@ import re
 
 @Client.on_message(filters.command(['link']) & filters.private & filters.incoming)
 async def gen_link_s(client: Client, message):
-    from plugins.clone import mongo_db
+    from plugins.clone import async_mongo_db as mongo_db
     me = await client.get_me()
     bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
     if bot_doc and bot_doc.get("is_deactivated", False):
@@ -97,8 +98,9 @@ async def gen_link_s(client: Client, message):
     short_id = str(uuid.uuid4())[:8]
     bot_username = me.username
     
-    # Store in DB
-    await mongo_db.clone_files.insert_one({
+    # Store in DB — must use async motor client, NOT sync pymongo
+    from plugins.clone import async_mongo_db
+    await async_mongo_db.clone_files.insert_one({
         "_id": short_id,
         "bot_username": bot_username,
         "file_id": file_id
@@ -122,7 +124,7 @@ async def gen_link_s(client: Client, message):
 
 @Client.on_message(filters.command(['batch']) & filters.private & filters.incoming)
 async def gen_link_batch(client: Client, message):
-    from plugins.clone import mongo_db
+    from plugins.clone import async_mongo_db as mongo_db
     from config import LOG_CHANNEL
     
     me = await client.get_me()
