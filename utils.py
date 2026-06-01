@@ -150,6 +150,9 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "") -> 
     to deliver the file AFTER the user watches the ad.
     """
     token = _generate_tma_token(user_id)
+    # Automatically convert http:// to https:// to satisfy Telegram's strict WebApp URL requirements
+    if app_url.startswith("http://"):
+        app_url = "https://" + app_url[7:]
     url = f"{app_url}?uid={user_id}&token={token}"
     if file_data:
         from urllib.parse import quote
