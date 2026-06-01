@@ -93,7 +93,7 @@ if 'DYNO' in environ:
     ON_HEROKU = True
 else:
     ON_HEROKU = False
-URL = environ.get("URL", "http://3.110.143.145:8080/")
+URL = environ.get("URL", "https://miniapp.anihubyt.com/")
 
 
 # Don't Remove Credit Tg - @viralverse0909
