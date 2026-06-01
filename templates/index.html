@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Unlock Your File</title>
+  <meta name="description" content="Watch a short ad to unlock your file instantly. Powered by AnihubYT." />
+
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+
+  <!-- ✅ Monetag Rewarded Interstitial SDK (Zone 11082607) -->
+  <script src="//libtl.com/sdk.js" data-zone="11082607" data-sdk="show_11082607"></script>
+
+  {% if monetag_zone_id and monetag_zone_id != '11082607' %}
+  <!-- Additional Monetag zone (from config) -->
+  <script src="https://js.monetag.com/{{ monetag_zone_id }}.js" async></script>
+  {% endif %}
+
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #080b14);
+      --bg2: var(--tg-theme-secondary-bg-color, #111827);
+      --accent: var(--tg-theme-button-color, #6366f1);
+      --accent2: #06b6d4;
+      --accent3: #a855f7;
+      --accent-glow: rgba(99, 102, 241, .45);
+      --green: #4ade80;
+      --red: #f87171;
+      --text: var(--tg-theme-text-color, #f1f5f9);
+      --hint: var(--tg-theme-hint-color, #8892a4);
+      --dim: #4b5563;
+      --radius: 18px;
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    /* Ambient background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 0%, rgba(99, 102, 241, .15) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6, 182, 212, .10) 0%, transparent 65%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 20px env(safe-area-inset-bottom);
+      gap: 20px;
+    }
+
+    /* ── Lock/unlock icon ── */
+    .icon-ring {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 42px;
+      box-shadow: 0 0 0 0 var(--accent-glow);
+      animation: pulse-ring 2.4s ease-in-out infinite;
+      transition: background .4s;
+    }
+
+    @keyframes pulse-ring {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 var(--accent-glow);
+        transform: scale(1);
+      }
+
+      50% {
+        box-shadow: 0 0 0 16px transparent;
+        transform: scale(1.04);
+      }
+    }
+
+    .icon-ring.success {
+      background: linear-gradient(135deg, var(--green), var(--accent2));
+      animation: none;
+    }
+
+    /* ── Main card ── */
+    .card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--bg2);
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: var(--radius);
+      padding: 24px 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, .5);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card h1 {
+      font-size: 1.25rem;
+      font-weight: 900;
+      text-align: center;
+      line-height: 1.3;
+      background: linear-gradient(90deg, #fff, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .card .subtitle {
+      font-size: .88rem;
+      color: var(--hint);
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* File info box */
+    .file-info-box {
+      background: rgba(99, 102, 241, .08);
+      border: 1px solid rgba(99, 102, 241, .20);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .file-emoji {
+      font-size: 1.8rem;
+      flex-shrink: 0;
+    }
+
+    .file-details {
+      flex: 1;
+    }
+
+    .file-name {
+      font-size: .85rem;
+      font-weight: 700;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .file-size {
+      font-size: .72rem;
+      color: var(--hint);
+      margin-top: 2px;
+    }
+
+    /* ── Steps chips ── */
+    .chips {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid rgba(255, 255, 255, .06);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: .82rem;
+      color: var(--text);
+    }
+
+    .chip-icon {
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .chip .done {
+      color: var(--green);
+    }
+
+    .chip.active {
+      border-color: rgba(99, 102, 241, .35);
+      background: rgba(99, 102, 241, .08);
+    }
+
+    .chip.completed {
+      border-color: rgba(74, 222, 128, .25);
+      background: rgba(74, 222, 128, .06);
+    }
+
+    /* ── Timer ring ── */
+    .timer-section {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .timer-section.visible {
+      display: flex;
+    }
+
+    .timer-circle {
+      width: 80px;
+      height: 80px;
+      position: relative;
+    }
+
+    .timer-circle svg {
+      width: 80px;
+      height: 80px;
+      transform: rotate(-90deg);
+    }
+
+    .timer-circle .bg-ring {
+      fill: none;
+      stroke: rgba(255, 255, 255, .08);
+      stroke-width: 4;
+      r: 36;
+      cx: 40;
+      cy: 40;
+    }
+
+    .timer-circle .fg-ring {
+      fill: none;
+      stroke: url(#timerGradient);
+      stroke-width: 4;
+      r: 36;
+      cx: 40;
+      cy: 40;
+      stroke-linecap: round;
+      stroke-dasharray: 226.2;
+      /* 2 * pi * 36 */
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset .4s linear;
+    }
+
+    .timer-value {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .timer-label {
+      font-size: .78rem;
+      color: var(--hint);
+      text-align: center;
+    }
+
+    /* ── Progress bar ── */
+    .progress-wrap {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, .08);
+      border-radius: 2px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-wrap.visible {
+      display: block;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 2px;
+      transition: width .4s linear;
+    }
+
+    /* ── CTA button ── */
+    .btn-cta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent3));
+      color: #fff;
+      font-family: inherit;
+      font-size: .95rem;
+      font-weight: 800;
+      letter-spacing: .3px;
+      cursor: pointer;
+      transition: opacity .2s, transform .15s;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .btn-cta:active:not(:disabled) {
+      transform: scale(.97);
+      opacity: .9;
+    }
+
+    .btn-cta:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    .btn-tg {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 14px;
+      background: #229ED9;
+      color: #fff;
+      font-family: inherit;
+      font-size: .95rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(34, 158, 217, .35);
+      transition: opacity .2s, transform .15s;
+      text-decoration: none;
+    }
+
+    .btn-tg.visible {
+      display: flex;
+    }
+
+    .btn-tg:active {
+      transform: scale(.97);
+    }
+
+    .btn-copy {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .05);
+      color: var(--hint);
+      font-family: inherit;
+      font-size: .82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .btn-copy.visible {
+      display: flex;
+    }
+
+    .btn-copy:hover {
+      background: rgba(255, 255, 255, .1);
+      color: var(--text);
+    }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2.5px solid rgba(255, 255, 255, .3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ── Status area ── */
+    #statusArea {
+      text-align: center;
+      font-size: .85rem;
+      min-height: 20px;
+      color: var(--hint);
+      transition: color .3s;
+    }
+
+    #statusArea.success {
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    #statusArea.error {
+      color: var(--red);
+      font-weight: 700;
+    }
+
+    /* ── Success confetti pulse ── */
+    @keyframes popIn {
+      from {
+        transform: scale(0);
+        opacity: 0
+      }
+
+      to {
+        transform: scale(1);
+        opacity: 1
+      }
+    }
+
+    .pop {
+      animation: popIn .4s cubic-bezier(.34, 1.56, .64, 1) both;
+    }
+
+    /* Footer */
+    .footer {
+      font-size: .72rem;
+      color: var(--dim);
+      text-align: center;
+      opacity: .7;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 380px) {
+      .card {
+        padding: 20px 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+
+    <!-- Animated icon -->
+    <div class="icon-ring" id="iconRing">🔒</div>
+
+    <!-- Main card -->
+    <div class="card">
+      <h1 id="cardTitle">Unlock Your File</h1>
+      <p class="subtitle" id="cardSubtitle">Watch a short ad to get <strong>instant access</strong> to your file. Free,
+        fast &amp; secure.</p>
+
+      <!-- File info (shown when file_id present) -->
+      <div class="file-info-box" id="fileInfoBox" style="display:none">
+        <span class="file-emoji" id="fileEmoji">📁</span>
+        <div class="file-details">
+          <div class="file-name" id="fileName">Your File</div>
+          <div class="file-size" id="fileSizeMeta"></div>
+        </div>
+      </div>
+
+      <!-- Step chips -->
+      <div class="chips" id="stepsChips">
+        <div class="chip active" id="step1">
+          <span class="chip-icon">🎬</span>
+          <span>Step 1: Watch a <strong>rewarded ad</strong></span>
+        </div>
+        <div class="chip" id="step2">
+          <span class="chip-icon">⏳</span>
+          <span>Step 2: Wait for <strong>countdown timer</strong></span>
+        </div>
+        <div class="chip" id="step3">
+          <span class="chip-icon">✈️</span>
+          <span>Step 3: Get your <strong>file on Telegram</strong></span>
+        </div>
+      </div>
+
+      <!-- Timer countdown (hidden until ad complete) -->
+      <div class="timer-section" id="timerSection">
+        <div class="timer-circle">
+          <svg viewBox="0 0 80 80">
+            <defs>
+              <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#6366f1" />
+                <stop offset="100%" style="stop-color:#06b6d4" />
+              </linearGradient>
+            </defs>
+            <circle class="bg-ring" />
+            <circle class="fg-ring" id="timerRing" />
+          </svg>
+          <div class="timer-value" id="timerValue">10</div>
+        </div>
+        <div class="timer-label" id="timerLabel">File link unlocking in...</div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+
+      <!-- CTA: Watch Ad -->
+      <button class="btn-cta" id="watchBtn">
+        <span>🎬</span> Watch Ad &amp; Unlock File
+      </button>
+
+      <!-- CTA: Get File (shown after timer) -->
+      <a class="btn-tg" id="getFileBtn" href="#" target="_blank" rel="noopener">
+        <span>✈️</span> Get File on Telegram
+      </a>
+
+      <!-- Copy share link -->
+      <button class="btn-copy" id="copyBtn">
+        🔗 Copy Share Link
+      </button>
+
+      <!-- Status -->
+      <div id="statusArea"></div>
+    </div>
+
+    <p class="footer">Powered by AnihubYT</p>
+  </div>
+
+  <script>
+    'use strict';
+
+    /* ════════════════════════════════════════
+       TELEGRAM WEB APP INIT
+    ════════════════════════════════════════ */
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.enableClosingConfirmation();
+    }
+
+    /* ════════════════════════════════════════
+       PARAMETERS
+    ════════════════════════════════════════ */
+    const USER_ID = "{{ user_id }}";
+    const TOKEN = "{{ token }}";
+    const BOT_USERNAME = "{{ bot_username }}";
+    const FILE_ID = "{{ file_id }}";         // base64 encoded file id (passed via ?file=)
+    const FILE_DEEPLINK = "{{ file_deeplink }}";   // full /start link data
+
+    /* Timer duration in seconds */
+    const TIMER_SECONDS = 10;
+    const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 36; // r=36
+
+    /* ════════════════════════════════════════
+       DOM REFS
+    ════════════════════════════════════════ */
+    const iconRing = document.getElementById('iconRing');
+    const watchBtn = document.getElementById('watchBtn');
+    const getFileBtn = document.getElementById('getFileBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const statusEl = document.getElementById('statusArea');
+    const progressWr = document.getElementById('progressWrap');
+    const progressBar = document.getElementById('progressBar');
+    const timerSec = document.getElementById('timerSection');
+    const timerVal = document.getElementById('timerValue');
+    const timerLabel = document.getElementById('timerLabel');
+    const timerRing = document.getElementById('timerRing');
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const step3 = document.getElementById('step3');
+    const fileInfoBox = document.getElementById('fileInfoBox');
+
+    /* ════════════════════════════════════════
+       INIT — show file info if available
+    ════════════════════════════════════════ */
+    if (FILE_DEEPLINK) {
+      fileInfoBox.style.display = 'flex';
+    }
+
+    function setStatus(msg, type = '') {
+      statusEl.textContent = msg;
+      statusEl.className = type;
+    }
+
+    function animateProgress(durationMs) {
+      progressWr.classList.add('visible');
+      let start = null;
+      function step(ts) {
+        if (!start) start = ts;
+        const pct = Math.min(((ts - start) / durationMs) * 100, 99);
+        progressBar.style.width = pct + '%';
+        if (pct < 99) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    /* ════════════════════════════════════════
+       BUILD THE BOT DEEPLINK
+    ════════════════════════════════════════ */
+    function getBotFileLink() {
+      // If we have the file_deeplink from the server, use it directly
+      if (FILE_DEEPLINK) {
+        return `https://t.me/${BOT_USERNAME}?start=${FILE_DEEPLINK}`;
+      }
+      // Fallback: just open the bot
+      return `https://t.me/${BOT_USERNAME}`;
+    }
+
+    /* ════════════════════════════════════════
+       GET SHARE LINK
+       Produces a Telegram bot deep-link. When another user taps it,
+       the bot checks TMA_MODE, generates a fresh WebApp button for this file,
+       and the Mini App opens inside Telegram with the same ad wall.
+    ════════════════════════════════════════ */
+    function getShareLink() {
+      // Bot deep-link — bot will show a TMA WebApp button to the new user
+      if (FILE_DEEPLINK) {
+        return `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(FILE_DEEPLINK)}`;
+      }
+      return `https://t.me/${BOT_USERNAME}`;
+    }
+
+    /* ════════════════════════════════════════
+       COUNTDOWN TIMER
+       Runs after ad completes, then reveals the file link
+    ════════════════════════════════════════ */
+    function startCountdown() {
+      timerSec.classList.add('visible');
+      progressWr.classList.remove('visible');
+      watchBtn.style.display = 'none';
+
+      // Update step chips
+      step1.classList.remove('active');
+      step1.classList.add('completed');
+      step1.querySelector('.chip-icon').textContent = '✅';
+      step2.classList.add('active');
+
+      let remaining = TIMER_SECONDS;
+      timerVal.textContent = remaining;
+      timerRing.style.strokeDasharray = CIRCLE_CIRCUMFERENCE;
+      timerRing.style.strokeDashoffset = 0;
+
+      const interval = setInterval(() => {
+        remaining--;
+        timerVal.textContent = Math.max(remaining, 0);
+
+        // Animate ring
+        const offset = ((TIMER_SECONDS - remaining) / TIMER_SECONDS) * CIRCLE_CIRCUMFERENCE;
+        timerRing.style.strokeDashoffset = offset;
+
+        if (remaining <= 0) {
+          clearInterval(interval);
+          onTimerComplete();
+        }
+      }, 1000);
+    }
+
+    /* ════════════════════════════════════════
+       TIMER COMPLETE → SHOW FILE LINK
+    ════════════════════════════════════════ */
+    function onTimerComplete() {
+      // Update UI
+      step2.classList.remove('active');
+      step2.classList.add('completed');
+      step2.querySelector('.chip-icon').textContent = '✅';
+      step3.classList.add('active');
+      step3.classList.add('completed');
+      step3.querySelector('.chip-icon').textContent = '✅';
+
+      timerSec.classList.remove('visible');
+
+      // Success icon
+      iconRing.textContent = '✅';
+      iconRing.classList.add('success');
+      iconRing.classList.add('pop');
+
+      // Build file link
+      const fileLink = getBotFileLink();
+      getFileBtn.href = fileLink;
+      getFileBtn.classList.add('visible');
+
+      // Copy share link button
+      copyBtn.classList.add('visible');
+
+      setStatus('🎉 File unlocked! Tap below to get it.', 'success');
+
+      // Also verify with backend (async, non-blocking)
+      verifyWithBackend();
+    }
+
+    /* ════════════════════════════════════════
+       VERIFY WITH BACKEND
+    ════════════════════════════════════════ */
+    async function verifyWithBackend() {
+      try {
+        const res = await fetch('/tma-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: USER_ID,
+            token: TOKEN,
+            file: FILE_DEEPLINK    // forward file so backend returns correct deeplink
+          })
+        });
+        const data = await res.json();
+        if (data.ok && data.deeplink) {
+          // Update get-file button with server-verified deeplink
+          getFileBtn.href = data.deeplink;
+        }
+      } catch (e) {
+        console.warn('Backend verify error (non-critical):', e);
+      }
+    }
+
+    /* ════════════════════════════════════════
+       WATCH AD → MONETAG REWARDED INTERSTITIAL
+    ════════════════════════════════════════ */
+    async function showAd() {
+      watchBtn.disabled = true;
+      watchBtn.innerHTML = '<span class="spinner"></span> Loading ad…';
+      setStatus('');
+      animateProgress(8000);
+
+      try {
+        // ✅ Monetag Rewarded Interstitial — Zone 11082607
+        await show_11082607();
+        onAdSuccess();
+      } catch (err) {
+        console.warn('Monetag ad error:', err);
+
+        // Try rewarded popup as fallback
+        try {
+          await show_11082607('pop');
+          onAdSuccess();
+        } catch (e2) {
+          console.warn('Popup fallback failed:', e2);
+          // No ad available — still proceed (or block, your choice)
+          setStatus('⚠️ No ad available — proceeding anyway...', 'error');
+          setTimeout(() => onAdSuccess(), 1500);
+        }
+      }
+    }
+
+    function onAdSuccess() {
+      setStatus('✅ Ad completed! Starting countdown...', 'success');
+      progressBar.style.width = '100%';
+
+      // Also fire In-App Interstitial in background
+      try {
+        show_11082607({
+          type: 'inApp',
+          inAppSettings: {
+            frequency: 2,
+            capping: 0.1,
+            interval: 30,
+            timeout: 5,
+            everyPage: false
+          }
+        });
+      } catch (e) { }
+
+      // Start countdown after brief delay
+      setTimeout(() => startCountdown(), 800);
+    }
+
+    watchBtn.addEventListener('click', showAd);
+
+    /* ════════════════════════════════════════
+       GET FILE BUTTON — opens in Telegram
+    ════════════════════════════════════════ */
+    getFileBtn.addEventListener('click', (e) => {
+      const link = getFileBtn.href;
+      if (tg) {
+        e.preventDefault();
+        tg.openTelegramLink(link);
+        setTimeout(() => tg.close(), 1200);
+      }
+      // else: normal <a> navigation works
+    });
+
+    /* ════════════════════════════════════════
+       COPY SHARE LINK
+    ════════════════════════════════════════ */
+    copyBtn.addEventListener('click', () => {
+      const link = getShareLink();
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(link);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      copyBtn.textContent = '✅ Copied!';
+      setTimeout(() => { copyBtn.innerHTML = '🔗 Copy Share Link'; }, 2000);
+    });
+  </script>
+</body>
+
+</html>

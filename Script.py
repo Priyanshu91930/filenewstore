@@ -166,3 +166,26 @@ Nᴀᴍᴇ - {}</b>
 # Ask Doubt on telegram @Brainaxe190
 
     FORCE_SUB_TEXT = """<b>ʜᴇʏ {}, ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴊᴏɪɴᴇᴅ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟꜱ ʏᴇᴛ. ᴘʟᴇᴀꜱᴇ ᴊᴏɪɴ ᴛʜᴇᴍ ᴛᴏ ᴜꜱᴇ ᴍᴇ!</b>"""
+
+    TMA_UNLOCK_TEXT = """<b>🎯 ᴜɴʟᴏᴄᴋ ʏᴏᴜʀ ғɪʟᴇ
+
+Hey {}, to access this file you need to watch a short ad in our Mini App.
+
+✅ It only takes <u>5-10 seconds</u>
+✅ Unlocks <u>all files till midnight</u>
+✅ 100% safe & free
+
+Tap the button below to open the Mini App and watch the ad to unlock!</b>"""
+
+    TMA_VERIFIED_TEXT = """<b>✅ ᴠᴇʀɪғɪᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!
+
+Hey {}, you've been successfully verified! 🎉
+
+You now have <u>unlimited access to all files until midnight</u>.
+
+Enjoy! 🚀</b>"""
+
+    TMA_EXPIRED_TEXT = """<b>⚠️ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ ᴇxᴘɪʀᴇᴅ ᴏʀ ɪɴᴠᴀʟɪᴅ
+
+The verification link has expired or is invalid. Please try opening the file again from the bot!</b>"""
+

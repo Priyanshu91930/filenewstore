@@ -13,8 +13,9 @@ from pyrogram import Client, filters, enums
 from plugins.users_api import get_user, update_user_info
 from pyrogram.errors import ChatAdminRequired, FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, CallbackQuery, Message, WebAppInfo
-from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal
+from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification
 from config import *
+from config import TMA_MODE, MONETAG_ZONE_ID, URL
 import re
 import json
 import base64
@@ -54,7 +55,7 @@ def formate_file_name(file_name):
     chars = ["[", "]", "(", ")"]
     for c in chars:
         file_name = file_name.replace(c, "")
-    file_name = '@anihubYT2 ' + ' '.join(filter(lambda x: not x.startswith('http') and not x.startswith('@') and not x.startswith('www.'), file_name.split()))
+    file_name = ' '.join(filter(lambda x: not x.startswith('http') and not x.startswith('@') and not x.startswith('www.'), file_name.split()))
     return file_name
 
 # Don't Remove Credit Tg - @viralverse0909
@@ -209,9 +210,38 @@ async def start(client, message):
                     text="<b>Invalid link or Expired link !</b>",
                     protect_content=True
                 )
+        # TMA verification callback: /start tma-{uid}-{token}
+        elif data.split("-", 1)[0] == "tma":
+            parts = data.split("-")
+            if len(parts) >= 3:
+                tma_uid = int(parts[1])
+                tma_token = "-".join(parts[2:])  # token may contain a dash
+                if message.from_user.id != tma_uid:
+                    return await message.reply_text(text=script.TMA_EXPIRED_TEXT, protect_content=True)
+                ok = await verify_tma_user(tma_uid, tma_token)
+                if ok:
+                    await message.reply_text(
+                        text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
+                        protect_content=True
+                    )
+                else:
+                    await message.reply_text(text=script.TMA_EXPIRED_TEXT, protect_content=True)
+            return
         elif data.split("-", 1)[0] == "BATCH":
             try:
-                if not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
+                # TMA Mode: use Monetag Mini App for verification
+                if TMA_MODE and not await check_tma_verification(message.from_user.id):
+                    tma_app_url = f"{URL.rstrip('/')}/tma"
+                    # Pass the raw /start data so the Mini App knows which file to deliver
+                    tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
+                    btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                    await message.reply_text(
+                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn)
+                    )
+                    return
+                elif not TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
                     btn = [[
                         InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
                     ],[
@@ -317,7 +347,19 @@ async def start(client, message):
 # Ask Doubt on telegram @Brainaxe190
 
         pre, decode_file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
-        if not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
+        # TMA Mode: use Monetag Mini App for verification
+        if TMA_MODE and not await check_tma_verification(message.from_user.id):
+            tma_app_url = f"{URL.rstrip('/')}/tma"
+            # Pass the raw /start data so the Mini App knows which file to deliver
+            tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
+            btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+            await message.reply_text(
+                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                protect_content=True,
+                reply_markup=InlineKeyboardMarkup(btn)
+            )
+            return
+        elif not TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
             btn = [[
                 InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
             ],[

@@ -65,6 +65,17 @@ SHORTLINK_URL = environ.get("SHORTLINK_URL", "") # shortlink domain without http
 SHORTLINK_API = environ.get("SHORTLINK_API", "") # shortlink api
 VERIFY_TUTORIAL = environ.get("VERIFY_TUTORIAL", "") # how to open link 
 
+# Telegram Mini App (TMA) + Monetag Integration
+# Set TMA_MODE to True to use Monetag Mini App ads instead of shortlinks for file verification
+TMA_MODE = is_enabled(environ.get('TMA_MODE', 'False'), False)  # Set True or False
+
+# If TMA_MODE Is True Then Fill All Required Variables.
+# Get your Zone ID from https://monetag.com after registering and adding a Telegram Mini App property.
+MONETAG_ZONE_ID = environ.get("MONETAG_ZONE_ID", "")  # Your Monetag Ad Zone ID (7-digit number)
+
+# Secret key used to sign TMA verification tokens (change this to something random!)
+TMA_SECRET_KEY = environ.get("TMA_SECRET_KEY", "tma-secret-key-change-this!")
+
 # Website Info:
 WEBSITE_URL_MODE = is_enabled(environ.get('WEBSITE_URL_MODE', 'False'), False) # Set True or False
 

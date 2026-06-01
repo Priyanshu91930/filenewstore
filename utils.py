@@ -2,9 +2,9 @@
 # Subscribe YouTube Channel For Amazing Bot @Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
 
-import logging, asyncio, os, re, random, pytz, aiohttp, requests, string, json, http.client
+import logging, asyncio, os, re, random, pytz, aiohttp, requests, string, json, http.client, hmac, hashlib, time
 from datetime import date, datetime
-from config import SHORTLINK_API, SHORTLINK_URL, FORCE_SUB_CHANNELS, UNIVERSAL_FORCE_SUB_CHANNEL
+from config import SHORTLINK_API, SHORTLINK_URL, FORCE_SUB_CHANNELS, UNIVERSAL_FORCE_SUB_CHANNEL, TMA_SECRET_KEY
 from pyrogram.errors import UserNotParticipant
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from shortzy import Shortzy
@@ -117,3 +117,61 @@ async def is_subscribed_universal(bot, message):
         logger.error(f"Error checking universal membership: {e}")
         return True
     return True
+
+# ─── Telegram Mini App (Monetag) Verification Helpers ───────────────────────
+
+TMA_VERIFIED = {}  # {user_id: iso_date_string}
+
+def _generate_tma_token(user_id: int) -> str:
+    """Generate a short-lived HMAC token to verify the TMA ad completion."""
+    ts = str(int(time.time()))
+    raw = f"{user_id}:{ts}"
+    sig = hmac.new(TMA_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{ts}-{sig}"
+
+def _validate_tma_token(user_id: int, token: str, max_age_sec: int = 600) -> bool:
+    """Validate a TMA token. Returns True if the token is valid and not expired."""
+    try:
+        ts_str, sig = token.split("-", 1)
+        ts = int(ts_str)
+        if int(time.time()) - ts > max_age_sec:
+            return False
+        raw = f"{user_id}:{ts_str}"
+        expected_sig = hmac.new(TMA_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
+        return hmac.compare_digest(sig, expected_sig)
+    except Exception:
+        return False
+
+async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "") -> str:
+    """Build the Mini App URL containing the user_id, a signed token, and optional file_data.
+
+    file_data is the raw /start parameter (e.g. base64-encoded file id or BATCH-xxx).
+    It is embedded in the TMA URL so the Mini App can construct the exact bot deeplink
+    to deliver the file AFTER the user watches the ad.
+    """
+    token = _generate_tma_token(user_id)
+    url = f"{app_url}?uid={user_id}&token={token}"
+    if file_data:
+        from urllib.parse import quote
+        url += f"&file={quote(file_data)}"
+    return url
+
+async def verify_tma_user(user_id: int, token: str) -> bool:
+    """Validate the token and mark the user as TMA-verified for today."""
+    if not _validate_tma_token(user_id, token):
+        return False
+    tz = pytz.timezone('Asia/Kolkata')
+    today = date.today()
+    TMA_VERIFIED[user_id] = str(today)
+    return True
+
+async def check_tma_verification(user_id: int) -> bool:
+    """Return True if the user already completed TMA verification today."""
+    tz = pytz.timezone('Asia/Kolkata')
+    today = date.today()
+    if user_id in TMA_VERIFIED:
+        exp_str = TMA_VERIFIED[user_id]
+        years, month, day = exp_str.split('-')
+        comp = date(int(years), int(month), int(day))
+        return comp >= today
+    return False
