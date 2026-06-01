@@ -231,7 +231,7 @@ async def start(client, message):
         elif data.split("-", 1)[0] == "BATCH":
             try:
                 # TMA Mode: use Monetag Mini App for verification
-                if TMA_MODE and not await check_tma_verification(message.from_user.id):
+                if config.TMA_MODE and not await check_tma_verification(message.from_user.id):
                     tma_app_url = f"{URL.rstrip('/')}/tma"
                     # Pass the raw /start data so the Mini App knows which file to deliver
                     tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
@@ -242,7 +242,7 @@ async def start(client, message):
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
                     return
-                elif not TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
+                elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
                     btn = [[
                         InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
                     ],[
@@ -349,7 +349,7 @@ async def start(client, message):
 
         pre, decode_file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
         # TMA Mode: use Monetag Mini App for verification
-        if TMA_MODE and not await check_tma_verification(message.from_user.id):
+        if config.TMA_MODE and not await check_tma_verification(message.from_user.id):
             tma_app_url = f"{URL.rstrip('/')}/tma"
             # Pass the raw /start data so the Mini App knows which file to deliver
             tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
@@ -360,7 +360,7 @@ async def start(client, message):
                 reply_markup=InlineKeyboardMarkup(btn)
             )
             return
-        elif not TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
+        elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
             btn = [[
                 InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
             ],[
