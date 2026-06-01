@@ -81,18 +81,14 @@ async def tma_verify_handler(request: web.Request):
     token     = str(data.get('token', ''))
     file_data = str(data.get('file', ''))
 
-    # Validate HMAC token
+    # Validate HMAC token and mark the user as verified for today!
+    from utils import verify_tma_user
     try:
-        ts_str, sig = token.split('-', 1)
-        ts = int(ts_str)
-        if _time.time() - ts > 600:
-            return web.json_response({'ok': False, 'error': 'expired'}, status=400)
-        raw      = f"{uid_str}:{ts_str}"
-        expected = _hmac.new(TMA_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
-        if not _hmac.compare_digest(sig, expected):
-            return web.json_response({'ok': False, 'error': 'invalid'}, status=400)
-    except Exception:
-        return web.json_response({'ok': False, 'error': 'bad_token'}, status=400)
+        is_verified = await verify_tma_user(int(uid_str), token)
+        if not is_verified:
+            return web.json_response({'ok': False, 'error': 'invalid_token'}, status=400)
+    except Exception as e:
+        return web.json_response({'ok': False, 'error': f'validation_error: {e}'}, status=400)
 
     # Build deeplink
     if file_data:
