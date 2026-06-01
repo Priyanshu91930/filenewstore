@@ -67,7 +67,7 @@ VERIFY_TUTORIAL = environ.get("VERIFY_TUTORIAL", "") # how to open link
 
 # Telegram Mini App (TMA) + Monetag Integration
 # Set TMA_MODE to True to use Monetag Mini App ads instead of shortlinks for file verification
-TMA_MODE = is_enabled(environ.get('TMA_MODE', 'False'), False)  # Set True or False
+TMA_MODE = is_enabled(environ.get('TMA_MODE', 'True'), True)  # Set True or False
 
 # If TMA_MODE Is True Then Fill All Required Variables.
 # Get your Zone ID from https://monetag.com after registering and adding a Telegram Mini App property.
