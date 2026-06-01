@@ -23,21 +23,84 @@ routes = web.RouteTableDef()
 
 @routes.get("/", allow_head=True)
 async def root_route_handler(_):
-    return web.json_response(
-        {
-            "server_status": "running",
-            "uptime": get_readable_time(time.time() - StartTime),
-            "telegram_bot": "@" + StreamBot.username,
-            "connected_bots": len(multi_clients),
-            "loads": dict(
-                ("bot" + str(c + 1), l)
-                for c, (_, l) in enumerate(
-                    sorted(work_loads.items(), key=lambda x: x[1], reverse=True)
-                )
-            ),
-            "version": __version__,
-        }
-    )
+    try:
+        with open("static/website/index.html", "r", encoding="utf-8") as f:
+            content = f.read()
+        return web.Response(text=content, content_type='text/html')
+    except Exception:
+        return web.json_response(
+            {
+                "server_status": "running",
+                "uptime": get_readable_time(time.time() - StartTime),
+                "telegram_bot": "@" + StreamBot.username,
+                "connected_bots": len(multi_clients),
+                "version": __version__,
+            }
+        )
+
+@routes.get("/tma", allow_head=True)
+async def tma_route_handler(request: web.Request):
+    from config import MONETAG_ZONE_ID, BOT_USERNAME
+    import jinja2
+    from urllib.parse import unquote
+
+    uid          = request.rel_url.query.get('uid', '')
+    token        = request.rel_url.query.get('token', '')
+    file_data    = unquote(request.rel_url.query.get('file', ''))
+    zone         = MONETAG_ZONE_ID or ''
+
+    # Load and render templates/index.html using Jinja2
+    template_path = "templates/index.html"
+    try:
+        with open(template_path, "r", encoding="utf-8") as f:
+            template = jinja2.Template(f.read())
+        
+        rendered = template.render(
+            monetag_zone_id = zone,
+            user_id         = uid,
+            token           = token,
+            bot_username    = BOT_USERNAME,
+            file_id         = file_data,
+            file_deeplink   = file_data,
+        )
+        return web.Response(text=rendered, content_type='text/html')
+    except Exception as e:
+        return web.Response(text=f"Error rendering TMA template: {e}", status=500)
+
+@routes.post("/tma-verify")
+async def tma_verify_handler(request: web.Request):
+    from config import TMA_SECRET_KEY, BOT_USERNAME
+    import hmac as _hmac, hashlib, time as _time
+
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+
+    uid_str   = str(data.get('uid', ''))
+    token     = str(data.get('token', ''))
+    file_data = str(data.get('file', ''))
+
+    # Validate HMAC token
+    try:
+        ts_str, sig = token.split('-', 1)
+        ts = int(ts_str)
+        if _time.time() - ts > 600:
+            return web.json_response({'ok': False, 'error': 'expired'}, status=400)
+        raw      = f"{uid_str}:{ts_str}"
+        expected = _hmac.new(TMA_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
+        if not _hmac.compare_digest(sig, expected):
+            return web.json_response({'ok': False, 'error': 'invalid'}, status=400)
+    except Exception:
+        return web.json_response({'ok': False, 'error': 'bad_token'}, status=400)
+
+    # Build deeplink
+    if file_data:
+        deeplink = f"https://t.me/{BOT_USERNAME}?start={file_data}"
+    else:
+        deeplink = f"https://t.me/{BOT_USERNAME}?start=tma-{uid_str}-{token}"
+
+    return web.json_response({'ok': True, 'deeplink': deeplink})
 
 
 @routes.get(r"/watch/{path:\S+}", allow_head=True)
