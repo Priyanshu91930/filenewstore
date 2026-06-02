@@ -16,12 +16,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
     rel="stylesheet" />
 
-  <!-- ✅ Monetag Rewarded Interstitial SDK (Zone 11082607) -->
+  <!-- ✅ Monetag SDK (Dynamic Zone Integration) -->
+  {% if monetag_zone_id %}
+  <script src="//libtl.com/sdk.js" data-zone="{{ monetag_zone_id }}" data-sdk="show_{{ monetag_zone_id }}"></script>
+  {% else %}
   <script src="//libtl.com/sdk.js" data-zone="11082607" data-sdk="show_11082607"></script>
-
-  {% if monetag_zone_id and monetag_zone_id != '11082607' %}
-  <!-- Additional Monetag zone (from config) -->
-  <script src="https://js.monetag.com/{{ monetag_zone_id }}.js" async></script>
   {% endif %}
 
   <style>
@@ -734,7 +733,7 @@
     }
 
     /* ════════════════════════════════════════
-       WATCH AD → MONETAG REWARDED INTERSTITIAL
+       WATCH AD → MONETAG REWARDED INTERSTITIAL (DYNAMIC ZONE)
     ════════════════════════════════════════ */
     async function showAd() {
       watchBtn.disabled = true;
@@ -742,23 +741,30 @@
       setStatus('');
       animateProgress(8000);
 
-      try {
-        // ✅ Monetag Rewarded Interstitial — Zone 11082607
-        await show_11082607();
-        onAdSuccess();
-      } catch (err) {
-        console.warn('Monetag ad error:', err);
+      const activeZone = "{{ monetag_zone_id }}" || "11082607";
+      const adFunc = window["show_" + activeZone];
 
-        // Try rewarded popup as fallback
+      if (typeof adFunc === 'function') {
         try {
-          await show_11082607('pop');
+          // Attempt standard rewarded interstitial call
+          await adFunc();
           onAdSuccess();
-        } catch (e2) {
-          console.warn('Popup fallback failed:', e2);
-          // No ad available — still proceed (or block, your choice)
-          setStatus('⚠️ No ad available — proceeding anyway...', 'error');
-          setTimeout(() => onAdSuccess(), 1500);
+        } catch (err) {
+          console.warn('Monetag ad error, trying popup fallback:', err);
+          try {
+            // Attempt popup fallback
+            await adFunc('pop');
+            onAdSuccess();
+          } catch (e2) {
+            console.warn('Popup fallback failed:', e2);
+            setStatus('⚠️ No ad available — proceeding anyway...', 'error');
+            setTimeout(() => onAdSuccess(), 1500);
+          }
         }
+      } else {
+        console.warn(`Ad function show_${activeZone} is not defined. Proceeding...`);
+        setStatus('⚠️ Ad service unavailable — proceeding...', 'error');
+        setTimeout(() => onAdSuccess(), 1500);
       }
     }
 
@@ -766,19 +772,24 @@
       setStatus('✅ Ad completed! Starting countdown...', 'success');
       progressBar.style.width = '100%';
 
-      // Also fire In-App Interstitial in background
-      try {
-        show_11082607({
-          type: 'inApp',
-          inAppSettings: {
-            frequency: 2,
-            capping: 0.1,
-            interval: 30,
-            timeout: 5,
-            everyPage: false
-          }
-        });
-      } catch (e) { }
+      const activeZone = "{{ monetag_zone_id }}" || "11082607";
+      const adFunc = window["show_" + activeZone];
+
+      // Also fire In-App Interstitial in background if function exists
+      if (typeof adFunc === 'function') {
+        try {
+          adFunc({
+            type: 'inApp',
+            inAppSettings: {
+              frequency: 2,
+              capping: 0.1,
+              interval: 30,
+              timeout: 5,
+              everyPage: false
+            }
+          });
+        } catch (e) { }
+      }
 
       // Start countdown after brief delay
       setTimeout(() => startCountdown(), 800);
