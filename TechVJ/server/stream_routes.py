@@ -99,6 +99,16 @@ async def tma_verify_handler(request: web.Request):
     return web.json_response({'ok': True, 'deeplink': deeplink})
 
 
+@routes.get("/sw.js")
+async def sw_route_handler(_):
+    try:
+        with open("templates/sw.js", "r", encoding="utf-8") as f:
+            content = f.read()
+        return web.Response(text=content, content_type='application/javascript')
+    except Exception as e:
+        return web.Response(text=f"Error loading service worker: {e}", status=404)
+
+
 @routes.get(r"/watch/{path:\S+}", allow_head=True)
 async def stream_handler(request: web.Request):
     try:
