@@ -1280,29 +1280,42 @@ async def cb_handler(client: Client, query: CallbackQuery):
 # Ask Doubt on telegram @Brainaxe190
 
     elif query.data == "toggle_tma":
+        from config import ADMINS
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ Only the bot owner can configure TMA settings!", show_alert=True)
         config.TMA_MODE = not config.TMA_MODE
         await query.answer(f"TMA Ads {'Enabled 🟢' if config.TMA_MODE else 'Disabled 🔴'}", show_alert=True)
         query.data = "settings"
         return await cb_handler(client, query)
 
     elif query.data == "settings":
+        from config import ADMINS
         user_id = query.from_user.id
         user = await get_user(user_id)
         tma_status = "Enabled 🟢" if config.TMA_MODE else "Disabled 🔴"
+        
+        # Base settings buttons for every user
         buttons = [[
             InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
             InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
         ],[
             InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
-        ],[
-            InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if config.TMA_MODE else 'OFF 🔴'}", callback_data="toggle_tma")
-        ],[
+        ]]
+        
+        # Only render and allow the global TMA toggle button for bot owners/admins
+        if user_id in ADMINS:
+            buttons.append([
+                InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if config.TMA_MODE else 'OFF 🔴'}", callback_data="toggle_tma")
+            ])
+            
+        buttons.extend([[
             InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
             InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
         ],[
             InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
-        ]]
+        ]])
+        
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
             text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code></b>",
