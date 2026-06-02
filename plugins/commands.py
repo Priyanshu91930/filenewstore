@@ -157,6 +157,19 @@ async def start(client, message):
 
         # Handle File ID
         data = message.command[1]
+
+        is_unlocked = False
+        if data.split("-", 1)[0] == "unlock":
+            parts = data.split("-", 3)
+            if len(parts) >= 4:
+                _, userid_str, token, file_data = parts
+                if str(message.from_user.id) == userid_str:
+                    from utils import validate_tma_token, is_token_consumed, consume_token
+                    if validate_tma_token(message.from_user.id, token):
+                        if not is_token_consumed(token):
+                            consume_token(token)
+                            is_unlocked = True
+                            data = file_data
         
         # Handle clone redirect from button
         if data == "clone":
@@ -231,7 +244,7 @@ async def start(client, message):
         elif data.split("-", 1)[0] == "BATCH":
             try:
                 # TMA Mode: use Monetag Mini App for verification
-                if config.TMA_MODE and not await check_tma_verification(message.from_user.id):
+                if config.TMA_MODE and not is_unlocked and not await check_tma_verification(message.from_user.id):
                     tma_app_url = f"{URL.rstrip('/')}/tma"
                     # Pass the raw /start data so the Mini App knows which file to deliver
                     tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
@@ -349,7 +362,7 @@ async def start(client, message):
 
         pre, decode_file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
         # TMA Mode: use Monetag Mini App for verification
-        if config.TMA_MODE and not await check_tma_verification(message.from_user.id):
+        if config.TMA_MODE and not is_unlocked and not await check_tma_verification(message.from_user.id):
             tma_app_url = f"{URL.rstrip('/')}/tma"
             # Pass the raw /start data so the Mini App knows which file to deliver
             tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)

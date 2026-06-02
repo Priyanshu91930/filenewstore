@@ -92,7 +92,7 @@ async def tma_verify_handler(request: web.Request):
 
     # Build deeplink
     if file_data:
-        deeplink = f"https://t.me/{BOT_USERNAME}?start={file_data}"
+        deeplink = f"https://t.me/{BOT_USERNAME}?start=unlock-{uid_str}-{token}-{file_data}"
     else:
         deeplink = f"https://t.me/{BOT_USERNAME}?start=tma-{uid_str}-{token}"
 

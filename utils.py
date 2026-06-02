@@ -129,7 +129,7 @@ def _generate_tma_token(user_id: int) -> str:
     sig = hmac.new(TMA_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
     return f"{ts}-{sig}"
 
-def _validate_tma_token(user_id: int, token: str, max_age_sec: int = 600) -> bool:
+def validate_tma_token(user_id: int, token: str, max_age_sec: int = 600) -> bool:
     """Validate a TMA token. Returns True if the token is valid and not expired."""
     try:
         ts_str, sig = token.split("-", 1)
@@ -161,7 +161,7 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "") -> 
 
 async def verify_tma_user(user_id: int, token: str) -> bool:
     """Validate the token and mark the user as TMA-verified for today."""
-    if not _validate_tma_token(user_id, token):
+    if not validate_tma_token(user_id, token):
         return False
     tz = pytz.timezone('Asia/Kolkata')
     today = date.today()
@@ -169,12 +169,18 @@ async def verify_tma_user(user_id: int, token: str) -> bool:
     return True
 
 async def check_tma_verification(user_id: int) -> bool:
-    """Return True if the user already completed TMA verification today."""
-    tz = pytz.timezone('Asia/Kolkata')
-    today = date.today()
-    if user_id in TMA_VERIFIED:
-        exp_str = TMA_VERIFIED[user_id]
-        years, month, day = exp_str.split('-')
-        comp = date(int(years), int(month), int(day))
-        return comp >= today
+    """Return True if the user already completed TMA verification today.
+    Under one-time verification mode, this always returns False to force ad views.
+    """
     return False
+
+# ─── One-time Token Consumption Helper ────────────────────────────────────
+TMA_CONSUMED_TOKENS = set()
+
+def is_token_consumed(token: str) -> bool:
+    """Check if the TMA verification token has already been consumed."""
+    return token in TMA_CONSUMED_TOKENS
+
+def consume_token(token: str):
+    """Consume the TMA verification token so it cannot be used again."""
+    TMA_CONSUMED_TOKENS.add(token)
