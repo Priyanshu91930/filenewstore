@@ -170,6 +170,14 @@ async def start(client, message):
                             consume_token(token)
                             is_unlocked = True
                             data = file_data
+                        else:
+                            return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
+                    else:
+                        return await message.reply_text(text="<b>This verification link has expired! Please watch the ad again.</b>", protect_content=True)
+                else:
+                    return await message.reply_text(text="<b>This verification link belongs to another user!</b>", protect_content=True)
+            else:
+                return await message.reply_text(text="<b>Invalid unlock link!</b>", protect_content=True)
         
         # Handle clone redirect from button
         if data == "clone":
