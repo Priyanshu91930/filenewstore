@@ -160,9 +160,10 @@ async def start(client, message):
 
         is_unlocked = False
         if data.split("-", 1)[0] == "unlock":
-            parts = data.split("-", 3)
-            if len(parts) >= 4:
-                _, userid_str, token, file_data = parts
+            parts = data.split("-", 4)
+            if len(parts) >= 5:
+                _, userid_str, ts, sig, file_data = parts
+                token = f"{ts}-{sig}"
                 if str(message.from_user.id) == userid_str:
                     from utils import validate_tma_token, is_token_consumed, consume_token
                     if validate_tma_token(message.from_user.id, token):
@@ -178,6 +179,7 @@ async def start(client, message):
                     return await message.reply_text(text="<b>This verification link belongs to another user!</b>", protect_content=True)
             else:
                 return await message.reply_text(text="<b>Invalid unlock link!</b>", protect_content=True)
+
         
         # Handle clone redirect from button
         if data == "clone":
