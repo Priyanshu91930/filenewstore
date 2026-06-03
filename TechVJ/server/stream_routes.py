@@ -43,11 +43,19 @@ async def tma_route_handler(request: web.Request):
     from config import MONETAG_ZONE_ID, BOT_USERNAME
     import jinja2
     from urllib.parse import unquote
+    from utils import get_tma_shortlink
 
     uid          = request.rel_url.query.get('uid', '')
     token        = request.rel_url.query.get('token', '')
     file_data    = unquote(request.rel_url.query.get('file', ''))
     zone         = MONETAG_ZONE_ID or ''
+
+    short_link = ""
+    if uid and token and file_data:
+        try:
+            short_link = await get_tma_shortlink(int(uid), token, file_data, BOT_USERNAME)
+        except Exception as e:
+            logging.error(f"Error generating shortlink: {e}")
 
     # Load and render templates/index.html using Jinja2
     template_path = "templates/index.html"
@@ -62,6 +70,7 @@ async def tma_route_handler(request: web.Request):
             bot_username    = BOT_USERNAME,
             file_id         = file_data,
             file_deeplink   = file_data,
+            short_link      = short_link,
         )
         return web.Response(text=rendered, content_type='text/html')
     except Exception as e:
