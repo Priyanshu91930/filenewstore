@@ -485,6 +485,64 @@ async def stats_handler(client, message):
         f"👥 Total Users in Clones: <code>{total_clone_users}</code></b>"
     )
 
+@Client.on_message(filters.command("validity") & filters.user(ADMINS) & filters.private)
+async def tma_validity_command(client, message):
+    from utils import TMA_VERIFIED, VERIFIED
+    import time
+    
+    text = "<b>📅 <u>Active Verifications</u></b>\n\n"
+    
+    # 1. TMA Verifications (3 Hours)
+    tma_count = 0
+    tma_text = "<b>⚡ TMA Verifications (3-Hour Validity):</b>\n"
+    current_time = time.time()
+    for uid, verified_time in list(TMA_VERIFIED.items()):
+        elapsed = current_time - verified_time
+        if elapsed < 3 * 3600:
+            tma_count += 1
+            remaining = int((3 * 3600) - elapsed)
+            hours = remaining // 3600
+            mins = (remaining % 3600) // 60
+            tma_text += f"• <code>{uid}</code> (Remaining: {hours}h {mins}m)\n"
+        else:
+            TMA_VERIFIED.pop(uid, None)
+            
+    if tma_count == 0:
+        tma_text += "<i>No active TMA verifications.</i>\n"
+        
+    # 2. Standard Verifications (24 Hours / Today)
+    std_count = 0
+    std_text = "\n<b>🔗 Standard Verifications (Daily):</b>\n"
+    for uid, expiry in list(VERIFIED.items()):
+        std_count += 1
+        std_text += f"• <code>{uid}</code> (Valid for: {expiry})\n"
+        
+    if std_count == 0:
+        std_text += "<i>No active standard verifications.</i>\n"
+        
+    total_text = text + tma_text + std_text
+    await message.reply_text(total_text)
+
+@Client.on_message(filters.command("remove_validity") & filters.user(ADMINS) & filters.private)
+async def remove_validity_command(client, message):
+    from utils import TMA_VERIFIED, VERIFIED
+    
+    if len(message.command) != 2:
+        return await message.reply_text("<b>Usage:</b> `/remove_validity (user_id)`")
+        
+    try:
+        target_uid = int(message.command[1].strip())
+    except ValueError:
+        return await message.reply_text("<b>Error:</b> Invalid User ID format. Please provide a numeric User ID.")
+        
+    removed_tma = TMA_VERIFIED.pop(target_uid, None) is not None
+    removed_std = VERIFIED.pop(target_uid, None) is not None
+    
+    if removed_tma or removed_std:
+        await message.reply_text(f"<b>✅ Successfully removed validity for User ID:</b> <code>{target_uid}</code>")
+    else:
+        await message.reply_text(f"<b>❌ User ID <code>{target_uid}</code> does not have any active validity.</b>")
+
 @Client.on_message(filters.command("setting") & filters.private & filters.incoming & filters.user(ADMINS))
 async def settings_command(client, message):
     # Force Subscribe Check
