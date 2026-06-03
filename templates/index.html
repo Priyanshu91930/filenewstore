@@ -499,10 +499,10 @@
         <span>🔗</span> Unlock File
       </button>
 
-      <!-- CTA: Get File (fallback link) -->
-      <a class="btn-tg" id="getFileBtn" href="#" target="_blank" rel="noopener">
-        <span>✈️</span> Get File on Telegram
-      </a>
+      <!-- CTA: Re-open Link -->
+      <button class="btn-cta" id="reopenBtn" style="display:none">
+        <span>🔄</span> Re-open Verification Link
+      </button>
 
       <!-- Copy share link -->
       <button class="btn-copy" id="copyBtn">
@@ -541,7 +541,7 @@
      ════════════════════════════════════════ */
     const iconRing = document.getElementById('iconRing');
     const unlockBtn = document.getElementById('unlockBtn');
-    const getFileBtn = document.getElementById('getFileBtn');
+    const reopenBtn = document.getElementById('reopenBtn');
     const copyBtn = document.getElementById('copyBtn');
     const statusEl = document.getElementById('statusArea');
     const step1 = document.getElementById('step1');
@@ -600,26 +600,21 @@
           window.open(targetUrl, '_blank');
         }
         
-        // Show fallback get link options for a smooth experience
+        // Hide unlock button and show retry option
         unlockBtn.style.display = 'none';
-        getFileBtn.href = getBotFileLink();
-        getFileBtn.classList.add('visible');
+        reopenBtn.style.display = 'flex';
         copyBtn.classList.add('visible');
-        setStatus('Please complete verification on the opened page. You will get the file directly in the bot.', 'success');
+        setStatus('Please complete the verification steps in your browser window. Once completed, your file will be sent directly by the bot!', 'success');
       }, 1000);
     }
 
     unlockBtn.addEventListener('click', performUnlock);
-
-    /* ════════════════════════════════════════
-       GET FILE BUTTON — opens in Telegram
-     ════════════════════════════════════════ */
-    getFileBtn.addEventListener('click', (e) => {
-      const link = getFileBtn.href;
+    reopenBtn.addEventListener('click', () => {
+      const targetUrl = SHORT_LINK || getBotFileLink();
       if (tg) {
-        e.preventDefault();
-        tg.openTelegramLink(link);
-        setTimeout(() => tg.close(), 1200);
+        tg.openLink(targetUrl);
+      } else {
+        window.open(targetUrl, '_blank');
       }
     });
 
