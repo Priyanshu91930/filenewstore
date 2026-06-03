@@ -165,12 +165,19 @@ async def start(client, message):
                 _, userid_str, ts, sig, file_data = parts
                 token = f"{ts}-{sig}"
                 if str(message.from_user.id) == userid_str:
-                    from utils import validate_tma_token, is_token_consumed, consume_token
+                    from utils import validate_tma_token, is_token_consumed, consume_token, verify_tma_user
                     if validate_tma_token(message.from_user.id, token):
                         if not is_token_consumed(token):
                             consume_token(token)
                             is_unlocked = True
                             data = file_data
+                            # Mark verified for 3 hours in database/memory
+                            await verify_tma_user(message.from_user.id, token)
+                            # Notify user of successful verification
+                            await message.reply_text(
+                                text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
+                                protect_content=True
+                            )
                         else:
                             return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
                     else:
