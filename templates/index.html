@@ -549,8 +549,8 @@
     const FILE_ID = "{{ file_id }}";         // base64 encoded file id (passed via ?file=)
     const FILE_DEEPLINK = "{{ file_deeplink }}";   // full /start link data
     const SHORT_LINK = "{{ short_link }}";
-    const IS_VERIFIED = {{ 'true' if is_verified else 'false' }};
-    let remainingTime = {{ remaining_time or 0 }};
+    const IS_VERIFIED = ("{{ is_verified }}" === "True");
+    let remainingTime = parseInt("{{ remaining_time or 0 }}", 10) || 0;
 
     /* ════════════════════════════════════════
        DOM REFS
