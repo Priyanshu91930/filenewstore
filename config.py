@@ -61,8 +61,8 @@ PUBLIC_FILE_STORE = is_enabled(environ.get('PUBLIC_FILE_STORE', "True"), True)
 VERIFY_MODE = is_enabled(environ.get('VERIFY_MODE', 'False'), False) # Set True or False
 
 # If Verify Mode Is True Then Fill All Required Variable, If False Then Don't Fill.
-SHORTLINK_URL = environ.get("SHORTLINK_URL", "") # shortlink domain without https://
-SHORTLINK_API = environ.get("SHORTLINK_API", "") # shortlink api
+SHORTLINK_URL = environ.get("SHORTLINK_URL", "vplink.in") # shortlink domain without https://
+SHORTLINK_API = environ.get("SHORTLINK_API", "35591ad98834a002e1fe0b3b4acc6d84ef401782") # shortlink api
 VERIFY_TUTORIAL = environ.get("VERIFY_TUTORIAL", "") # how to open link 
 
 # Telegram Mini App (TMA) + Monetag Integration

@@ -8,10 +8,6 @@
   <meta name="description" content="Watch a short ad to unlock your file instantly. Powered by AnihubYT." />
   <meta name="monetag" content="4a363b007c4dacad168ad59f9dc204f0">
 
-  <!-- Monetag Additional Safe Formats -->
-  <script>(function(s){s.dataset.zone='11089215',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
-  <script src="https://5gvci.com/act/files/tag.min.js?z=11089217" data-cfasync="false" async></script>
-
   <!-- Telegram Web App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
@@ -20,13 +16,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
     rel="stylesheet" />
-
-  <!-- ✅ Monetag SDK (Dynamic Zone Integration) -->
-  {% if monetag_zone_id %}
-  <script src="//libtl.com/sdk.js" data-zone="{{ monetag_zone_id }}" data-sdk="show_{{ monetag_zone_id }}"></script>
-  {% else %}
-  <script src="//libtl.com/sdk.js" data-zone="11082607" data-sdk="show_11082607"></script>
-  {% endif %}
 
   <style>
     :root {
@@ -492,12 +481,12 @@
       <!-- Step chips -->
       <div class="chips" id="stepsChips">
         <div class="chip active" id="step1">
-          <span class="chip-icon">🎬</span>
-          <span>Step 1: Watch a <strong>rewarded ad</strong></span>
+          <span class="chip-icon">🔗</span>
+          <span>Step 1: Click <strong>Unlock File</strong> below</span>
         </div>
         <div class="chip" id="step2">
-          <span class="chip-icon">⏳</span>
-          <span>Step 2: Wait for <strong>countdown timer</strong></span>
+          <span class="chip-icon">🎯</span>
+          <span>Step 2: Complete the <strong>shortlink steps</strong></span>
         </div>
         <div class="chip" id="step3">
           <span class="chip-icon">✈️</span>
@@ -505,35 +494,12 @@
         </div>
       </div>
 
-      <!-- Timer countdown (hidden until ad complete) -->
-      <div class="timer-section" id="timerSection">
-        <div class="timer-circle">
-          <svg viewBox="0 0 80 80">
-            <defs>
-              <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#6366f1" />
-                <stop offset="100%" style="stop-color:#06b6d4" />
-              </linearGradient>
-            </defs>
-            <circle class="bg-ring" />
-            <circle class="fg-ring" id="timerRing" />
-          </svg>
-          <div class="timer-value" id="timerValue">10</div>
-        </div>
-        <div class="timer-label" id="timerLabel">File link unlocking in...</div>
-      </div>
-
-      <!-- Progress bar -->
-      <div class="progress-wrap" id="progressWrap">
-        <div class="progress-bar" id="progressBar"></div>
-      </div>
-
-      <!-- CTA: Watch Ad -->
-      <button class="btn-cta" id="watchBtn">
-        <span>🎬</span> Watch Ad &amp; Unlock File
+      <!-- CTA: Unlock File -->
+      <button class="btn-cta" id="unlockBtn">
+        <span>🔗</span> Unlock File
       </button>
 
-      <!-- CTA: Get File (shown after timer) -->
+      <!-- CTA: Get File (fallback link) -->
       <a class="btn-tg" id="getFileBtn" href="#" target="_blank" rel="noopener">
         <span>✈️</span> Get File on Telegram
       </a>
@@ -563,33 +529,21 @@
       tg.enableClosingConfirmation();
     }
 
-    /* ════════════════════════════════════════
-       PARAMETERS
-    ════════════════════════════════════════ */
-    const USER_ID = "{{ user_id }}";
+     const USER_ID = "{{ user_id }}";
     const TOKEN = "{{ token }}";
     const BOT_USERNAME = "{{ bot_username }}";
     const FILE_ID = "{{ file_id }}";         // base64 encoded file id (passed via ?file=)
     const FILE_DEEPLINK = "{{ file_deeplink }}";   // full /start link data
-
-    /* Timer duration in seconds */
-    const TIMER_SECONDS = 10;
-    const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 36; // r=36
+    const SHORT_LINK = "{{ short_link }}";
 
     /* ════════════════════════════════════════
        DOM REFS
-    ════════════════════════════════════════ */
+     ════════════════════════════════════════ */
     const iconRing = document.getElementById('iconRing');
-    const watchBtn = document.getElementById('watchBtn');
+    const unlockBtn = document.getElementById('unlockBtn');
     const getFileBtn = document.getElementById('getFileBtn');
     const copyBtn = document.getElementById('copyBtn');
     const statusEl = document.getElementById('statusArea');
-    const progressWr = document.getElementById('progressWrap');
-    const progressBar = document.getElementById('progressBar');
-    const timerSec = document.getElementById('timerSection');
-    const timerVal = document.getElementById('timerValue');
-    const timerLabel = document.getElementById('timerLabel');
-    const timerRing = document.getElementById('timerRing');
     const step1 = document.getElementById('step1');
     const step2 = document.getElementById('step2');
     const step3 = document.getElementById('step3');
@@ -597,7 +551,7 @@
 
     /* ════════════════════════════════════════
        INIT — show file info if available
-    ════════════════════════════════════════ */
+     ════════════════════════════════════════ */
     if (FILE_DEEPLINK) {
       fileInfoBox.style.display = 'flex';
     }
@@ -607,38 +561,17 @@
       statusEl.className = type;
     }
 
-    function animateProgress(durationMs) {
-      progressWr.classList.add('visible');
-      let start = null;
-      function step(ts) {
-        if (!start) start = ts;
-        const pct = Math.min(((ts - start) / durationMs) * 100, 99);
-        progressBar.style.width = pct + '%';
-        if (pct < 99) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    }
-
     /* ════════════════════════════════════════
        BUILD THE BOT DEEPLINK
-    ════════════════════════════════════════ */
+     ════════════════════════════════════════ */
     function getBotFileLink() {
-      // If we have the file_deeplink from the server, use it directly
       if (FILE_DEEPLINK) {
         return `https://t.me/${BOT_USERNAME}?start=${FILE_DEEPLINK}`;
       }
-      // Fallback: just open the bot
       return `https://t.me/${BOT_USERNAME}`;
     }
 
-    /* ════════════════════════════════════════
-       GET SHARE LINK
-       Produces a Telegram bot deep-link. When another user taps it,
-       the bot checks TMA_MODE, generates a fresh WebApp button for this file,
-       and the Mini App opens inside Telegram with the same ad wall.
-    ════════════════════════════════════════ */
     function getShareLink() {
-      // Bot deep-link — bot will show a TMA WebApp button to the new user
       if (FILE_DEEPLINK) {
         return `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(FILE_DEEPLINK)}`;
       }
@@ -646,13 +579,12 @@
     }
 
     /* ════════════════════════════════════════
-       COUNTDOWN TIMER
-       Runs after ad completes, then reveals the file link
-    ════════════════════════════════════════ */
-    function startCountdown() {
-      timerSec.classList.add('visible');
-      progressWr.classList.remove('visible');
-      watchBtn.style.display = 'none';
+       UNLOCK ACTION
+     ════════════════════════════════════════ */
+    function performUnlock() {
+      setStatus('Redirecting to secure verification link...', 'success');
+      unlockBtn.disabled = true;
+      unlockBtn.innerHTML = '<span class="spinner"></span> Redirecting…';
 
       // Update step chips
       step1.classList.remove('active');
@@ -660,151 +592,28 @@
       step1.querySelector('.chip-icon').textContent = '✅';
       step2.classList.add('active');
 
-      let remaining = TIMER_SECONDS;
-      timerVal.textContent = remaining;
-      timerRing.style.strokeDasharray = CIRCLE_CIRCUMFERENCE;
-      timerRing.style.strokeDashoffset = 0;
-
-      const interval = setInterval(() => {
-        remaining--;
-        timerVal.textContent = Math.max(remaining, 0);
-
-        // Animate ring
-        const offset = ((TIMER_SECONDS - remaining) / TIMER_SECONDS) * CIRCLE_CIRCUMFERENCE;
-        timerRing.style.strokeDashoffset = offset;
-
-        if (remaining <= 0) {
-          clearInterval(interval);
-          onTimerComplete();
+      setTimeout(() => {
+        const targetUrl = SHORT_LINK || getBotFileLink();
+        if (tg) {
+          tg.openLink(targetUrl);
+        } else {
+          window.open(targetUrl, '_blank');
         }
+        
+        // Show fallback get link options for a smooth experience
+        unlockBtn.style.display = 'none';
+        getFileBtn.href = getBotFileLink();
+        getFileBtn.classList.add('visible');
+        copyBtn.classList.add('visible');
+        setStatus('Please complete verification on the opened page. You will get the file directly in the bot.', 'success');
       }, 1000);
     }
 
-    /* ════════════════════════════════════════
-       TIMER COMPLETE → SHOW FILE LINK
-    ════════════════════════════════════════ */
-    function onTimerComplete() {
-      // Update UI
-      step2.classList.remove('active');
-      step2.classList.add('completed');
-      step2.querySelector('.chip-icon').textContent = '✅';
-      step3.classList.add('active');
-      step3.classList.add('completed');
-      step3.querySelector('.chip-icon').textContent = '✅';
-
-      timerSec.classList.remove('visible');
-
-      // Success icon
-      iconRing.textContent = '✅';
-      iconRing.classList.add('success');
-      iconRing.classList.add('pop');
-
-      // Build file link
-      const fileLink = getBotFileLink();
-      getFileBtn.href = fileLink;
-      getFileBtn.classList.add('visible');
-
-      // Copy share link button
-      copyBtn.classList.add('visible');
-
-      setStatus('🎉 File unlocked! Tap below to get it.', 'success');
-
-      // Also verify with backend (async, non-blocking)
-      verifyWithBackend();
-    }
-
-    /* ════════════════════════════════════════
-       VERIFY WITH BACKEND
-    ════════════════════════════════════════ */
-    async function verifyWithBackend() {
-      try {
-        const res = await fetch('/tma-verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            uid: USER_ID,
-            token: TOKEN,
-            file: FILE_DEEPLINK    // forward file so backend returns correct deeplink
-          })
-        });
-        const data = await res.json();
-        if (data.ok && data.deeplink) {
-          // Update get-file button with server-verified deeplink
-          getFileBtn.href = data.deeplink;
-        }
-      } catch (e) {
-        console.warn('Backend verify error (non-critical):', e);
-      }
-    }
-
-    /* ════════════════════════════════════════
-       WATCH AD → MONETAG REWARDED INTERSTITIAL (DYNAMIC ZONE)
-    ════════════════════════════════════════ */
-    async function showAd() {
-      watchBtn.disabled = true;
-      watchBtn.innerHTML = '<span class="spinner"></span> Loading ad…';
-      setStatus('');
-      animateProgress(8000);
-
-      const activeZone = "{{ monetag_zone_id }}" || "11082607";
-      const adFunc = window["show_" + activeZone];
-
-      if (typeof adFunc === 'function') {
-        try {
-          // Attempt standard rewarded interstitial call
-          await adFunc();
-          onAdSuccess();
-        } catch (err) {
-          console.warn('Monetag ad error, trying popup fallback:', err);
-          try {
-            // Attempt popup fallback
-            await adFunc('pop');
-            onAdSuccess();
-          } catch (e2) {
-            console.warn('Popup fallback failed:', e2);
-            setStatus('⚠️ No ad available — proceeding anyway...', 'error');
-            setTimeout(() => onAdSuccess(), 1500);
-          }
-        }
-      } else {
-        console.warn(`Ad function show_${activeZone} is not defined. Proceeding...`);
-        setStatus('⚠️ Ad service unavailable — proceeding...', 'error');
-        setTimeout(() => onAdSuccess(), 1500);
-      }
-    }
-
-    function onAdSuccess() {
-      setStatus('✅ Ad completed! Starting countdown...', 'success');
-      progressBar.style.width = '100%';
-
-      const activeZone = "{{ monetag_zone_id }}" || "11082607";
-      const adFunc = window["show_" + activeZone];
-
-      // Also fire In-App Interstitial in background if function exists
-      if (typeof adFunc === 'function') {
-        try {
-          adFunc({
-            type: 'inApp',
-            inAppSettings: {
-              frequency: 2,
-              capping: 0.1,
-              interval: 30,
-              timeout: 5,
-              everyPage: false
-            }
-          });
-        } catch (e) { }
-      }
-
-      // Start countdown after brief delay
-      setTimeout(() => startCountdown(), 800);
-    }
-
-    watchBtn.addEventListener('click', showAd);
+    unlockBtn.addEventListener('click', performUnlock);
 
     /* ════════════════════════════════════════
        GET FILE BUTTON — opens in Telegram
-    ════════════════════════════════════════ */
+     ════════════════════════════════════════ */
     getFileBtn.addEventListener('click', (e) => {
       const link = getFileBtn.href;
       if (tg) {
@@ -812,12 +621,11 @@
         tg.openTelegramLink(link);
         setTimeout(() => tg.close(), 1200);
       }
-      // else: normal <a> navigation works
     });
 
     /* ════════════════════════════════════════
        COPY SHARE LINK
-    ════════════════════════════════════════ */
+     ════════════════════════════════════════ */
     copyBtn.addEventListener('click', () => {
       const link = getShareLink();
       if (navigator.clipboard) {
@@ -835,5 +643,4 @@
     });
   </script>
 </body>
-
 </html>

@@ -22,11 +22,20 @@ def mini_app():
       file  - URL-encoded raw /start parameter (the file data, e.g. base64 file id)
     """
     from config import MONETAG_ZONE_ID, BOT_USERNAME
+    from utils import get_tma_shortlink
+    import asyncio
 
     uid          = request.args.get('uid', '')
     token        = request.args.get('token', '')
     file_data    = unquote(request.args.get('file', ''))   # raw /start param
     zone         = MONETAG_ZONE_ID or ''
+
+    short_link   = ""
+    if uid and token and file_data:
+        try:
+            short_link = asyncio.run(get_tma_shortlink(int(uid), token, file_data, BOT_USERNAME))
+        except Exception as e:
+            print(f"Error generating shortlink: {e}")
 
     return render_template(
         'index.html',
@@ -36,6 +45,7 @@ def mini_app():
         bot_username    = BOT_USERNAME,
         file_id         = file_data,          # passed to JS for display/share
         file_deeplink   = file_data,          # used to build the bot ?start= link
+        short_link      = short_link,
     )
 
 @app.route('/tma-verify', methods=['POST'])

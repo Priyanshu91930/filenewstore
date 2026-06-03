@@ -184,3 +184,9 @@ def is_token_consumed(token: str) -> bool:
 def consume_token(token: str):
     """Consume the TMA verification token so it cannot be used again."""
     TMA_CONSUMED_TOKENS.add(token)
+
+async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_username: str) -> str:
+    """Build the target unlock link and shorten it."""
+    link = f"https://t.me/{bot_username}?start=unlock-{user_id}-{token}-{file_data}"
+    shortened_verify_url = await get_verify_shorted_link(link)
+    return str(shortened_verify_url)
