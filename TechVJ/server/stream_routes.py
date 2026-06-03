@@ -40,8 +40,10 @@ async def root_route_handler(_):
 
 @routes.get("/tma", allow_head=True)
 async def tma_route_handler(request: web.Request):
-    from config import MONETAG_ZONE_ID, BOT_USERNAME
+    from config import MONETAG_ZONE_ID, BOT_USERNAME, LOG_CHANNEL
+    from TechVJ.bot import StreamBot
     import jinja2
+    import base64
     from urllib.parse import unquote
     from utils import get_tma_shortlink
 
@@ -57,6 +59,53 @@ async def tma_route_handler(request: web.Request):
         except Exception as e:
             logging.error(f"Error generating shortlink: {e}")
 
+    # Fetch actual file details
+    file_name = "Your File"
+    file_size = ""
+    file_emoji = "📁"
+    
+    if file_data:
+        if file_data.startswith("BATCH-"):
+            file_name = "Batch Folder"
+            file_emoji = "📂"
+        else:
+            try:
+                # Decode file details
+                decoded = base64.urlsafe_b64decode(file_data + "=" * (-len(file_data) % 4)).decode("ascii")
+                if "_" in decoded:
+                    _, decode_file_id = decoded.split("_", 1)
+                else:
+                    decode_file_id = decoded
+                
+                msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
+                if msg and msg.media:
+                    media = getattr(msg, msg.media.value)
+                    raw_name = getattr(media, "file_name", "Your File")
+                    # Format name
+                    file_name = ' '.join(filter(lambda x: not x.startswith('http') and not x.startswith('@') and not x.startswith('www.'), raw_name.replace("[", "").replace("]", "").replace("(", "").replace(")", "").split()))
+                    
+                    # Calculate size
+                    size_bytes = float(media.file_size)
+                    units = ["Bytes", "KB", "MB", "GB"]
+                    i = 0
+                    while size_bytes >= 1024.0 and i < len(units) - 1:
+                        i += 1
+                        size_bytes /= 1024.0
+                    file_size = "%.2f %s" % (size_bytes, units[i])
+                    
+                    # Set emoji based on type
+                    mtype = msg.media.value
+                    if mtype in ["video", "animation"]:
+                        file_emoji = "🎬"
+                    elif mtype == "audio":
+                        file_emoji = "🎵"
+                    elif mtype == "photo":
+                        file_emoji = "🖼️"
+                    else:
+                        file_emoji = "📄"
+            except Exception as e:
+                logging.error(f"Error fetching file details: {e}")
+
     # Load and render templates/index.html using Jinja2
     template_path = "templates/index.html"
     try:
@@ -71,6 +120,9 @@ async def tma_route_handler(request: web.Request):
             file_id         = file_data,
             file_deeplink   = file_data,
             short_link      = short_link,
+            file_name       = file_name,
+            file_size       = file_size,
+            file_emoji      = file_emoji,
         )
         return web.Response(text=rendered, content_type='text/html')
     except Exception as e:

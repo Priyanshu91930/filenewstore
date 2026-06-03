@@ -471,10 +471,10 @@
 
       <!-- File info (shown when file_id present) -->
       <div class="file-info-box" id="fileInfoBox" style="display:none">
-        <span class="file-emoji" id="fileEmoji">📁</span>
+        <span class="file-emoji" id="fileEmoji">{{ file_emoji or '📁' }}</span>
         <div class="file-details">
-          <div class="file-name" id="fileName">Your File</div>
-          <div class="file-size" id="fileSizeMeta"></div>
+          <div class="file-name" id="fileName">{{ file_name or 'Your File' }}</div>
+          <div class="file-size" id="fileSizeMeta">{{ file_size or '' }}</div>
         </div>
       </div>
 
@@ -596,6 +596,10 @@
         const targetUrl = SHORT_LINK || getBotFileLink();
         if (tg) {
           tg.openLink(targetUrl);
+          // Automatically close the Mini App so the user is directly back in the bot chat
+          setTimeout(() => {
+            tg.close();
+          }, 800);
         } else {
           window.open(targetUrl, '_blank');
         }
