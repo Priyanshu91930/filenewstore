@@ -504,10 +504,7 @@
         <span>🔄</span> Re-open Verification Link
       </button>
 
-      <!-- Copy share link -->
-      <button class="btn-copy" id="copyBtn">
-        🔗 Copy Share Link
-      </button>
+
 
       <!-- Status -->
       <div id="statusArea"></div>
@@ -542,7 +539,6 @@
     const iconRing = document.getElementById('iconRing');
     const unlockBtn = document.getElementById('unlockBtn');
     const reopenBtn = document.getElementById('reopenBtn');
-    const copyBtn = document.getElementById('copyBtn');
     const statusEl = document.getElementById('statusArea');
     const step1 = document.getElementById('step1');
     const step2 = document.getElementById('step2');
@@ -607,7 +603,6 @@
         // Hide unlock button and show retry option
         unlockBtn.style.display = 'none';
         reopenBtn.style.display = 'flex';
-        copyBtn.classList.add('visible');
         setStatus('Please complete the verification steps in your browser window. Once completed, your file will be sent directly by the bot!', 'success');
       }, 1000);
     }
@@ -620,25 +615,6 @@
       } else {
         window.open(targetUrl, '_blank');
       }
-    });
-
-    /* ════════════════════════════════════════
-       COPY SHARE LINK
-     ════════════════════════════════════════ */
-    copyBtn.addEventListener('click', () => {
-      const link = getShareLink();
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(link);
-      } else {
-        const ta = document.createElement('textarea');
-        ta.value = link;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
-      copyBtn.textContent = '✅ Copied!';
-      setTimeout(() => { copyBtn.innerHTML = '🔗 Copy Share Link'; }, 2000);
     });
   </script>
 </body>
