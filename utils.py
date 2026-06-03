@@ -160,18 +160,19 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "") -> 
     return url
 
 async def verify_tma_user(user_id: int, token: str) -> bool:
-    """Validate the token and mark the user as TMA-verified for today."""
+    """Validate the token and mark the user as TMA-verified for 3 hours."""
     if not validate_tma_token(user_id, token):
         return False
-    tz = pytz.timezone('Asia/Kolkata')
-    today = date.today()
-    TMA_VERIFIED[user_id] = str(today)
+    TMA_VERIFIED[user_id] = time.time()
     return True
 
 async def check_tma_verification(user_id: int) -> bool:
-    """Return True if the user already completed TMA verification today.
-    Under one-time verification mode, this always returns False to force ad views.
+    """Return True if the user already completed TMA verification within the last 3 hours.
     """
+    if user_id in TMA_VERIFIED:
+        verified_time = TMA_VERIFIED[user_id]
+        if time.time() - verified_time < 3 * 3600:
+            return True
     return False
 
 # ─── One-time Token Consumption Helper ────────────────────────────────────

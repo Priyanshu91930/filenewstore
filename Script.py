@@ -172,7 +172,7 @@ Nᴀᴍᴇ - {}</b>
 Hey {}, to access this file you need to watch a short ad in our Mini App.
 
 ✅ It only takes <u>5-10 seconds</u>
-✅ Unlocks <u>all files till midnight</u>
+✅ Unlocks <u>all files for 3 hours</u>
 ✅ 100% safe & free
 
 Tap the button below to open the Mini App and watch the ad to unlock!</b>"""
@@ -181,7 +181,7 @@ Tap the button below to open the Mini App and watch the ad to unlock!</b>"""
 
 Hey {}, you've been successfully verified! 🎉
 
-You now have <u>unlimited access to all files until midnight</u>.
+You now have <u>unlimited access to all files for 3 hours</u>.
 
 Enjoy! 🚀</b>"""
 
