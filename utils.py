@@ -129,7 +129,7 @@ def _generate_tma_token(user_id: int) -> str:
     sig = hmac.new(TMA_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
     return f"{ts}-{sig}"
 
-def validate_tma_token(user_id: int, token: str, max_age_sec: int = 600) -> bool:
+def validate_tma_token(user_id: int, token: str, max_age_sec: int = 10800) -> bool:
     """Validate a TMA token. Returns True if the token is valid and not expired."""
     try:
         ts_str, sig = token.split("-", 1)
