@@ -28,12 +28,13 @@ def mini_app():
     uid          = request.args.get('uid', '')
     token        = request.args.get('token', '')
     file_data    = unquote(request.args.get('file', ''))   # raw /start param
+    bot_username = request.args.get('bot', BOT_USERNAME)
     zone         = MONETAG_ZONE_ID or ''
 
     short_link   = ""
     if uid and token and file_data:
         try:
-            short_link = asyncio.run(get_tma_shortlink(int(uid), token, file_data, BOT_USERNAME))
+            short_link = asyncio.run(get_tma_shortlink(int(uid), token, file_data, bot_username))
         except Exception as e:
             print(f"Error generating shortlink: {e}")
 
@@ -42,7 +43,7 @@ def mini_app():
         monetag_zone_id = zone,
         user_id         = uid,
         token           = token,
-        bot_username    = BOT_USERNAME,
+        bot_username    = bot_username,
         file_id         = file_data,          # passed to JS for display/share
         file_deeplink   = file_data,          # used to build the bot ?start= link
         short_link      = short_link,
@@ -62,6 +63,7 @@ def tma_verify():
     uid_str  = str(data.get('uid', ''))
     token    = str(data.get('token', ''))
     file_data = str(data.get('file', ''))   # file /start param forwarded from JS
+    bot_username = str(data.get('bot', BOT_USERNAME))
 
     # ── Validate HMAC token ──
     try:
@@ -81,9 +83,9 @@ def tma_verify():
     # Otherwise fall back to the TMA verification callback so the bot marks
     # the user as verified and then re-delivers the pending file.
     if file_data:
-        deeplink = f"https://t.me/{BOT_USERNAME}?start={file_data}"
+        deeplink = f"https://t.me/{bot_username}?start={file_data}"
     else:
-        deeplink = f"https://t.me/{BOT_USERNAME}?start=tma-{uid_str}-{token}"
+        deeplink = f"https://t.me/{bot_username}?start=tma-{uid_str}-{token}"
 
     return jsonify({'ok': True, 'deeplink': deeplink})
 

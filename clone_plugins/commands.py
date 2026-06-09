@@ -14,9 +14,10 @@ from pyrogram import Client, filters, enums
 from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait, UserNotParticipant
 from config import BOT_USERNAME, ADMINS, LOG_CHANNEL
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto
-from config import PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL
-from utils import is_subscribed_universal
+from config import PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL
+from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip
+import config
+from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto, WebAppInfo
 import re
 import json
 import base64
@@ -197,6 +198,49 @@ async def start(client, message):
     data = message.command[1]
     logger.info(f"Processing payload data: {data}")
     
+    is_unlocked = False
+    if data.split("-", 1)[0] == "unlock":
+        parts = data.split("-", 4)
+        if len(parts) >= 5:
+            _, userid_str, ts, sig, file_data = parts
+            token = f"{ts}-{sig}"
+            if str(message.from_user.id) == userid_str:
+                if validate_tma_token(message.from_user.id, token):
+                    if not is_token_consumed(token):
+                        consume_token(token)
+                        is_unlocked = True
+                        data = file_data
+                        await verify_tma_user(message.from_user.id, token)
+                        await message.reply_text(
+                            text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
+                            protect_content=True
+                        )
+                    else:
+                        return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
+                else:
+                    return await message.reply_text(text="<b>This verification link has expired! Please watch the ad again.</b>", protect_content=True)
+            else:
+                return await message.reply_text(text="<b>This verification link belongs to another user!</b>", protect_content=True)
+        else:
+            return await message.reply_text(text="<b>Invalid unlock link!</b>", protect_content=True)
+
+    if data.split("-", 1)[0] == "tma":
+        parts = data.split("-")
+        if len(parts) >= 3:
+            tma_uid = int(parts[1])
+            tma_token = "-".join(parts[2:])
+            if message.from_user.id != tma_uid:
+                return await message.reply_text(text=script.TMA_EXPIRED_TEXT, protect_content=True)
+            ok = await verify_tma_user(tma_uid, tma_token)
+            if ok:
+                await message.reply_text(
+                    text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
+                    protect_content=True
+                )
+            else:
+                await message.reply_text(text=script.TMA_EXPIRED_TEXT, protect_content=True)
+        return
+
     if data.startswith("verify-"):
         logger.info("Detected verification payload")
         parts = data.split("-", 3)
@@ -228,24 +272,36 @@ async def start(client, message):
             # Token Verification Check for Batch
             token_mode = bot_doc.get("token_verify", False) if bot_doc else False
             if token_mode:
-                timeout = bot_doc.get("token_timeout", 86400)
-                key = f"{me.id}_{message.from_user.id}"
-                is_verified = False
-                if key in CLONE_VERIFIED:
-                    if time.time() < CLONE_VERIFIED[key] + timeout:
-                        is_verified = True
+                user_is_vip = await is_vip(me.id, message.from_user.id)
+                if user_is_vip:
+                    is_verified = True
+                else:
+                    timeout = bot_doc.get("token_timeout", 86400)
+                    key = f"{me.id}_{message.from_user.id}"
+                    is_verified = False
+                    
+                    if config.TMA_MODE:
+                        is_verified = await check_tma_verification(message.from_user.id)
+                    else:
+                        if key in CLONE_VERIFIED:
+                            if time.time() < CLONE_VERIFIED[key] + timeout:
+                                is_verified = True
                 
-                if not is_verified:
-                    # Redirect to verification logic (similar to single file)
-                    # We'll just fall through to the verification block by NOT returning here
-                    # and letting the normal logic handle it.
+                if not is_verified and not is_unlocked:
+                    if config.TMA_MODE:
+                        tma_app_url = f"{URL.rstrip('/')}/tma"
+                        tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+                        btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                        return await message.reply_text(
+                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                            protect_content=True,
+                            reply_markup=InlineKeyboardMarkup(btn)
+                        )
                     pass
                 else:
-                    is_verified = True # dummy to avoid re-check
+                    is_verified = True
             
-            # If not verified and token_mode is on, we'll handle it below.
-            # But if verified or token_mode is off, process batch.
-            if not token_mode or (token_mode and is_verified):
+            if not token_mode or (token_mode and (is_verified or is_unlocked)):
                 sts = await message.reply("<b>🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ... ɢᴇᴛᴛɪɴɢ ʙᴀᴛᴄʜ ғɪʟᴇs</b>")
                 file_id = data.split("-", 1)[1]
                 msgs = BATCH_FILES.get(file_id)
@@ -328,13 +384,32 @@ async def start(client, message):
         tut_url = bot_owner.get("token_tutorial") or "https://t.me"
         
         key = f"{me.id}_{message.from_user.id}"
-        is_verified = False
-        if key in CLONE_VERIFIED:
-            if time.time() < CLONE_VERIFIED[key] + timeout:
-                is_verified = True
+        user_is_vip = await is_vip(me.id, message.from_user.id)
+        if user_is_vip:
+            is_verified = True
+        else:
+            if config.TMA_MODE:
+                is_verified = await check_tma_verification(message.from_user.id)
+            else:
+                if key in CLONE_VERIFIED:
+                    if time.time() < CLONE_VERIFIED[key] + timeout:
+                        is_verified = True
         
         logger.info(f"User verified status: {is_verified}")
-        if not is_verified and site and api:
+        if not is_verified and not is_unlocked:
+            if config.TMA_MODE:
+                tma_app_url = f"{URL.rstrip('/')}/tma"
+                tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+                btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                return await message.reply_text(
+                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                    protect_content=True,
+                    reply_markup=InlineKeyboardMarkup(btn)
+                )
+            
+            if not site or not api:
+                return await message.reply_text("<b>Access Token settings are not fully configured by the bot owner.</b>")
+            
             logger.info("Redirecting user to verification")
             # Clean URL to prevent Shortzy crashes
             clean_site = site.replace("https://", "").replace("http://", "").strip("/")
@@ -454,7 +529,8 @@ async def settings_command(client, message):
         InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
         InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
     ],[
-        InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption')
+        InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
+        InlineKeyboardButton('💳 Configure Plan', callback_data='setplan')
     ],[
         InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
         InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -715,9 +791,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
             InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
         ],[
-            InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption')
+            InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
+            InlineKeyboardButton('💳 Configure Plan', callback_data='setplan')
         ],[
-            InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
+            InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
         ],[
             InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
@@ -765,3 +842,221 @@ async def cb_handler(client: Client, query: CallbackQuery):
             text="<b>📝 ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx\n\nᴜsᴇ ᴛʜᴇ /setcaption ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ sᴇᴛ ʏᴏᴜʀ ᴄᴜsᴛᴏᴍ ɴᴀᴍᴇ ᴘʀᴇꜰɪx.\n\nᴇx: <code>/setcaption @YourChannel</code>\n\nᴛᴏ ʀᴇᴍᴏᴠᴇ: <code>/setcaption off</code></b>",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='settings')]])
         )
+
+    elif query.data == "setplan":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
+            
+        msg = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>📸 Please send/upload your payment QR code photo (or send /cancel to exit).</b>"
+        )
+        if msg.text and msg.text.strip() == "/cancel":
+            return await msg.reply("<b>Cancelled plan configuration.</b>")
+            
+        if not msg.photo:
+            return await msg.reply("<b>❌ Please send a photo of the QR code. Try again from Settings.</b>")
+            
+        qr_file_id = msg.photo.file_id
+        
+        msg_text = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>✍️ Now please send the plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - $5\n3 Months - $12\nLifetime - $30</code></b>"
+        )
+        if msg_text.text and msg_text.text.strip() == "/cancel":
+            return await msg_text.reply("<b>Cancelled plan configuration.</b>")
+            
+        plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
+        
+        await mongo_db.plans_config.update_one(
+            {"_id": me.id},
+            {"$set": {
+                "payment_qr": qr_file_id,
+                "plans_text": plans_text
+            }},
+            upsert=True
+        )
+        
+        await msg_text.reply("<b>✅ Payment Plan configured successfully!</b>")
+        query.data = "settings"
+        return await cb_handler(client, query)
+
+    elif query.data == "buy_plan":
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        if not plan_cfg:
+            return await query.answer("Plans not configured!", show_alert=True)
+            
+        qr_file_id = plan_cfg["payment_qr"]
+        plans_text = plan_cfg["plans_text"]
+        
+        caption = (
+            f"<b>🛒 <u>VIP Plans & Pricing</u></b>\n\n"
+            f"{plans_text}\n\n"
+            f"<b><u>How to buy:</u></b>\n"
+            f"1️⃣ Scan the QR code below to make payment.\n"
+            f"2️⃣ Send the screenshot of the payment receipt here in the chat.\n\n"
+            f"<i>Our admin will review and verify your screenshot to activate VIP access.</i>"
+        )
+        
+        await mongo_db.user_states.update_one(
+            {"bot_id": me.id, "user_id": query.from_user.id},
+            {"$set": {"state": "waiting_screenshot"}},
+            upsert=True
+        )
+        
+        await client.send_photo(
+            chat_id=query.message.chat.id,
+            photo=qr_file_id,
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="start")]])
+        )
+        await query.message.delete()
+        await query.answer()
+
+@Client.on_message(filters.command("plan") & filters.private)
+async def plan_command_handler(client, message):
+    me = client.me or await client.get_me()
+    plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+    if not plan_cfg:
+        return await message.reply_text("<b>⚠️ This bot does not have a plan configured yet. Please check back later!</b>")
+        
+    user_vip = await is_vip(me.id, message.from_user.id)
+    if user_vip:
+        from datetime import datetime
+        vip_user = await mongo_db.vip_users.find_one({"bot_id": me.id, "user_id": message.from_user.id})
+        expiry = vip_user.get("expiry")
+        if expiry:
+            expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            expiry_str = "Lifetime"
+            
+        return await message.reply_text(
+            f"<b>✨ <u>VIP Plan Status</u>\n\n"
+            f"➜ Status: Active VIP Member ✅\n"
+            f"➜ Expiry: <code>{expiry_str}</code>\n\n"
+            f"Thank you for supporting us! You bypass all shortlink/TMA verifications.</b>"
+        )
+    else:
+        btn = [[InlineKeyboardButton("🛒 Buy Plan", callback_data="buy_plan")]]
+        return await message.reply_text(
+            f"<b>❌ <u>VIP Plan Status</u>\n\n"
+            f"➜ Status: No Active Plan ❌\n\n"
+            f"You will need to bypass verifications to download files. Get a VIP plan to unlock instant downloads!</b>",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+
+@Client.on_message(filters.photo & filters.private & filters.incoming)
+async def photo_message_handler(client, message):
+    me = client.me or await client.get_me()
+    state_doc = await mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id})
+    if state_doc and state_doc.get("state") == "waiting_screenshot":
+        await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
+        
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        
+        recipients = [owner_id] + list(mods)
+        for rcpt in recipients:
+            if rcpt:
+                try:
+                    await message.forward(rcpt)
+                    await client.send_message(
+                        chat_id=rcpt,
+                        text=f"<b>📩 New VIP Payment Receipt Screenshot!</b>\n\n"
+                             f"👤 <b>From User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                             f"To activate, use: `/addvip {message.from_user.id} [days]`"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to forward screenshot to {rcpt}: {e}")
+                
+        await message.reply_text(
+            "<b>Receipt sent successfully! Please wait for confirmation.</b>"
+        )
+
+@Client.on_message(filters.command("addvip") & filters.private)
+async def add_vip_handler(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+        
+    if len(message.command) < 3:
+        return await message.reply_text("<b>Usage:</b> `/addvip [user_id] [days]` (use 0 or 'lifetime' for permanent access)")
+        
+    try:
+        user_id = int(message.command[1])
+        days_str = message.command[2].lower()
+        import time
+        from datetime import datetime
+        
+        if days_str in ["0", "lifetime", "permanent"]:
+            expiry = None
+            days_label = "Lifetime"
+        else:
+            days = int(days_str)
+            expiry = time.time() + days * 86400
+            days_label = f"{days} Days"
+            
+        await mongo_db.vip_users.update_one(
+            {"bot_id": me.id, "user_id": user_id},
+            {"$set": {"expiry": expiry}},
+            upsert=True
+        )
+        
+        await message.reply_text(f"<b>✅ User <code>{user_id}</code> is now a VIP member ({days_label})!</b>")
+        
+        try:
+            expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S') if expiry else "Lifetime"
+            await client.send_message(
+                chat_id=user_id,
+                text=f"🎉 <b>Congratulations! You have been granted VIP access for {days_label}.</b>\n\n"
+                     f"➜ Expires on: <code>{expiry_str}</code>\n"
+                     f"You now bypass all shortlink/TMA verifications on this bot! Enjoy instant downloads."
+            )
+        except Exception as e:
+            logger.error(f"Could not notify VIP user {user_id}: {e}")
+            
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid User ID or Days. Must be integers.</b>")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+@Client.on_message(filters.command("delvip") & filters.private)
+async def del_vip_handler(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+        
+    if len(message.command) < 2:
+        return await message.reply_text("<b>Usage:</b> `/delvip [user_id]`")
+        
+    try:
+        user_id = int(message.command[1])
+        res = await mongo_db.vip_users.delete_one({"bot_id": me.id, "user_id": user_id})
+        if res.deleted_count > 0:
+            await message.reply_text(f"<b>✅ VIP access removed for User <code>{user_id}</code>.</b>")
+            try:
+                await client.send_message(
+                    chat_id=user_id,
+                    text="<b>❌ Your VIP access has been removed.</b>"
+                )
+            except Exception as e:
+                logger.error(f"Could not notify user {user_id}: {e}")
+        else:
+            await message.reply_text(f"<b>❌ User <code>{user_id}</code> is not a VIP member.</b>")
+            
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid User ID. Must be integer.</b>")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")

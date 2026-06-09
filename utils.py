@@ -142,7 +142,7 @@ def validate_tma_token(user_id: int, token: str, max_age_sec: int = 10800) -> bo
     except Exception:
         return False
 
-async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "") -> str:
+async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "", bot_username: str = "") -> str:
     """Build the Mini App URL containing the user_id, a signed token, and optional file_data.
 
     file_data is the raw /start parameter (e.g. base64-encoded file id or BATCH-xxx).
@@ -154,6 +154,8 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "") -> 
     if app_url.startswith("http://"):
         app_url = "https://" + app_url[7:]
     url = f"{app_url}?uid={user_id}&token={token}"
+    if bot_username:
+        url += f"&bot={bot_username}"
     if file_data:
         from urllib.parse import quote
         url += f"&file={quote(file_data)}"
@@ -191,3 +193,21 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
     link = f"https://t.me/{bot_username}?start=unlock-{user_id}-{token}-{file_data}"
     shortened_verify_url = await get_verify_shorted_link(link)
     return str(shortened_verify_url)
+
+async def is_vip(bot_id: int, user_id: int) -> bool:
+    try:
+        from plugins.clone import async_mongo_db
+        vip_user = await async_mongo_db.vip_users.find_one({"bot_id": bot_id, "user_id": user_id})
+        if not vip_user:
+            return False
+        expiry = vip_user.get("expiry")
+        if expiry is None:  # Lifetime
+            return True
+        if time.time() < expiry:
+            return True
+        # Expired - remove from DB
+        await async_mongo_db.vip_users.delete_one({"bot_id": bot_id, "user_id": user_id})
+        return False
+    except Exception as e:
+        logger.error(f"Error checking VIP status: {e}")
+        return False

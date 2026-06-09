@@ -13,7 +13,7 @@ from pyrogram import Client, filters, enums
 from plugins.users_api import get_user, update_user_info
 from pyrogram.errors import ChatAdminRequired, FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, CallbackQuery, Message, WebAppInfo
-from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification
+from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification, is_vip
 from config import *
 from config import TMA_MODE, MONETAG_ZONE_ID, URL
 import config
@@ -260,30 +260,32 @@ async def start(client, message):
             return
         elif data.split("-", 1)[0] == "BATCH":
             try:
-                # TMA Mode: use Monetag Mini App for verification
-                if config.TMA_MODE and not is_unlocked and not await check_tma_verification(message.from_user.id):
-                    tma_app_url = f"{URL.rstrip('/')}/tma"
-                    # Pass the raw /start data so the Mini App knows which file to deliver
-                    tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
-                    btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-                    await message.reply_text(
-                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
-                        protect_content=True,
-                        reply_markup=InlineKeyboardMarkup(btn)
-                    )
-                    return
-                elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
-                    btn = [[
-                        InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
-                    ],[
-                        InlineKeyboardButton("How To Open Link & Verify", url=VERIFY_TUTORIAL)
-                    ]]
-                    await message.reply_text(
-                        text="<b>You are not verified !\nKindly verify to continue !</b>",
-                        protect_content=True,
-                        reply_markup=InlineKeyboardMarkup(btn)
-                    )
-                    return
+                user_is_vip = await is_vip(me.id, message.from_user.id)
+                if not user_is_vip:
+                    # TMA Mode: use Monetag Mini App for verification
+                    if config.TMA_MODE and not is_unlocked and not await check_tma_verification(message.from_user.id):
+                        tma_app_url = f"{URL.rstrip('/')}/tma"
+                        # Pass the raw /start data so the Mini App knows which file to deliver
+                        tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
+                        btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                        await message.reply_text(
+                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                            protect_content=True,
+                            reply_markup=InlineKeyboardMarkup(btn)
+                        )
+                        return
+                    elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
+                        btn = [[
+                            InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
+                        ],[
+                            InlineKeyboardButton("How To Open Link & Verify", url=VERIFY_TUTORIAL)
+                        ]]
+                        await message.reply_text(
+                            text="<b>You are not verified !\nKindly verify to continue !</b>",
+                            protect_content=True,
+                            reply_markup=InlineKeyboardMarkup(btn)
+                        )
+                        return
             except Exception as e:
                 return await message.reply_text(f"**Error - {e}**")
             sts = await message.reply("**🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ**")
@@ -378,30 +380,32 @@ async def start(client, message):
 # Ask Doubt on telegram @Brainaxe190
 
         pre, decode_file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
-        # TMA Mode: use Monetag Mini App for verification
-        if config.TMA_MODE and not is_unlocked and not await check_tma_verification(message.from_user.id):
-            tma_app_url = f"{URL.rstrip('/')}/tma"
-            # Pass the raw /start data so the Mini App knows which file to deliver
-            tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
-            btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-            await message.reply_text(
-                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
-                protect_content=True,
-                reply_markup=InlineKeyboardMarkup(btn)
-            )
-            return
-        elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
-            btn = [[
-                InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
-            ],[
-                InlineKeyboardButton("How To Open Link & Verify", url=VERIFY_TUTORIAL)
-            ]]
-            await message.reply_text(
-                text="<b>You are not verified !\nKindly verify to continue !</b>",
-                protect_content=True,
-                reply_markup=InlineKeyboardMarkup(btn)
-            )
-            return
+        user_is_vip = await is_vip(me.id, message.from_user.id)
+        if not user_is_vip:
+            # TMA Mode: use Monetag Mini App for verification
+            if config.TMA_MODE and not is_unlocked and not await check_tma_verification(message.from_user.id):
+                tma_app_url = f"{URL.rstrip('/')}/tma"
+                # Pass the raw /start data so the Mini App knows which file to deliver
+                tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
+                btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                await message.reply_text(
+                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                    protect_content=True,
+                    reply_markup=InlineKeyboardMarkup(btn)
+                )
+                return
+            elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
+                btn = [[
+                    InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
+                ],[
+                    InlineKeyboardButton("How To Open Link & Verify", url=VERIFY_TUTORIAL)
+                ]]
+                await message.reply_text(
+                    text="<b>You are not verified !\nKindly verify to continue !</b>",
+                    protect_content=True,
+                    reply_markup=InlineKeyboardMarkup(btn)
+                )
+                return
         try:
             msg = await client.get_messages(LOG_CHANNEL, int(decode_file_id))
             if msg.media:
@@ -856,11 +860,25 @@ async def cb_handler(client: Client, query: CallbackQuery):
             [InlineKeyboardButton("BACK", callback_data="clone_manage")]
         ]
         
-        await query.message.edit_text(
-            text=f"<b>🪄 <u>Customize Clone</u>\n\n➜ Name: <i>{bot['name']}</i>\n\nConfigure Your Clone Settings Using Given Buttons</b>",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.HTML
-        )
+        text = f"<b>🪄 <u>Customize Clone</u>\n\n➜ Name: <i>{bot['name']}</i>\n\nConfigure Your Clone Settings Using Given Buttons</b>"
+        
+        if query.message.photo:
+            try:
+                await query.message.delete()
+            except:
+                pass
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML
+            )
+        else:
+            await query.message.edit_text(
+                text=text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML
+            )
 
     elif query.data.startswith("startmsg_"):
         bot_id = int(query.data.split("_")[-1])
@@ -1143,6 +1161,57 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data.startswith("tokencfg_"):
         bot_id = int(query.data.split("_")[-1])
         bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        
+        vplink_verified = bot.get("vplink_verified", False)
+        if not vplink_verified:
+            req = await clone_mongo_db.vplink_requests.find_one({"bot_id": bot_id, "status": "pending"})
+            if req:
+                text = "<b>waiting msg please wait for confirmation</b>"
+                buttons = [[InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]]
+                if query.message.photo:
+                    try:
+                        await query.message.delete()
+                    except:
+                        pass
+                    await client.send_message(
+                        chat_id=query.message.chat.id,
+                        text=text,
+                        reply_markup=InlineKeyboardMarkup(buttons),
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                else:
+                    await query.message.edit_text(
+                        text=text,
+                        reply_markup=InlineKeyboardMarkup(buttons),
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                return
+            else:
+                caption = (
+                    "<b>⚠️ You need to register under our referral link first!</b>\n\n"
+                    "1️⃣ Click this link to register: https://vplink.in/ref/Priyanshu7890\n"
+                    "2️⃣ Create an account on VPLink.\n"
+                    "3️⃣ Go to Tools -> Developers API (as shown in the image below) to get your API token.\n"
+                    "4️⃣ Once done, click <b>📤 Submit Request</b> below.\n\n"
+                    "<i>Our admin will manually verify and approve your request. Once verified, you can set your API key.</i>"
+                )
+                buttons = [
+                    [InlineKeyboardButton("🔗 Register on VPLink", url="https://vplink.in/ref/Priyanshu7890")],
+                    [InlineKeyboardButton("📤 Submit Request", callback_data=f"req_vplink_{bot_id}")],
+                    [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
+                ]
+                try:
+                    await query.message.delete()
+                except:
+                    pass
+                await client.send_photo(
+                    chat_id=query.message.chat.id,
+                    photo="vplink_tutorial.png",
+                    caption=caption,
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+                return
+                
         token_mode = bot.get("token_verify", False)
         status_txt = "Enabled ✅" if token_mode else "Disabled ❌"
         
@@ -1167,12 +1236,25 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f"<b>- Tutorial:</b> {tutorial}"
         )
         
-        await query.message.edit_text(
-            text=text,
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.HTML,
-            disable_web_page_preview=True
-        )
+        if query.message.photo:
+            try:
+                await query.message.delete()
+            except:
+                pass
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True
+            )
+        else:
+            await query.message.edit_text(
+                text=text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML,
+                disable_web_page_preview=True
+            )
 
     elif query.data.startswith("token_"):
         bot_id = int(query.data.split("_")[-1])
@@ -1371,7 +1453,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         # Only render and allow the global TMA toggle button for bot owners/admins
         if user_id in ADMINS:
             buttons.append([
-                InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if config.TMA_MODE else 'OFF 🔴'}", callback_data="toggle_tma")
+                InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if config.TMA_MODE else 'OFF 🔴'}", callback_data="toggle_tma"),
+                InlineKeyboardButton("💳 Configure Plan", callback_data="setplan")
             ])
             
         buttons.extend([[
@@ -1399,3 +1482,424 @@ async def cb_handler(client: Client, query: CallbackQuery):
             text="<b>ᴛᴏ sᴇᴛ ʏᴏᴜʀ ʙᴀsᴇ sɪᴛᴇ, ᴜsᴇ ᴛʜᴇ /base_site ᴄᴏᴍᴍᴀɴᴅ.\n\nᴇx: <code>/base_site domain.com</code></b>",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='settings')]])
         )
+
+    elif query.data.startswith("req_vplink_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        if not bot:
+            return await query.answer("Bot not found!", show_alert=True)
+            
+        user_id = query.from_user.id
+        import time
+        from datetime import datetime
+        
+        await clone_mongo_db.vplink_requests.update_one(
+            {"bot_id": bot_id},
+            {"$set": {
+                "user_id": user_id,
+                "username": bot.get("username", ""),
+                "bot_name": bot.get("name", ""),
+                "user_mention": query.from_user.mention,
+                "status": "pending",
+                "requested_at": time.time()
+            }},
+            upsert=True
+        )
+        
+        text = "<b>waiting msg please wait for confirmation</b>"
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]]
+        if query.message.photo:
+            try:
+                await query.message.delete()
+            except:
+                pass
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML
+            )
+        else:
+            await query.message.edit_text(
+                text=text,
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode=enums.ParseMode.HTML
+            )
+            
+        from config import ADMINS
+        for admin in ADMINS:
+            try:
+                notify_buttons = [
+                    [
+                        InlineKeyboardButton("✅ Approve", callback_data=f"adm_appr_{bot_id}"),
+                        InlineKeyboardButton("❌ Decline", callback_data=f"adm_decl_{bot_id}")
+                    ]
+                ]
+                await client.send_message(
+                    chat_id=admin,
+                    text=f"<b>🔔 New TMA Verification Request!</b>\n\n"
+                         f"👤 <b>User:</b> {query.from_user.mention} (ID: <code>{user_id}</code>)\n"
+                         f"🤖 <b>Clone Bot:</b> @{bot.get('username')} (ID: <code>{bot_id}</code>)\n"
+                         f"📅 <b>Requested At:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                    reply_markup=InlineKeyboardMarkup(notify_buttons)
+                )
+            except Exception as e:
+                logger.error(f"Failed to send admin notification to {admin}: {e}")
+                
+        await query.answer("Verification request submitted successfully!", show_alert=True)
+
+    elif query.data.startswith("adm_appr_") or query.data.startswith("adm_decl_"):
+        from config import ADMINS
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ You are not an admin!", show_alert=True)
+            
+        action = "approved" if "appr" in query.data else "declined"
+        bot_id = int(query.data.split("_")[-1])
+        import time
+        
+        req = await clone_mongo_db.vplink_requests.find_one({"bot_id": bot_id, "status": "pending"})
+        if not req:
+            return await query.answer("Request not found or already processed!", show_alert=True)
+            
+        await clone_mongo_db.vplink_requests.update_one(
+            {"bot_id": bot_id},
+            {"$set": {"status": action, "processed_at": time.time()}}
+        )
+        
+        if action == "approved":
+            await clone_mongo_db.bots.update_one(
+                {"bot_id": bot_id},
+                {"$set": {"vplink_verified": True}}
+            )
+            try:
+                await client.send_message(
+                    chat_id=req["user_id"],
+                    text="<b>youre verified now send me api token</b>"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send approval message: {e}")
+            await query.answer("Request Approved! User notified.", show_alert=True)
+        else:
+            try:
+                await client.send_message(
+                    chat_id=req["user_id"],
+                    text="<b>❌ Your VPLink verification request was declined. Please ensure you registered using our referral link.</b>"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send declination message: {e}")
+            await query.answer("Request Declined! User notified.", show_alert=True)
+            
+        try:
+            await query.message.edit_text(
+                text=query.message.text.html + f"\n\n<b>Status: {action.upper()} by {query.from_user.mention}</b>",
+                reply_markup=None
+            )
+        except Exception as e:
+            logger.error(f"Failed to edit admin notification: {e}")
+
+    elif query.data.startswith("page_appr_") or query.data.startswith("page_decl_"):
+        from config import ADMINS
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ You are not an admin!", show_alert=True)
+            
+        parts = query.data.split("_")
+        action = "approved" if parts[1] == "appr" else "declined"
+        bot_id = int(parts[2])
+        page = int(parts[3])
+        import time
+        
+        req = await clone_mongo_db.vplink_requests.find_one({"bot_id": bot_id, "status": "pending"})
+        if not req:
+            await query.answer("Request not found or already processed!", show_alert=True)
+            await send_requests_page(client, query.message.chat.id, page, query.message.id)
+            return
+            
+        await clone_mongo_db.vplink_requests.update_one(
+            {"bot_id": bot_id},
+            {"$set": {"status": action, "processed_at": time.time()}}
+        )
+        
+        if action == "approved":
+            await clone_mongo_db.bots.update_one(
+                {"bot_id": bot_id},
+                {"$set": {"vplink_verified": True}}
+            )
+            try:
+                await client.send_message(
+                    chat_id=req["user_id"],
+                    text="<b>youre verified now send me api token</b>"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send approval message: {e}")
+            await query.answer("Request Approved! User notified.", show_alert=True)
+        else:
+            try:
+                await client.send_message(
+                    chat_id=req["user_id"],
+                    text="<b>❌ Your VPLink verification request was declined. Please ensure you registered using our referral link.</b>"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send declination message: {e}")
+            await query.answer("Request Declined! User notified.", show_alert=True)
+            
+        await send_requests_page(client, query.message.chat.id, page, query.message.id)
+
+    elif query.data.startswith("reqpage_"):
+        page = int(query.data.split("_")[-1])
+        await send_requests_page(client, query.message.chat.id, page, query.message.id)
+        await query.answer()
+
+    elif query.data == "setplan":
+        from config import ADMINS
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ Only admins can configure plans!", show_alert=True)
+            
+        msg = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>📸 Please send/upload your payment QR code photo (or send /cancel to exit).</b>"
+        )
+        if msg.text and msg.text.strip() == "/cancel":
+            return await msg.reply("<b>Cancelled plan configuration.</b>")
+            
+        if not msg.photo:
+            return await msg.reply("<b>❌ Please send a photo of the QR code. Try again from Settings.</b>")
+            
+        qr_file_id = msg.photo.file_id
+        
+        msg_text = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>✍️ Now please send the plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - $5\n3 Months - $12\nLifetime - $30</code></b>"
+        )
+        if msg_text.text and msg_text.text.strip() == "/cancel":
+            return await msg_text.reply("<b>Cancelled plan configuration.</b>")
+            
+        plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
+        
+        me = client.me or await client.get_me()
+        await clone_mongo_db.plans_config.update_one(
+            {"_id": me.id},
+            {"$set": {
+                "payment_qr": qr_file_id,
+                "plans_text": plans_text
+            }},
+            upsert=True
+        )
+        
+        await msg_text.reply("<b>✅ Payment Plan configured successfully!</b>")
+        query.data = "settings"
+        return await cb_handler(client, query)
+
+    elif query.data == "buy_plan":
+        me = client.me or await client.get_me()
+        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+        if not plan_cfg:
+            return await query.answer("Plans not configured!", show_alert=True)
+            
+        qr_file_id = plan_cfg["payment_qr"]
+        plans_text = plan_cfg["plans_text"]
+        
+        caption = (
+            f"<b>🛒 <u>VIP Plans & Pricing</u></b>\n\n"
+            f"{plans_text}\n\n"
+            f"<b><u>How to buy:</u></b>\n"
+            f"1️⃣ Scan the QR code below to make payment.\n"
+            f"2️⃣ Send the screenshot of the payment receipt here in the chat.\n\n"
+            f"<i>Our admin will review and verify your screenshot to activate VIP access.</i>"
+        )
+        
+        await clone_mongo_db.user_states.update_one(
+            {"bot_id": me.id, "user_id": query.from_user.id},
+            {"$set": {"state": "waiting_screenshot"}},
+            upsert=True
+        )
+        
+        await client.send_photo(
+            chat_id=query.message.chat.id,
+            photo=qr_file_id,
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="start")]])
+        )
+        await query.message.delete()
+        await query.answer()
+
+async def send_requests_page(client, chat_id, page, message_id=None):
+    limit = 5
+    skip = (page - 1) * limit
+    
+    total = await clone_mongo_db.vplink_requests.count_documents({"status": "pending"})
+    requests_list = []
+    async for r in clone_mongo_db.vplink_requests.find({"status": "pending"}).sort("requested_at", 1).skip(skip).limit(limit):
+        requests_list.append(r)
+        
+    if not requests_list:
+        text = "<b>📭 No pending VPLink verification requests found.</b>"
+        if message_id:
+            await client.edit_message_text(chat_id, message_id, text)
+        else:
+            await client.send_message(chat_id, text)
+        return
+
+    text = f"<b>📋 Pending VPLink Requests (Page {page}/{(total + limit - 1) // limit}):</b>\n\n"
+    buttons = []
+    
+    for idx, r in enumerate(requests_list, 1):
+        text += f"{idx}. 👤 {r['user_mention']} (ID: <code>{r['user_id']}</code>)\n" \
+                f"   🤖 Bot: @{r['username']} (ID: <code>{r['bot_id']}</code>)\n\n"
+                
+        buttons.append([
+            InlineKeyboardButton(f"✅ Approve {idx}", callback_data=f"page_appr_{r['bot_id']}_{page}"),
+            InlineKeyboardButton(f"❌ Decline {idx}", callback_data=f"page_decl_{r['bot_id']}_{page}")
+        ])
+        
+    nav_row = []
+    if page > 1:
+        nav_row.append(InlineKeyboardButton("⏮ Previous", callback_data=f"reqpage_{page - 1}"))
+    if skip + limit < total:
+        nav_row.append(InlineKeyboardButton("Next ⏭", callback_data=f"reqpage_{page + 1}"))
+        
+    if nav_row:
+        buttons.append(nav_row)
+        
+    if message_id:
+        await client.edit_message_text(chat_id, message_id, text, reply_markup=InlineKeyboardMarkup(buttons))
+    else:
+        await client.send_message(chat_id, text, reply_markup=InlineKeyboardMarkup(buttons))
+
+@Client.on_message(filters.command(["requests", "tma_requests"]) & filters.private & filters.user(ADMINS))
+async def list_requests_handler(client, message):
+    page = 1
+    if len(message.command) > 1:
+        try:
+            page = int(message.command[1])
+        except ValueError:
+            pass
+            
+    await send_requests_page(client, message.chat.id, page)
+
+@Client.on_message(filters.command("plan") & filters.private)
+async def plan_command_handler(client, message):
+    me = client.me or await client.get_me()
+    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+    if not plan_cfg:
+        return await message.reply_text("<b>⚠️ This bot does not have a plan configured yet. Please check back later!</b>")
+        
+    user_vip = await is_vip(me.id, message.from_user.id)
+    if user_vip:
+        from datetime import datetime
+        vip_user = await clone_mongo_db.vip_users.find_one({"bot_id": me.id, "user_id": message.from_user.id})
+        expiry = vip_user.get("expiry")
+        if expiry:
+            expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            expiry_str = "Lifetime"
+            
+        return await message.reply_text(
+            f"<b>✨ <u>VIP Plan Status</u>\n\n"
+            f"➜ Status: Active VIP Member ✅\n"
+            f"➜ Expiry: <code>{expiry_str}</code>\n\n"
+            f"Thank you for supporting us! You bypass all shortlink/TMA verifications.</b>"
+        )
+    else:
+        btn = [[InlineKeyboardButton("🛒 Buy Plan", callback_data="buy_plan")]]
+        return await message.reply_text(
+            f"<b>❌ <u>VIP Plan Status</u>\n\n"
+            f"➜ Status: No Active Plan ❌\n\n"
+            f"You will need to bypass verifications to download files. Get a VIP plan to unlock instant downloads!</b>",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+
+@Client.on_message(filters.photo & filters.private & filters.incoming)
+async def photo_message_handler(client, message):
+    me = client.me or await client.get_me()
+    state_doc = await clone_mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id})
+    if state_doc and state_doc.get("state") == "waiting_screenshot":
+        await clone_mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
+        
+        from config import ADMINS
+        for admin in ADMINS:
+            try:
+                await message.forward(admin)
+                await client.send_message(
+                    chat_id=admin,
+                    text=f"<b>📩 New VIP Payment Receipt Screenshot!</b>\n\n"
+                         f"👤 <b>From User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                         f"🤖 <b>Bot ID:</b> <code>{me.id}</code>\n"
+                         f"To activate, use: `/addvip {message.from_user.id} [days]`"
+                )
+            except Exception as e:
+                logger.error(f"Failed to forward screenshot to admin {admin}: {e}")
+                
+        await message.reply_text(
+            "<b>Receipt sent successfully! Please wait for confirmation.</b>"
+        )
+
+@Client.on_message(filters.command("addvip") & filters.private & filters.user(ADMINS))
+async def add_vip_handler(client, message):
+    if len(message.command) < 3:
+        return await message.reply_text("<b>Usage:</b> `/addvip [user_id] [days]` (use 0 or 'lifetime' for permanent access)")
+        
+    try:
+        user_id = int(message.command[1])
+        days_str = message.command[2].lower()
+        import time
+        from datetime import datetime
+        
+        if days_str in ["0", "lifetime", "permanent"]:
+            expiry = None
+            days_label = "Lifetime"
+        else:
+            days = int(days_str)
+            expiry = time.time() + days * 86400
+            days_label = f"{days} Days"
+            
+        me = client.me or await client.get_me()
+        await clone_mongo_db.vip_users.update_one(
+            {"bot_id": me.id, "user_id": user_id},
+            {"$set": {"expiry": expiry}},
+            upsert=True
+        )
+        
+        await message.reply_text(f"<b>✅ User <code>{user_id}</code> is now a VIP member ({days_label})!</b>")
+        
+        try:
+            expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S') if expiry else "Lifetime"
+            await client.send_message(
+                chat_id=user_id,
+                text=f"🎉 <b>Congratulations! You have been granted VIP access for {days_label}.</b>\n\n"
+                     f"➜ Expires on: <code>{expiry_str}</code>\n"
+                     f"You now bypass all shortlink/TMA verifications on this bot! Enjoy instant downloads."
+            )
+        except Exception as e:
+            logger.error(f"Could not notify VIP user {user_id}: {e}")
+            
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid User ID or Days. Must be integers.</b>")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+@Client.on_message(filters.command("delvip") & filters.private & filters.user(ADMINS))
+async def del_vip_handler(client, message):
+    if len(message.command) < 2:
+        return await message.reply_text("<b>Usage:</b> `/delvip [user_id]`")
+        
+    try:
+        user_id = int(message.command[1])
+        me = client.me or await client.get_me()
+        
+        res = await clone_mongo_db.vip_users.delete_one({"bot_id": me.id, "user_id": user_id})
+        if res.deleted_count > 0:
+            await message.reply_text(f"<b>✅ VIP access removed for User <code>{user_id}</code>.</b>")
+            try:
+                await client.send_message(
+                    chat_id=user_id,
+                    text="<b>❌ Your VIP access has been removed.</b>"
+                )
+            except Exception as e:
+                logger.error(f"Could not notify user {user_id}: {e}")
+        else:
+            await message.reply_text(f"<b>❌ User <code>{user_id}</code> is not a VIP member.</b>")
+            
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid User ID. Must be integer.</b>")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")

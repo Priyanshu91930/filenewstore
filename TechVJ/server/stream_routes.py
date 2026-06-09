@@ -50,12 +50,13 @@ async def tma_route_handler(request: web.Request):
     uid          = request.rel_url.query.get('uid', '')
     token        = request.rel_url.query.get('token', '')
     file_data    = unquote(request.rel_url.query.get('file', ''))
+    bot_username = request.rel_url.query.get('bot', BOT_USERNAME)
     zone         = MONETAG_ZONE_ID or ''
 
     short_link = ""
     if uid and token and file_data:
         try:
-            short_link = await get_tma_shortlink(int(uid), token, file_data, BOT_USERNAME)
+            short_link = await get_tma_shortlink(int(uid), token, file_data, bot_username)
         except Exception as e:
             logging.error(f"Error generating shortlink: {e}")
 
@@ -130,7 +131,7 @@ async def tma_route_handler(request: web.Request):
             monetag_zone_id = zone,
             user_id         = uid,
             token           = token,
-            bot_username    = BOT_USERNAME,
+            bot_username    = bot_username,
             file_id         = file_data,
             file_deeplink   = file_data,
             short_link      = short_link,
@@ -157,6 +158,7 @@ async def tma_verify_handler(request: web.Request):
     uid_str   = str(data.get('uid', ''))
     token     = str(data.get('token', ''))
     file_data = str(data.get('file', ''))
+    bot_username = str(data.get('bot', BOT_USERNAME))
 
     # Validate HMAC token and mark the user as verified for today!
     from utils import verify_tma_user
@@ -169,9 +171,9 @@ async def tma_verify_handler(request: web.Request):
 
     # Build deeplink
     if file_data:
-        deeplink = f"https://t.me/{BOT_USERNAME}?start=unlock-{uid_str}-{token}-{file_data}"
+        deeplink = f"https://t.me/{bot_username}?start=unlock-{uid_str}-{token}-{file_data}"
     else:
-        deeplink = f"https://t.me/{BOT_USERNAME}?start=tma-{uid_str}-{token}"
+        deeplink = f"https://t.me/{bot_username}?start=tma-{uid_str}-{token}"
 
     return web.json_response({'ok': True, 'deeplink': deeplink})
 
