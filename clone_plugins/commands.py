@@ -607,6 +607,19 @@ async def shortener_api_handler(client, m: Message):
     if m.from_user.id != owner_id and m.from_user.id not in mods:
         return await m.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
+    vplink_verified = bot_owner.get("vplink_verified", False) if bot_owner else False
+    if not vplink_verified:
+        from TechVJ.bot import StreamBot
+        main_bot_username = (await StreamBot.get_me()).username
+        return await m.reply(
+            f"<b>⚠️ You need to register under our referral link first!</b>\n\n"
+            f"1️⃣ Click this link to register: https://vplink.in/ref/Priyanshu7890\n"
+            f"2️⃣ Create an account on VPLink.\n"
+            f"3️⃣ Go to the Main Bot @{main_bot_username} and use Settings -> select this Bot to submit your verification request.\n\n"
+            f"<i>Once verified by the admin, you will be able to set your shortener API key!</i>",
+            disable_web_page_preview=True
+        )
+
     user_id = m.from_user.id
     user = await get_user(me.id, user_id)
     cmd = m.command
@@ -638,6 +651,19 @@ async def base_site_handler(client, m: Message):
     mods = bot_owner.get("moderators", []) if bot_owner else []
     if m.from_user.id != owner_id and m.from_user.id not in mods:
         return await m.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+
+    vplink_verified = bot_owner.get("vplink_verified", False) if bot_owner else False
+    if not vplink_verified:
+        from TechVJ.bot import StreamBot
+        main_bot_username = (await StreamBot.get_me()).username
+        return await m.reply(
+            f"<b>⚠️ You need to register under our referral link first!</b>\n\n"
+            f"1️⃣ Click this link to register: https://vplink.in/ref/Priyanshu7890\n"
+            f"2️⃣ Create an account on VPLink.\n"
+            f"3️⃣ Go to the Main Bot @{main_bot_username} and use Settings -> select this Bot to submit your verification request.\n\n"
+            f"<i>Once verified by the admin, you will be able to set your shortener base site!</i>",
+            disable_web_page_preview=True
+        )
 
     user_id = m.from_user.id
     user = await get_user(me.id, user_id)
