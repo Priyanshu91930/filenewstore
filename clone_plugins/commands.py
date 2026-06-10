@@ -271,7 +271,7 @@ async def start(client, message):
         try:
             # Token Verification Check for Batch
             token_mode = bot_doc.get("token_verify", False) if bot_doc else False
-            tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+            tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
             if token_mode or tma_mode:
                 user_is_vip = await is_vip(me.id, message.from_user.id)
                 if user_is_vip:
@@ -289,7 +289,7 @@ async def start(client, message):
                                 is_verified = True
                 
                 if not is_verified and not is_unlocked:
-                    tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+                    tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
                     if tma_mode:
                         tma_app_url = f"{URL.rstrip('/')}/tma"
                         tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
@@ -378,7 +378,7 @@ async def start(client, message):
 
     # Token Verification Check
     token_mode = bot_owner.get("token_verify", False) if bot_owner else False
-    tma_mode = bot_owner.get("tma_mode", config.TMA_MODE) if bot_owner else config.TMA_MODE
+    tma_mode = bot_owner.get("tma_mode", False) if bot_owner else False
     logger.info(f"Token verify mode: {token_mode}, TMA mode: {tma_mode}")
     if token_mode or tma_mode:
         site = bot_owner.get("shortener_site") or ""
@@ -391,7 +391,7 @@ async def start(client, message):
         if user_is_vip:
             is_verified = True
         else:
-            tma_mode = bot_owner.get("tma_mode", config.TMA_MODE) if bot_owner else config.TMA_MODE
+            tma_mode = bot_owner.get("tma_mode", False) if bot_owner else False
             if tma_mode:
                 is_verified = await check_tma_verification(message.from_user.id)
             else:
@@ -401,7 +401,7 @@ async def start(client, message):
         
         logger.info(f"User verified status: {is_verified}")
         if not is_verified and not is_unlocked:
-            tma_mode = bot_owner.get("tma_mode", config.TMA_MODE) if bot_owner else config.TMA_MODE
+            tma_mode = bot_owner.get("tma_mode", False) if bot_owner else False
             if tma_mode:
                 tma_app_url = f"{URL.rstrip('/')}/tma"
                 tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
@@ -530,7 +530,7 @@ async def settings_command(client, message):
     user_id = message.from_user.id
     user = await get_user(me.id, user_id)
     prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
-    tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+    tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
     tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
     buttons = [[
         InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
@@ -777,7 +777,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         mods = bot_doc.get("moderators", []) if bot_doc else []
         if query.from_user.id != owner_id and query.from_user.id not in mods:
             return await query.answer("❌ Only the bot owner and moderators can configure TMA settings!", show_alert=True)
-        tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+        tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
         new_mode = not tma_mode
         await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"tma_mode": new_mode}})
         await query.answer(f"TMA Ads {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
@@ -867,7 +867,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         user = await get_user(me.id, user_id)
         prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
-        tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+        tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
         tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
         
         buttons = [[
