@@ -239,11 +239,14 @@ async def start(client, message):
             else:
                 token_mode = bot.get("token_verify", False)
                 status_txt = "Enabled ✅" if token_mode else "Disabled ❌"
+                api_key = bot.get("shortener_api") or "Not set"
                 validity = bot.get("token_timeout", 86400) // 3600
                 tutorial = bot.get("token_tutorial", "None")
+                api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>Not set</i>"
                 buttons = [
+                    [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
                     [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
-                    [InlineKeyboardButton(f"{'Disable ❌' if token_mode else 'Enable ✅'} Token", callback_data=f"token_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
+                    [InlineKeyboardButton(f"{'Disable \u274c' if token_mode else 'Enable \u2705'} Token", callback_data=f"token_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
                 ]
                 text = (
@@ -251,6 +254,7 @@ async def start(client, message):
                     f"Users need to pass a shortened link to gain special access to messages from all clone shareable links. This access will be valid for the next custom validity period.\n\n"
                     f"<b>- Status:</b> {status_txt}\n"
                     f"<b>- Domain:</b> <code>vplink.in</code>\n"
+                    f"<b>- API Key:</b> {api_display}\n"
                     f"<b>- Validity:</b> {validity} hours\n"
                     f"<b>- Tutorial:</b> {tutorial}"
                 )
@@ -1291,12 +1295,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
         token_status = "Enabled ✅" if token_mode else "Disabled ❌"
         tma_status = "ON 🟢" if tma_mode else "OFF 🔴"
         
+        api_key = bot.get("shortener_api") or "Not set"
         validity = bot.get("token_timeout", 86400) // 3600
         tutorial = bot.get("token_tutorial", "None")
+        api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
         
         buttons = [
+            [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
             [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
-            [InlineKeyboardButton(f"{'🔴 Disable' if token_mode else '✅ Enable'} Token", callback_data=f"token_{bot_id}"), InlineKeyboardButton(f"TMA Ads: {tma_status}", callback_data=f"tok_tma_{bot_id}")],
+            [InlineKeyboardButton(f"{'\ud83d\udd34 Disable' if token_mode else '\u2705 Enable'} Token", callback_data=f"token_{bot_id}"), InlineKeyboardButton(f"TMA Ads: {tma_status}", callback_data=f"tok_tma_{bot_id}")],
             [InlineKeyboardButton("🧹 Clear All Settings", callback_data=f"tok_clr_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
         ]
@@ -1306,6 +1313,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f"<b>🔗 Standard Token Verify:</b>\n"
             f"  - Status: {token_status}\n"
             f"  - Domain: <code>vplink.in</code>\n"
+            f"  - API Key: {api_display}\n"
             f"  - Validity: <code>{validity} hours</code>\n"
             f"  - Tutorial: {tutorial}\n\n"
             f"<b>🎯 TMA Ads Verification:</b>\n"
@@ -1359,14 +1367,26 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("tok_api_"):
         bot_id = int(query.data.split("_")[-1])
-        msg = await client.ask(query.message.chat.id, "<b>Send your Shortener Base Site and API Key separated by space.\nFormat: <code>domain.com api_key</code>\n\n/cancel to skip.</b>")
-        if msg.text == "/cancel": return await msg.reply("Cancelled.")
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        current_api = bot.get("shortener_api") or "Not set"
+        msg = await client.ask(
+            query.message.chat.id,
+            f"<b>🔑 Set VPLink API Key</b>\n\n"
+            f"Current API Key: <code>{current_api}</code>\n\n"
+            f"Please send your <b>VPLink API Key</b> from:\n"
+            f"<code>vplink.in → Tools → Developer API</code>\n\n"
+            f"Send /cancel to skip."
+        )
+        if msg.text and msg.text.strip() == "/cancel": return await msg.reply("Cancelled.")
         try:
-            site, api = msg.text.strip().split(" ", 1)
-            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"shortener_site": site, "shortener_api": api}})
-            await msg.reply(f"<b>✅ Shortener configured to {site}!</b>")
-        except:
-            await msg.reply("<b>❌ Invalid format. Make sure you sent Domain and API Key separated by a space.</b>")
+            api_key = msg.text.strip()
+            await clone_mongo_db.bots.update_one(
+                {"bot_id": bot_id},
+                {"$set": {"shortener_site": "vplink.in", "shortener_api": api_key}}
+            )
+            await msg.reply(f"<b>✅ API Key set successfully!\n\nYour standard token verify is now ready to use.</b>")
+        except Exception as e:
+            await msg.reply(f"<b>❌ Error: {e}</b>")
         query.data = f"tokencfg_{bot_id}"
         return await cb_handler(client, query)
 
