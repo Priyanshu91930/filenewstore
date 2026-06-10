@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 _pending_asks = {}
 
 @Client.on_message(filters.private & filters.incoming & ~filters.command(
-    ["start","batch","link","setting","setcaption","api","base_site","stats","broadcast","shortner_api","shortner_domain"]
+    ["start","batch","link","setting","setcaption","api","base_site","stats","broadcast","shortner_api","shortner_domain","validity","plan","addvip","delvip"]
 ))
 async def _ask_listener(client: Client, message):
     """Intercepts the next private message for any active ask() session."""

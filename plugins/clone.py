@@ -90,9 +90,10 @@ async def clone(client, message):
                 BotCommand("link", "Reply to a file to get a shareable link"),
                 BotCommand("broadcast", "Send a message to all bot users"),
                 BotCommand("setting", "Manage your bot settings"),
-                BotCommand("shortner_api", "Set your shortener API key"),
-                BotCommand("shortner_domain", "Set your shortener base site"),
                 BotCommand("setcaption", "Set your custom file name prefix"),
+                BotCommand("stats", "View bot statistics"),
+                BotCommand("plan", "View VIP status / prices"),
+                BotCommand("validity", "View active user verifications"),
             ])
         except Exception as e:
             logger.error(f"Error setting bot commands for clone: {e}")
