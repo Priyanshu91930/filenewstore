@@ -109,35 +109,14 @@ First Send /clone command then follow below steps.
 
     HELP_TXT = """<b><u>💢 HOW TO USE THE BOT ☺️</u>
 
-🔻 /link - ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴠɪᴅᴇᴏ ᴏʀ ғɪʟᴇ ᴛᴏ ɢᴇᴛ sʜᴀʀᴀʙʟᴇ ʟɪɴᴋ
-
-🔻 /batch - sᴇɴᴅ ғɪʀsᴛ ʟɪɴᴋ ᴏғ ғɪʟᴇ sᴛᴏʀᴇ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ ᴛʜᴇɴ ʟᴀsᴛ ᴘᴏsᴛ ʟɪɴᴋ ᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ ʙᴏᴛ ɪs ᴀᴅᴍɪɴ ɪɴ ʏᴏᴜʀ ғɪʟᴇ sᴛᴏʀᴇ ᴄʜᴀɴɴᴇʟ.
-ᴇx - /batch https://t.me/viralverse0909/25 https://t.me/viralverse0909/30
-
-🔻 /clone - ᴄʀᴇᴀᴛᴇ ʏᴏᴜʀ ᴏᴡɴ ɪᴅᴇɴᴛɪᴄᴀʟ ᴄʟᴏɴᴇ ʙᴏᴛ
-
-🔻 /deletecloned - ᴜsᴇ ᴛʜɪs ғᴏʀ ᴅᴇʟᴇᴛᴇ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ 
-
-🔻 /setforcesub - ꜱᴇᴛ ғᴏʀᴄᴇ ꜱᴜʙꜱᴄʀɪʙᴇ ᴄʜᴀɴɴᴇʟꜱ ғᴏʀ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ
-
-🔻 /listforcesub - ʟɪꜱᴛ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ'ꜱ ғᴏʀᴄᴇ ꜱᴜʙ ᴄʜᴀɴɴᴇʟꜱ
-
-🔻 /clearforcesub - ᴄʜᴀʀ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ'ꜱ ғᴏʀᴄᴇ ꜱᴜʙ ᴄʜᴀɴɴᴇʟꜱ
-
-🔻 /base_site - ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ sᴇᴛ ᴜʀʟ sʜᴏʀᴛɴᴇʀ ʟɪɴᴋ ᴅᴏᴍᴀɪɴ 
-ᴇx - /base_site ʏᴏᴜʀᴅᴏᴍᴀɪɴ.ᴄᴏᴍ
-
-🔻 /api - sᴇᴛ ʏᴏᴜʀ ᴜʀʟ sʜᴏʀᴛɴᴇʀ ᴀᴄᴄᴏᴜɴᴛ ᴀᴘɪ 
-ᴇx - /api ʙᴀᴏᴡɢᴡᴋʟᴀᴀʙᴀᴋʟ
-
-🔻 /broadcast - ʀᴇᴘʟʏ ᴛᴏ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
-
-🔻 /validity - ᴠɪᴇᴡ ᴀᴄᴛɪᴠᴇ ᴜsᴇʀ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴs (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
-
-🔻 /addvip - ᴀᴅᴅ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
-ᴇx - /addvip 12345678 30 (or 'lifetime')
-
-🔻 /delvip - ʀᴇᴍᴏᴠᴇ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)</b>"""
+🔻 /link - ʀᴇᴘʟʏ ᴛᴏ ᴀ ғɪʟᴇ ᴛᴏ ɢᴇᴛ sʜᴀʀᴀʙʟᴇ ʟɪɴᴋ
+🔻 /batch - ᴄʀᴇᴀᴛᴇ ʙᴀᴛᴄʜ ʟɪɴᴋꜱ ꜰᴏʀ ᴍᴜʟᴛɪᴘʟᴇ ғɪʟᴇs
+🔻 /clone & /deletecloned - ᴄʀᴇᴀᴛᴇ/ᴅᴇʟᴇᴛᴇ ᴄʟᴏɴᴇ ʙᴏᴛ
+🔻 Force Sub - /setforcesub, /listforcesub, /clearforcesub
+🔻 Shortener - /base_site [domain], /api [key]
+🔻 VIP Access - /addvip [id] [days], /delvip [id]
+🔻 /validity - ᴠɪᴇᴡ ᴀᴄᴛɪᴠᴇ ᴜsᴇʀ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴs
+🔻 /broadcast - ʙʀᴏᴀᴅᴄᴀsᴛ ᴍᴇssᴀɢᴇ (ᴏᴡɴᴇʀ ᴏɴʟʏ)</b>"""
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -146,34 +125,16 @@ First Send /clone command then follow below steps.
 
     CHELP_TXT = """<b>💢 Hᴏᴡ Tᴏ Usᴇ Tʜɪs Bᴏᴛ ☺️
 
-🔻 /link - ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴠɪᴅᴇᴏ ᴏʀ ғɪʟᴇ ᴛᴏ ɢᴇᴛ sʜᴀʀᴀʙʟᴇ ʟɪɴᴋ
-
-🔻 /batch - sᴇɴᴅ ғɪʀsᴛ ʟɪɴᴋ ᴏғ ғɪʟᴇ sᴛᴏʀᴇ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ ᴛʜᴇɴ ʟᴀsᴛ ᴘᴏsᴛ ʟɪɴᴋ ᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ ʙᴏᴛ ɪs ᴀᴅᴍɪɴ ɪɴ ʏᴏᴜʀ ғɪʟᴇ sᴛᴏʀᴇ ᴄʜᴀɴɴᴇʟ.
-ᴇx - /batch https://t.me/viralverse0909/25 https://t.me/viralverse0909/30
-
-🔻 /setting - ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ʙᴏᴛ sᴇᴛᴛɪɴgs (sʜᴏʀᴛᴇɴᴇʀ, ᴄᴀᴘᴛɪᴏɴ, ᴇᴛᴄ.)
-
+🔻 /link - ʀᴇᴘʟʏ ᴛᴏ ᴀ  ғɪʟᴇ ᴛᴏ ɢᴇᴛ sʜᴀʀᴀʙʟᴇ ʟɪɴᴋ
+🔻 /batch - ᴄʀᴇᴀᴛᴇ ʙᴀᴛᴄʜ ʟɪɴᴋꜱ ꜰᴏʀ ᴍᴜʟᴛɪᴘʟᴇ ғɪʟᴇs
+🔻 /setting - ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ sᴇᴛᴛɪɴɢs
 🔻 /setcaption - ꜱᴇᴛ ʏᴏᴜʀ ᴄᴜꜱᴛᴏᴍ ғɪʟᴇ ɴᴀᴍᴇ ᴘʀᴇғɪx
-ᴇx - /setcaption @YourChannel (or 'off' to disable)
-
-🔻 /base_site - ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ sᴇᴛ ᴜʀʟ sʜᴏʀᴛɴᴇ r ʟɪɴᴋ ᴅᴏᴍᴀɪɴ
-ᴇx - /base_site ʏᴏᴜʀᴅᴏᴍᴀɪɴ.ᴄᴏᴍ
-
-🔻 /api - sᴇᴛ ʏᴏᴜʀ ᴜʀʟ sʜᴏʀᴛɴᴇʀ ᴀᴄᴄᴏᴜɴᴛ ᴀᴘɪ
-ᴇx - /api ʙᴀᴏᴡɢᴡᴋʟᴀᴀʙᴀᴋʟ
-
-🔻 /stats - ᴠɪᴇᴡ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ sᴛᴀᴛɪsᴛɪᴄs
-
-🔻 /plan - ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴠɪᴘ ꜱᴛᴀᴛᴜꜱ ᴏʀ ʙᴜʏ ᴀ ᴠɪᴘ ᴘʟᴀɴ
-
-🔻 /broadcast - ʀᴇᴘʟʏ ᴛᴏ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
-
-🔻 /validity - ᴠɪᴇᴡ ᴀᴄᴛɪᴠᴇ ᴜsᴇʀ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴs (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
-
-🔻 /addvip - ᴀᴅᴅ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
-ᴇx - /addvip 12345678 30 (or 'lifetime')
-
-🔻 /delvip - ʀᴇᴍᴏᴠᴇ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)</b>"""
+🔻 Shortener - /base_site [domain], /api [key]
+🔻 /stats - ᴠɪᴇᴡ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ sᴛᴀᴛɪsᴛɪcs
+🔻 /plan - ᴄʜᴇᴄᴋ ᴠɪᴘ ꜱᴛᴀᴛᴜꜱ ᴏʀ ʙᴜʏ ᴀ ᴠɪᴘ ᴘʟᴀɴ
+🔻 VIP Access - /addvip [id] [days], /delvip [id]
+🔻 /validity - ᴠɪᴇᴡ ᴀᴄᴛɪᴠᴇ ᴜsᴇʀ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴs
+🔻 /broadcast - ʙʀᴏᴀᴅᴄᴀsᴛ ᴍᴇssᴀɢᴇ (ᴏᴡɴᴇʀ ᴏɴʟʏ)</b>"""
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
