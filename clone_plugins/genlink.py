@@ -23,7 +23,7 @@ _pending_asks = {}
 
 @Client.on_message(filters.private & filters.incoming & ~filters.command(
     ["start","batch","link","setting","setcaption","api","base_site","stats","broadcast","shortner_api","shortner_domain","validity","plan","addvip","delvip"]
-))
+), group=-1)
 async def _ask_listener(client: Client, message):
     """Intercepts the next private message for any active ask() session."""
     key = (id(client), message.chat.id)
@@ -68,6 +68,8 @@ async def gen_link_s(client: Client, message):
     try:
         from plugins.clone import async_mongo_db as mongo_db
         me = await client.get_me()
+        # Clear any stale user state
+        await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
         logger.debug(f"[/link] Running as bot: @{me.username} (id={me.id})")
 
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
@@ -179,6 +181,8 @@ async def gen_link_batch(client: Client, message):
         from config import LOG_CHANNEL
 
         me = await client.get_me()
+        # Clear any stale user state
+        await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
         logger.debug(f"[/batch] Running as bot: @{me.username} (id={me.id})")
 
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})

@@ -53,6 +53,8 @@ def get_size(size):
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     me = client.me or await client.get_me()
+    # Clear any stale user state
+    await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
     bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
     
     # Deactivation Check
