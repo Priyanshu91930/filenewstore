@@ -269,44 +269,32 @@ async def start(client, message):
     if data.startswith("BATCH-"):
         logger.info("Detected BATCH payload")
         try:
-            # Token Verification Check for Batch
-            token_mode = bot_doc.get("token_verify", False) if bot_doc else False
+            # TMA Verification Check for Batch
             tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
             is_verified = False
-            if token_mode or tma_mode:
+            if tma_mode:
                 user_is_vip = await is_vip(me.id, message.from_user.id)
                 if user_is_vip:
                     is_verified = True
                 else:
-                    timeout = bot_doc.get("token_timeout", 86400)
-                    key = f"{me.id}_{message.from_user.id}"
-                    
-                    if tma_mode:
-                        is_verified = await check_tma_verification(message.from_user.id)
-                    else:
-                        if key in CLONE_VERIFIED:
-                            if time.time() < CLONE_VERIFIED[key] + timeout:
-                                is_verified = True
+                    is_verified = await check_tma_verification(message.from_user.id)
                 
                 if not is_verified and not is_unlocked:
-                    if tma_mode:
-                        tma_app_url = f"{URL.rstrip('/')}/tma"
-                        tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
-                        btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-                        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-                        if plan_cfg:
-                            btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-                        return await message.reply_text(
-                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
-                            protect_content=True,
-                            reply_markup=InlineKeyboardMarkup(btn)
-                        )
-                    else:
-                        return await message.reply_text("<b>❌ You are not verified! Please verify to access batch files.</b>")
+                    tma_app_url = f"{URL.rstrip('/')}/tma"
+                    tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+                    btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                    plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                    if plan_cfg:
+                        btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+                    return await message.reply_text(
+                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn)
+                    )
                 else:
                     is_verified = True
             
-            if not token_mode or is_verified or is_unlocked:
+            if not tma_mode or is_verified or is_unlocked:
                 sts = await message.reply("<b>🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ... ɢᴇᴛᴛɪɴɢ ʙᴀᴛᴄʜ ғɪʟᴇs</b>")
                 batch_file_id = data.split("-", 1)[1]
                 msgs = BATCH_FILES.get(batch_file_id)
@@ -379,92 +367,29 @@ async def start(client, message):
     
     logger.info(f"Final file_id to send: {file_id[:20]}...")
 
-    # Token Verification Check
-    token_mode = bot_owner.get("token_verify", False) if bot_owner else False
+    # TMA Verification Check
     tma_mode = bot_owner.get("tma_mode", False) if bot_owner else False
-    logger.info(f"Token verify mode: {token_mode}, TMA mode: {tma_mode}")
-    if token_mode or tma_mode:
-        site = bot_owner.get("shortener_site") or ""
-        api = bot_owner.get("shortener_api") or ""
-        timeout = bot_owner.get("token_timeout", 86400)
-        tut_url = bot_owner.get("token_tutorial") or "https://t.me"
-        
-        key = f"{me.id}_{message.from_user.id}"
+    logger.info(f"TMA mode: {tma_mode}")
+    if tma_mode:
         user_is_vip = await is_vip(me.id, message.from_user.id)
         if user_is_vip:
             is_verified = True
         else:
-            tma_mode = bot_owner.get("tma_mode", False) if bot_owner else False
-            if tma_mode:
-                is_verified = await check_tma_verification(message.from_user.id)
-            else:
-                if key in CLONE_VERIFIED:
-                    if time.time() < CLONE_VERIFIED[key] + timeout:
-                        is_verified = True
+            is_verified = await check_tma_verification(message.from_user.id)
         
         logger.info(f"User verified status: {is_verified}")
         if not is_verified and not is_unlocked:
-            tma_mode = bot_owner.get("tma_mode", False) if bot_owner else False
-            if tma_mode:
-                tma_app_url = f"{URL.rstrip('/')}/tma"
-                tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
-                btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-                plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-                if plan_cfg:
-                    btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-                return await message.reply_text(
-                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
-                    protect_content=True,
-                    reply_markup=InlineKeyboardMarkup(btn)
-                )
-            
-            if not site or not api:
-                return await message.reply_text("<b>Access Token settings are not fully configured by the bot owner.</b>")
-            
-            logger.info("Redirecting user to verification")
-            # Clean URL to prevent Shortzy crashes
-            clean_site = site.replace("https://", "").replace("http://", "").strip("/")
-            
-            token = ''.join(random.choices(string.ascii_letters + string.digits, k=7))
-            CLONE_TOKENS[key] = {token: False}
-            verify_link = f"https://t.me/{me.username}?start=verify-{message.from_user.id}-{token}-{data}"
-            
-            try:
-                shortzy = Shortzy(api_key=api, base_site=clean_site)
-                short_link = await shortzy.convert(verify_link)
-                logger.info(f"Shortlink generated: {short_link}")
-            except Exception as e:
-                logger.error(f"Clone shortener error: {e}")
-                short_link = verify_link
-                
-            # Ensure tut_url is a valid URL string
-            if not tut_url or not str(tut_url).startswith("http"):
-                tut_url = "https://t.me/viralverse0909"
-            
-            btn = [[
-                InlineKeyboardButton("Verify", url=str(short_link))
-            ],[
-                InlineKeyboardButton("How To Open Link & Verify", url=str(tut_url))
-            ]]
-            
-            try:
-                logger.info(f"Sending verification message to {message.from_user.id}...")
-                v_msg = await asyncio.wait_for(
-                    client.send_message(
-                        chat_id=message.from_user.id,
-                        text="<b>You are not verified!\nKindly verify to continue!</b>",
-                        reply_markup=InlineKeyboardMarkup(btn)
-                    ),
-                    timeout=15
-                )
-                logger.info(f"Verification message sent. ID: {v_msg.id}")
-            except asyncio.TimeoutError:
-                logger.error("CRITICAL: send_message timed out after 15 seconds!")
-                await message.reply_text("<b>⚠️ Verification service is slow. Please try again in a moment.</b>")
-            except Exception as e:
-                logger.error(f"Failed to send verification message: {e}")
-                await message.reply_text(f"<b>❌ Error: {e}</b>")
-            return
+            tma_app_url = f"{URL.rstrip('/')}/tma"
+            tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+            btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+            plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+            if plan_cfg:
+                btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+            return await message.reply_text(
+                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                protect_content=True,
+                reply_markup=InlineKeyboardMarkup(btn)
+            )
 
     logger.info("Proceeding to send_cached_media...")
     try:
@@ -556,7 +481,7 @@ async def settings_command(client, message):
     main_bot_username = (await StreamBot.get_me()).username
     if bot_doc and int(bot_doc['user_id']) == message.from_user.id:
         buttons.insert(0, [InlineKeyboardButton('🔒 Fᴏʀᴄᴇ Sᴜʙ Sᴇᴛᴛɪɴɢs', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
-    buttons.insert(0, [InlineKeyboardButton('⚙️ TMA / Token Settings', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
+    buttons.insert(0, [InlineKeyboardButton('⚙️ TMA Setting', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
@@ -624,20 +549,22 @@ async def shortener_api_handler(client, m: Message):
             disable_web_page_preview=True
         )
 
-    user_id = m.from_user.id
-    user = await get_user(me.id, user_id)
     cmd = m.command
 
     if len(cmd) == 1:
-        s = script.SHORTENER_API_MESSAGE.format(base_site=user["base_site"], shortener_api=user["shortener_api"])
+        current_api = bot_owner.get("shortener_api") or "Not set"
+        s = f"<b><u>⚙️ Shortener Settings</u></b>\n\nDomain: <code>vplink.in</code>\nAPI Key: <code>{current_api}</code>\n\nTo set or update your API Key, use:\n<code>/api your_api_key</code>"
         return await m.reply(s)
 
     elif len(cmd) == 2:    
         api = cmd[1].strip()
-        await update_user_info(me.id, user_id, {"shortener_api": api})
-        await m.reply("Shortener API updated successfully to " + api)
+        await mongo_db.bots.update_one(
+            {"bot_id": me.id},
+            {"$set": {"shortener_site": "vplink.in", "shortener_api": api}}
+        )
+        await m.reply(f"<b>✅ Shortener API Key updated successfully!</b>")
     else:
-        await m.reply("You are not authorized to use this command.")
+        await m.reply("<b>❌ Invalid usage. Use: <code>/api your_api_key</code></b>")
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -975,7 +902,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         main_bot_username = (await StreamBot.get_me()).username
         if bot_doc and int(bot_doc['user_id']) == query.from_user.id:
             buttons.insert(0, [InlineKeyboardButton('🔒 Fᴏʀᴄᴇ Sᴜʙ Sᴇᴛᴛɪɴɢs', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
-        buttons.insert(0, [InlineKeyboardButton('⚙️ TMA / Token Settings', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
+        buttons.insert(0, [InlineKeyboardButton('⚙️ TMA Setting', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(

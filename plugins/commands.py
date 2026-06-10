@@ -237,17 +237,17 @@ async def start(client, message):
                             disable_web_page_preview=True
                         )
             else:
-                token_mode = bot.get("token_verify", False)
-                status_txt = "Enabled ✅" if token_mode else "Disabled ❌"
-                token_btn = "Disable ❌ Token" if token_mode else "Enable ✅ Token"
+                tma_mode = bot.get("tma_mode", False)
+                status_txt = "ON 🟢" if tma_mode else "OFF 🔴"
+                tma_btn = "Disable ❌ TMA Ads" if tma_mode else "Enable ✅ TMA Ads"
                 api_key = bot.get("shortener_api") or "Not set"
-                validity = bot.get("token_timeout", 86400) // 3600
+                validity = bot.get("token_timeout", 10800) // 3600
                 tutorial = bot.get("token_tutorial", "None")
-                api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>Not set</i>"
+                api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
                 buttons = [
                     [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
                     [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
-                    [InlineKeyboardButton(f"{token_btn}", callback_data=f"token_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
+                    [InlineKeyboardButton(f"{tma_btn}", callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
                 ]
                 text = (
@@ -256,8 +256,7 @@ async def start(client, message):
                     f"  - Domain: <code>vplink.in</code>\n"
                     f"  - API Key: {api_display}\n"
                     f"  - Tutorial: {tutorial}\n"
-                    f"  - TMA Ads Status: <b>{('ON 🟢' if bot.get('tma_mode') else 'OFF 🔴')}</b>\n"
-                    f"  - Validity: <code>{validity} hours</code> (shared with token)"
+                    f"  - Validity: <code>{validity} hours</code>"
                 )
                 return await message.reply_text(
                     text=text,
@@ -1291,33 +1290,29 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 )
                 return
                 
-        token_mode = bot.get("token_verify", False)
         tma_mode = bot.get("tma_mode", False)
-        token_status = "Enabled ✅" if token_mode else "Disabled ❌"
-        tma_status = "ON 🟢" if tma_mode else "OFF 🔴"
+        status_txt = "ON 🟢" if tma_mode else "OFF 🔴"
+        tma_btn = "Disable ❌ TMA Ads" if tma_mode else "Enable ✅ TMA Ads"
         
         api_key = bot.get("shortener_api") or "Not set"
-        validity = bot.get("token_timeout", 86400) // 3600
+        validity = bot.get("token_timeout", 10800) // 3600
         tutorial = bot.get("token_tutorial", "None")
         api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
         
-        token_btn = "🔴 Disable Token" if token_mode else "✅ Enable Token"
         buttons = [
             [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
             [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
-            [InlineKeyboardButton(token_btn, callback_data=f"token_{bot_id}"), InlineKeyboardButton(f"TMA Ads: {tma_status}", callback_data=f"tok_tma_{bot_id}")],
-            [InlineKeyboardButton("🧹 Clear All Settings", callback_data=f"tok_clr_{bot_id}")],
+            [InlineKeyboardButton(tma_btn, callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear All Settings", callback_data=f"tok_clr_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
         ]
         
         text = (
             f"<b><u>⚙️ TMA Setting</u></b>\n\n"
-            f"  - Status: {token_status}\n"
+            f"  - Status: {status_txt}\n"
             f"  - Domain: <code>vplink.in</code>\n"
             f"  - API Key: {api_display}\n"
             f"  - Tutorial: {tutorial}\n"
-            f"  - TMA Ads Status: <b>{tma_status}</b>\n"
-            f"  - Validity: <code>{validity} hours</code> (shared with token)"
+            f"  - Validity: <code>{validity} hours</code>"
         )
         
         if query.message.photo:
@@ -1339,16 +1334,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 parse_mode=enums.ParseMode.HTML,
                 disable_web_page_preview=True
             )
-
-    elif query.data.startswith("token_"):
-        bot_id = int(query.data.split("_")[-1])
-        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
-        token_mode = bot.get("token_verify", False)
-        new_status = not token_mode
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_verify": new_status}})
-        await query.answer(f"Access Token {'Enabled' if new_status else 'Disabled'}", show_alert=True)
-        query.data = f"tokencfg_{bot_id}"
-        return await cb_handler(client, query)
 
     elif query.data.startswith("tok_val_"):
         bot_id = int(query.data.split("_")[-1])
@@ -1382,7 +1367,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 {"bot_id": bot_id},
                 {"$set": {"shortener_site": "vplink.in", "shortener_api": api_key}}
             )
-            await msg.reply(f"<b>✅ API Key set successfully!\n\nYour standard token verify is now ready to use.</b>")
+            await msg.reply(f"<b>✅ API Key set successfully!\n\nYour TMA Ads verification is now ready to use.</b>")
         except Exception as e:
             await msg.reply(f"<b>❌ Error: {e}</b>")
         query.data = f"tokencfg_{bot_id}"

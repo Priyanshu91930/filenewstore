@@ -14,11 +14,17 @@ logger.setLevel(logging.INFO)
 TOKENS = {}
 VERIFIED = {}
 
-async def get_verify_shorted_link(link):
-    if SHORTLINK_URL == "api.shareus.io":
-        url = f'https://{SHORTLINK_URL}/easy_api'
+async def get_verify_shorted_link(link, api_key=None, shortener_url=None):
+    api = api_key or SHORTLINK_API
+    site = shortener_url or SHORTLINK_URL
+    if not api or not site or api == "None" or site == "None":
+        return link
+    site = site.replace("https://", "").replace("http://", "").strip("/")
+    
+    if site == "api.shareus.io":
+        url = f'https://{site}/easy_api'
         params = {
-            "key": SHORTLINK_API,
+            "key": api,
             "link": link,
         }
         try:
@@ -30,13 +36,13 @@ async def get_verify_shorted_link(link):
             logger.error(e)
             return link
     else:
-  #      response = requests.get(f"https://{SHORTLINK_URL}/api?api={SHORTLINK_API}&url={link}")
- #       data = response.json()
-  #      if data["status"] == "success" or rget.status_code == 200:
-   #         return data["shortenedUrl"]
-        shortzy = Shortzy(api_key=SHORTLINK_API, base_site=SHORTLINK_URL)
-        link = await shortzy.convert(link)
-        return link
+        try:
+            shortzy = Shortzy(api_key=api, base_site=site)
+            link = await shortzy.convert(link)
+            return link
+        except Exception as e:
+            logger.error(e)
+            return link
 
 async def check_token(bot, userid, token):
     user = await bot.get_users(userid)
@@ -191,7 +197,30 @@ def consume_token(token: str):
 async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_username: str) -> str:
     """Build the target unlock link and shorten it."""
     link = f"https://t.me/{bot_username}?start=unlock-{user_id}-{token}-{file_data}"
-    shortened_verify_url = await get_verify_shorted_link(link)
+    
+    # Query database for the bot's configured API Key and shortener URL
+    import motor.motor_asyncio
+    from config import DB_URI
+    
+    client = motor.motor_asyncio.AsyncIOMotorClient(DB_URI)
+    db = client["cloned_vjbotz"]
+    
+    api_key = None
+    shortener_url = "vplink.in"
+    
+    bot = await db.bots.find_one({"username": bot_username})
+    if bot:
+        api_key = bot.get("shortener_api")
+        shortener_url = bot.get("shortener_site") or "vplink.in"
+    else:
+        # Check if it's the main bot
+        from config import BOT_USERNAME
+        if bot_username.lower() == BOT_USERNAME.lower():
+            from config import SHORTLINK_API, SHORTLINK_URL
+            api_key = SHORTLINK_API
+            shortener_url = SHORTLINK_URL
+            
+    shortened_verify_url = await get_verify_shorted_link(link, api_key=api_key, shortener_url=shortener_url)
     return str(shortened_verify_url)
 
 async def is_vip(bot_id: int, user_id: int) -> bool:
