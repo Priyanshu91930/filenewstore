@@ -193,6 +193,77 @@ async def start(client, message):
             from plugins.clone import clone
             return await clone(client, message)
             
+        if data.startswith("verifyclone_"):
+            bot_id = int(data.split("_")[-1])
+            bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+            if not bot or int(bot.get("user_id", 0)) != message.from_user.id:
+                return await message.reply("<b>❌ You don't own this bot!</b>")
+            
+            vplink_verified = bot.get("vplink_verified", False)
+            if not vplink_verified:
+                req = await clone_mongo_db.vplink_requests.find_one({"bot_id": bot_id, "status": "pending"})
+                if req:
+                    text = "<b>waiting msg please wait for confirmation</b>"
+                    buttons = [[InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]]
+                    return await message.reply_text(
+                        text=text,
+                        reply_markup=InlineKeyboardMarkup(buttons),
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                else:
+                    caption = (
+                        "<b>⚠️ You need to register under our referral link first!</b>\n\n"
+                        "1️⃣ Click this link to register: https://vplink.in/ref/Priyanshu7890\n"
+                        "2️⃣ Create an account on VPLink.\n"
+                        "3️⃣ Go to Tools -> Developers API (as shown in the image below) to get your API token.\n"
+                        "4️⃣ Once done, click <b>📤 Submit Request</b> below.\n\n"
+                        "<i>Our admin will manually verify and approve your request. Once verified, you can set your API key.</i>"
+                    )
+                    buttons = [
+                        [InlineKeyboardButton("🔗 Register on VPLink", url="https://vplink.in/ref/Priyanshu7890")],
+                        [InlineKeyboardButton("📤 Submit Request", callback_data=f"req_vplink_{bot_id}")],
+                        [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
+                    ]
+                    try:
+                        return await message.reply_photo(
+                            photo="vplink_tutorial.png",
+                            caption=caption,
+                            reply_markup=InlineKeyboardMarkup(buttons)
+                        )
+                    except Exception as e:
+                        return await message.reply_text(
+                            text=caption,
+                            reply_markup=InlineKeyboardMarkup(buttons),
+                            disable_web_page_preview=True
+                        )
+            else:
+                token_mode = bot.get("token_verify", False)
+                status_txt = "Enabled ✅" if token_mode else "Disabled ❌"
+                domain = bot.get("shortener_site", "None")
+                api = bot.get("shortener_api", "None")
+                validity = bot.get("token_timeout", 86400) // 3600
+                tutorial = bot.get("token_tutorial", "None")
+                buttons = [
+                    [InlineKeyboardButton("Shorteners", callback_data=f"tok_api_{bot_id}"), InlineKeyboardButton("Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("Tutorial", callback_data=f"tok_tut_{bot_id}")],
+                    [InlineKeyboardButton(f"{'Disable ❌' if token_mode else 'Enable ✅'} Token", callback_data=f"token_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
+                    [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
+                ]
+                text = (
+                    f"<b><u>Access Token</u></b>\n\n"
+                    f"Users need to pass a shortened link to gain special access to messages from all clone shareable links. This access will be valid for the next custom validity period.\n\n"
+                    f"<b>- Status:</b> {status_txt}\n"
+                    f"<b>- Domain:</b> <code>{domain}</code>\n"
+                    f"<b>- API Key:</b> <code>{api}</code>\n"
+                    f"<b>- Validity:</b> {validity} hours\n"
+                    f"<b>- Tutorial:</b> {tutorial}"
+                )
+                return await message.reply_text(
+                    text=text,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    parse_mode=enums.ParseMode.HTML,
+                    disable_web_page_preview=True
+                )
+
         if data.startswith("manageclone_"):
             bot_id = int(data.split("_")[-1])
             bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})

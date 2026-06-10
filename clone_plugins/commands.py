@@ -817,7 +817,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             ).format(main_bot_username=main_bot_username)
             buttons = [
                 [InlineKeyboardButton("🔗 Register on VPLink", url="https://vplink.in/ref/Priyanshu7890")],
-                [InlineKeyboardButton("🤖 Go to Main Bot to Verify", url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")],
+                [InlineKeyboardButton("🤖 Go to Main Bot to Verify", url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")],
                 [InlineKeyboardButton("🔙 Back", callback_data="settings")]
             ]
             try:
