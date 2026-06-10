@@ -250,13 +250,13 @@ async def start(client, message):
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
                 ]
                 text = (
-                    f"<b><u>TMA Setting</u></b>\n\n"
-                    f"Users need to pass a shortened link to gain special access to messages from all clone shareable links. This access will be valid for the next custom validity period.\n\n"
-                    f"<b>- Status:</b> {status_txt}\n"
-                    f"<b>- Domain:</b> <code>vplink.in</code>\n"
-                    f"<b>- API Key:</b> {api_display}\n"
-                    f"<b>- Validity:</b> {validity} hours\n"
-                    f"<b>- Tutorial:</b> {tutorial}"
+                    f"<b><u>⚙️ TMA Setting</u></b>\n\n"
+                    f"  - Status: {status_txt}\n"
+                    f"  - Domain: <code>vplink.in</code>\n"
+                    f"  - API Key: {api_display}\n"
+                    f"  - Tutorial: {tutorial}\n"
+                    f"  - TMA Ads Status: <b>{('ON 🟢' if bot.get('tma_mode') else 'OFF 🔴')}</b>\n"
+                    f"  - Validity: <code>{validity} hours</code> (shared with token)"
                 )
                 return await message.reply_text(
                     text=text,
@@ -1310,16 +1310,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         text = (
             f"<b><u>⚙️ TMA Setting</u></b>\n\n"
-            f"<b>🔗 Standard Token Verify:</b>\n"
             f"  - Status: {token_status}\n"
             f"  - Domain: <code>vplink.in</code>\n"
             f"  - API Key: {api_display}\n"
-            f"  - Validity: <code>{validity} hours</code>\n"
-            f"  - Tutorial: {tutorial}\n\n"
-            f"<b>🎯 TMA Ads Verification:</b>\n"
-            f"  - Status: <b>{tma_status}</b>\n"
-            f"  - Validity: <code>{validity} hours</code> (shared with token)\n\n"
-            f"<i>Enable either Token or TMA Ads to require users to verify before accessing files. Validity applies to both.</i>"
+            f"  - Tutorial: {tutorial}\n"
+            f"  - TMA Ads Status: <b>{tma_status}</b>\n"
+            f"  - Validity: <code>{validity} hours</code> (shared with token)"
         )
         
         if query.message.photo:
