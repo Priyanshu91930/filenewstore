@@ -1637,27 +1637,45 @@ async def cb_handler(client: Client, query: CallbackQuery):
             {"$set": {"status": action, "processed_at": time.time()}}
         )
         
+        # Use clone bot client to send notification so user sees it in their clone bot chat
+        from plugins.clone import running_clones
+        clone_client = running_clones.get(bot_id, client)
+        
         if action == "approved":
             await clone_mongo_db.bots.update_one(
                 {"bot_id": bot_id},
                 {"$set": {"vplink_verified": True}}
             )
             try:
-                await client.send_message(
+                await clone_client.send_message(
                     chat_id=req["user_id"],
-                    text="<b>youre verified now send me api token</b>"
+                    text="<b>✅ You're verified! You can now enable TMA Ads and set your API key.\n\nUse /setting in your clone bot to configure it.</b>"
                 )
             except Exception as e:
-                logger.error(f"Failed to send approval message: {e}")
+                logger.error(f"Failed to send approval message via clone bot: {e}")
+                try:
+                    await client.send_message(
+                        chat_id=req["user_id"],
+                        text=f"<b>✅ Your clone bot @{req.get('username', '')} has been verified!\nYou can now enable TMA Ads and set your API key in the clone bot settings.</b>"
+                    )
+                except Exception as e2:
+                    logger.error(f"Failed to send approval message via main bot too: {e2}")
             await query.answer("Request Approved! User notified.", show_alert=True)
         else:
             try:
-                await client.send_message(
+                await clone_client.send_message(
                     chat_id=req["user_id"],
-                    text="<b>❌ Your VPLink verification request was declined. Please ensure you registered using our referral link.</b>"
+                    text="<b>❌ Your VPLink verification request was declined. Please ensure you registered using our referral link: https://vplink.in/ref/Priyanshu7890</b>"
                 )
             except Exception as e:
-                logger.error(f"Failed to send declination message: {e}")
+                logger.error(f"Failed to send declination message via clone bot: {e}")
+                try:
+                    await client.send_message(
+                        chat_id=req["user_id"],
+                        text="<b>❌ Your VPLink verification request was declined. Please ensure you registered using our referral link.</b>"
+                    )
+                except Exception as e2:
+                    logger.error(f"Failed to send declination message via main bot too: {e2}")
             await query.answer("Request Declined! User notified.", show_alert=True)
             
         try:
@@ -1690,27 +1708,45 @@ async def cb_handler(client: Client, query: CallbackQuery):
             {"$set": {"status": action, "processed_at": time.time()}}
         )
         
+        # Use clone bot client to send notification so user sees it in their clone bot chat
+        from plugins.clone import running_clones
+        clone_client = running_clones.get(bot_id, client)
+        
         if action == "approved":
             await clone_mongo_db.bots.update_one(
                 {"bot_id": bot_id},
                 {"$set": {"vplink_verified": True}}
             )
             try:
-                await client.send_message(
+                await clone_client.send_message(
                     chat_id=req["user_id"],
-                    text="<b>youre verified now send me api token</b>"
+                    text="<b>✅ You're verified! You can now enable TMA Ads and set your API key.\n\nUse /setting in your clone bot to configure it.</b>"
                 )
             except Exception as e:
-                logger.error(f"Failed to send approval message: {e}")
+                logger.error(f"Failed to send approval message via clone bot: {e}")
+                try:
+                    await client.send_message(
+                        chat_id=req["user_id"],
+                        text=f"<b>✅ Your clone bot @{req.get('username', '')} has been verified!\nYou can now enable TMA Ads and set your API key in the clone bot settings.</b>"
+                    )
+                except Exception as e2:
+                    logger.error(f"Failed to send approval message via main bot too: {e2}")
             await query.answer("Request Approved! User notified.", show_alert=True)
         else:
             try:
-                await client.send_message(
+                await clone_client.send_message(
                     chat_id=req["user_id"],
-                    text="<b>❌ Your VPLink verification request was declined. Please ensure you registered using our referral link.</b>"
+                    text="<b>❌ Your VPLink verification request was declined. Please ensure you registered using our referral link: https://vplink.in/ref/Priyanshu7890</b>"
                 )
             except Exception as e:
-                logger.error(f"Failed to send declination message: {e}")
+                logger.error(f"Failed to send declination message via clone bot: {e}")
+                try:
+                    await client.send_message(
+                        chat_id=req["user_id"],
+                        text="<b>❌ Your VPLink verification request was declined. Please ensure you registered using our referral link.</b>"
+                    )
+                except Exception as e2:
+                    logger.error(f"Failed to send declination message via main bot too: {e2}")
             await query.answer("Request Declined! User notified.", show_alert=True)
             
         await send_requests_page(client, query.message.chat.id, page, query.message.id)
