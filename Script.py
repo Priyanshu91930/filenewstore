@@ -132,6 +132,8 @@ First Send /clone command then follow below steps.
 
 🔻 /broadcast - ʀᴇᴘʟʏ ᴛᴏ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
 
+🔻 /validity - ᴠɪᴇᴡ ᴀᴄᴛɪᴠᴇ ᴜsᴇʀ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴs (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
+
 🔻 /addvip - ᴀᴅᴅ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
 ᴇx - /addvip 12345678 30 (or 'lifetime')
 
@@ -165,6 +167,8 @@ First Send /clone command then follow below steps.
 🔻 /plan - ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴠɪᴘ ꜱᴛᴀᴛᴜꜱ ᴏʀ ʙᴜʏ ᴀ ᴠɪᴘ ᴘʟᴀɴ
 
 🔻 /broadcast - ʀᴇᴘʟʏ ᴛᴏ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
+
+🔻 /validity - ᴠɪᴇᴡ ᴀᴄᴛɪᴠᴇ ᴜsᴇʀ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴs (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
 
 🔻 /addvip - ᴀᴅᴅ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
 ᴇx - /addvip 12345678 30 (or 'lifetime')

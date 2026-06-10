@@ -271,7 +271,8 @@ async def start(client, message):
         try:
             # Token Verification Check for Batch
             token_mode = bot_doc.get("token_verify", False) if bot_doc else False
-            if token_mode:
+            tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+            if token_mode or tma_mode:
                 user_is_vip = await is_vip(me.id, message.from_user.id)
                 if user_is_vip:
                     is_verified = True
@@ -280,7 +281,6 @@ async def start(client, message):
                     key = f"{me.id}_{message.from_user.id}"
                     is_verified = False
                     
-                    tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
                     if tma_mode:
                         is_verified = await check_tma_verification(message.from_user.id)
                     else:
@@ -378,8 +378,9 @@ async def start(client, message):
 
     # Token Verification Check
     token_mode = bot_owner.get("token_verify", False) if bot_owner else False
-    logger.info(f"Token verify mode: {token_mode}")
-    if token_mode:
+    tma_mode = bot_owner.get("tma_mode", config.TMA_MODE) if bot_owner else config.TMA_MODE
+    logger.info(f"Token verify mode: {token_mode}, TMA mode: {tma_mode}")
+    if token_mode or tma_mode:
         site = bot_owner.get("shortener_site") or ""
         api = bot_owner.get("shortener_api") or ""
         timeout = bot_owner.get("token_timeout", 86400)
@@ -683,6 +684,65 @@ async def stats_handler(client, message):
         f"🚫 No Forward: <code>{nofwd}</code>\n"
         f"🔑 Access Token: <code>{token}</code></b>"
     )
+
+@Client.on_message(filters.command("validity") & filters.private)
+async def validity_command(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    # Owner/Moderator check
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can access this command.</b>")
+
+    from utils import TMA_VERIFIED
+    import time
+    
+    text = "<b>📅 <u>Active Verifications</u></b>\n\n"
+    
+    # 1. TMA Verifications (3 Hours)
+    tma_count = 0
+    tma_text = "<b>⚡ TMA Verifications (3-Hour Validity):</b>\n"
+    current_time = time.time()
+    for uid, verified_time in list(TMA_VERIFIED.items()):
+        elapsed = current_time - verified_time
+        if elapsed < 3 * 3600:
+            tma_count += 1
+            remaining = int((3 * 3600) - elapsed)
+            hours = remaining // 3600
+            mins = (remaining % 3600) // 60
+            tma_text += f"• <code>{uid}</code> (Remaining: {hours}h {mins}m)\n"
+        else:
+            TMA_VERIFIED.pop(uid, None)
+            
+    if tma_count == 0:
+        tma_text += "<i>No active TMA verifications.</i>\n"
+        
+    # 2. Standard Verifications (24 Hours / Custom Timeout)
+    std_count = 0
+    std_text = "\n<b>🔗 Standard Verifications:</b>\n"
+    timeout = bot_doc.get("token_timeout", 86400) if bot_doc else 86400
+    for key, verified_time in list(CLONE_VERIFIED.items()):
+        if key.startswith(f"{me.id}_"):
+            uid = key.split("_")[-1]
+            elapsed = current_time - verified_time
+            if elapsed < timeout:
+                std_count += 1
+                remaining = int(timeout - elapsed)
+                hours = remaining // 3600
+                mins = (remaining % 3600) // 60
+                std_text += f"• <code>{uid}</code> (Remaining: {hours}h {mins}m)\n"
+            else:
+                CLONE_VERIFIED.pop(key, None)
+        
+    if std_count == 0:
+        std_text += "<i>No active standard verifications.</i>\n"
+        
+    total_text = text + tma_text + std_text
+    await message.reply_text(total_text)
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
