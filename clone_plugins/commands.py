@@ -293,6 +293,9 @@ async def start(client, message):
                         tma_app_url = f"{URL.rstrip('/')}/tma"
                         tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
                         btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                        if plan_cfg:
+                            btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                         return await message.reply_text(
                             text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
                             protect_content=True,
@@ -406,6 +409,9 @@ async def start(client, message):
                 tma_app_url = f"{URL.rstrip('/')}/tma"
                 tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
                 btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                if plan_cfg:
+                    btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                 return await message.reply_text(
                     text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
                     protect_content=True,
