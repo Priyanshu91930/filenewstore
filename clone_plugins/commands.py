@@ -552,10 +552,11 @@ async def settings_command(client, message):
         InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
     ]]
     
+    from TechVJ.bot import StreamBot
+    main_bot_username = (await StreamBot.get_me()).username
     if bot_doc and int(bot_doc['user_id']) == message.from_user.id:
-        from TechVJ.bot import StreamBot
-        main_bot_username = (await StreamBot.get_me()).username
         buttons.insert(0, [InlineKeyboardButton('🔒 Fᴏʀᴄᴇ Sᴜʙ Sᴇᴛᴛɪɴɢs', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
+    buttons.insert(0, [InlineKeyboardButton('⚙️ TMA / Token Settings', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
@@ -970,10 +971,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
             )
         except Exception:
             pass
+        from TechVJ.bot import StreamBot
+        main_bot_username = (await StreamBot.get_me()).username
         if bot_doc and int(bot_doc['user_id']) == query.from_user.id:
-            from TechVJ.bot import StreamBot
-            main_bot_username = (await StreamBot.get_me()).username
             buttons.insert(0, [InlineKeyboardButton('🔒 Fᴏʀᴄᴇ Sᴜʙ Sᴇᴛᴛɪɴɢs', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
+        buttons.insert(0, [InlineKeyboardButton('⚙️ TMA / Token Settings', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
