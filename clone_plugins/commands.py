@@ -280,7 +280,8 @@ async def start(client, message):
                     key = f"{me.id}_{message.from_user.id}"
                     is_verified = False
                     
-                    if config.TMA_MODE:
+                    tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+                    if tma_mode:
                         is_verified = await check_tma_verification(message.from_user.id)
                     else:
                         if key in CLONE_VERIFIED:
@@ -288,7 +289,8 @@ async def start(client, message):
                                 is_verified = True
                 
                 if not is_verified and not is_unlocked:
-                    if config.TMA_MODE:
+                    tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+                    if tma_mode:
                         tma_app_url = f"{URL.rstrip('/')}/tma"
                         tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
                         btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
@@ -388,7 +390,8 @@ async def start(client, message):
         if user_is_vip:
             is_verified = True
         else:
-            if config.TMA_MODE:
+            tma_mode = bot_owner.get("tma_mode", config.TMA_MODE) if bot_owner else config.TMA_MODE
+            if tma_mode:
                 is_verified = await check_tma_verification(message.from_user.id)
             else:
                 if key in CLONE_VERIFIED:
@@ -397,7 +400,8 @@ async def start(client, message):
         
         logger.info(f"User verified status: {is_verified}")
         if not is_verified and not is_unlocked:
-            if config.TMA_MODE:
+            tma_mode = bot_owner.get("tma_mode", config.TMA_MODE) if bot_owner else config.TMA_MODE
+            if tma_mode:
                 tma_app_url = f"{URL.rstrip('/')}/tma"
                 tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
                 btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
@@ -525,19 +529,22 @@ async def settings_command(client, message):
     user_id = message.from_user.id
     user = await get_user(me.id, user_id)
     prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
+    tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+    tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
     buttons = [[
         InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
         InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
     ],[
         InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
-        InlineKeyboardButton('💳 Configure Plan', callback_data='setplan')
+        InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if tma_mode else 'OFF 🔴'}", callback_data="toggle_tma")
     ],[
-        InlineKeyboardButton('💬 ᴄʜᴀᴛʙᴏx', url='https://t.me/+cFO-dJGWlCMzNGRl'),
-        InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
+        InlineKeyboardButton('💳 Configure Plan', callback_data='setplan'),
+        InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl')
     ],[
-        InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
-        InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
+        InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909'),
+        InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help')
     ],[
+        InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about'),
         InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
     ]]
     
@@ -548,7 +555,7 @@ async def settings_command(client, message):
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
@@ -704,6 +711,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
     me = client.me or await client.get_me()
     if query.data == "close_data":
         await query.message.delete()
+    elif query.data == "toggle_tma":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure TMA settings!", show_alert=True)
+        tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+        new_mode = not tma_mode
+        await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"tma_mode": new_mode}})
+        await query.answer(f"TMA Ads {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
+        query.data = "settings"
+        return await cb_handler(client, query)
     elif query.data == "start":
         buttons = [[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
@@ -787,23 +806,27 @@ async def cb_handler(client: Client, query: CallbackQuery):
         user_id = query.from_user.id
         user = await get_user(me.id, user_id)
         prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        tma_mode = bot_doc.get("tma_mode", config.TMA_MODE) if bot_doc else config.TMA_MODE
+        tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
+        
         buttons = [[
             InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
             InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
         ],[
             InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
-            InlineKeyboardButton('💳 Configure Plan', callback_data='setplan')
+            InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if tma_mode else 'OFF 🔴'}", callback_data="toggle_tma")
         ],[
-            InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
-            InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
+            InlineKeyboardButton('💳 Configure Plan', callback_data='setplan'),
+            InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl')
         ],[
-            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
-            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
+            InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909'),
+            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help')
         ],[
+            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about'),
             InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
         ]]
         
-        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         photo = bot_doc.get("start_photo") if bot_doc else None
         if photo and not photo.startswith("http"): photo = None
         if not photo: photo = random.choice(PICS)
@@ -820,7 +843,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )

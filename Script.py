@@ -116,15 +116,26 @@ First Send /clone command then follow below steps.
 
 🔻 /clone - ᴄʀᴇᴀᴛᴇ ʏᴏᴜʀ ᴏᴡɴ ɪᴅᴇɴᴛɪᴄᴀʟ ᴄʟᴏɴᴇ ʙᴏᴛ
 
+🔻 /deletecloned - ᴜsᴇ ᴛʜɪs ғᴏʀ ᴅᴇʟᴇᴛᴇ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ 
+
+🔻 /setforcesub - ꜱᴇᴛ ғᴏʀᴄᴇ ꜱᴜʙꜱᴄʀɪʙᴇ ᴄʜᴀɴɴᴇʟꜱ ғᴏʀ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ
+
+🔻 /listforcesub - ʟɪꜱᴛ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ'ꜱ ғᴏʀᴄᴇ ꜱᴜʙ ᴄʜᴀɴɴᴇʟꜱ
+
+🔻 /clearforcesub - ᴄʜᴀʀ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ'ꜱ ғᴏʀᴄᴇ ꜱᴜʙ ᴄʜᴀɴɴᴇʟꜱ
+
 🔻 /base_site - ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ sᴇᴛ ᴜʀʟ sʜᴏʀᴛɴᴇʀ ʟɪɴᴋ ᴅᴏᴍᴀɪɴ 
 ᴇx - /base_site ʏᴏᴜʀᴅᴏᴍᴀɪɴ.ᴄᴏᴍ
 
 🔻 /api - sᴇᴛ ʏᴏᴜʀ ᴜʀʟ sʜᴏʀᴛɴᴇʀ ᴀᴄᴄᴏᴜɴᴛ ᴀᴘɪ 
 ᴇx - /api ʙᴀᴏᴡɢᴡᴋʟᴀᴀʙᴀᴋʟ
 
-🔻 /deletecloned - ᴜsᴇ ᴛʜɪs ғᴏʀ ᴅᴇʟᴇᴛᴇ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ 
+🔻 /broadcast - ʀᴇᴘʟʏ ᴛᴏ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
 
-🔻 /broadcast - ʀᴇᴘʟʏ ᴛᴏ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)</b>"""
+🔻 /addvip - ᴀᴅᴅ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
+ᴇx - /addvip 12345678 30 (or 'lifetime')
+
+🔻 /delvip - ʀᴇᴍᴏᴠᴇ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)</b>"""
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -135,13 +146,30 @@ First Send /clone command then follow below steps.
 
 🔻 /link - ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴠɪᴅᴇᴏ ᴏʀ ғɪʟᴇ ᴛᴏ ɢᴇᴛ sʜᴀʀᴀʙʟᴇ ʟɪɴᴋ
 
-🔻 /base_site - ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ sᴇᴛ ᴜʀʟ sʜᴏʀᴛɴᴇʀ ʟɪɴᴋ ᴅᴏᴍᴀɪɴ
+🔻 /batch - sᴇɴᴅ ғɪʀsᴛ ʟɪɴᴋ ᴏғ ғɪʟᴇ sᴛᴏʀᴇ ᴄʜᴀɴɴᴇʟ ᴘᴏsᴛ ᴛʜᴇɴ ʟᴀsᴛ ᴘᴏsᴛ ʟɪɴᴋ ᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ ʙᴏᴛ ɪs ᴀᴅᴍɪɴ ɪɴ ʏᴏᴜʀ ғɪʟᴇ sᴛᴏʀᴇ ᴄʜᴀɴɴᴇʟ.
+ᴇx - /batch https://t.me/viralverse0909/25 https://t.me/viralverse0909/30
+
+🔻 /setting - ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ʙᴏᴛ sᴇᴛᴛɪɴgs (sʜᴏʀᴛᴇɴᴇʀ, ᴄᴀᴘᴛɪᴏɴ, ᴇᴛᴄ.)
+
+🔻 /setcaption - ꜱᴇᴛ ʏᴏᴜʀ ᴄᴜꜱᴛᴏᴍ ғɪʟᴇ ɴᴀᴍᴇ ᴘʀᴇғɪx
+ᴇx - /setcaption @YourChannel (or 'off' to disable)
+
+🔻 /base_site - ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ sᴇᴛ ᴜʀʟ sʜᴏʀᴛɴᴇ r ʟɪɴᴋ ᴅᴏᴍᴀɪɴ
 ᴇx - /base_site ʏᴏᴜʀᴅᴏᴍᴀɪɴ.ᴄᴏᴍ
 
 🔻 /api - sᴇᴛ ʏᴏᴜʀ ᴜʀʟ sʜᴏʀᴛɴᴇʀ ᴀᴄᴄᴏᴜɴᴛ ᴀᴘɪ
 ᴇx - /api ʙᴀᴏᴡɢᴡᴋʟᴀᴀʙᴀᴋʟ
 
-🔻 /broadcast - ʀᴇᴘʟʏ ᴛᴏ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)</b>"""
+🔻 /stats - ᴠɪᴇᴡ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ sᴛᴀᴛɪsᴛɪᴄs
+
+🔻 /plan - ᴄʜᴇᴄᴋ ʏᴏᴜʀ ᴠɪᴘ ꜱᴛᴀᴛᴜꜱ ᴏʀ ʙᴜʏ ᴀ ᴠɪᴘ ᴘʟᴀɴ
+
+🔻 /broadcast - ʀᴇᴘʟʏ ᴛᴏ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ʙʀᴏᴀᴅᴄᴀsᴛ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
+
+🔻 /addvip - ᴀᴅᴅ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)
+ᴇx - /addvip 12345678 30 (or 'lifetime')
+
+🔻 /delvip - ʀᴇᴍᴏᴠᴇ ᴠɪᴘ ᴀᴄᴄᴇss ꜰᴏʀ ᴀ ᴜsᴇʀ (ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ)</b>"""
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
