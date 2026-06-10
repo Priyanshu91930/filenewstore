@@ -272,6 +272,7 @@ async def start(client, message):
             # Token Verification Check for Batch
             token_mode = bot_doc.get("token_verify", False) if bot_doc else False
             tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
+            is_verified = False
             if token_mode or tma_mode:
                 user_is_vip = await is_vip(me.id, message.from_user.id)
                 if user_is_vip:
@@ -279,7 +280,6 @@ async def start(client, message):
                 else:
                     timeout = bot_doc.get("token_timeout", 86400)
                     key = f"{me.id}_{message.from_user.id}"
-                    is_verified = False
                     
                     if tma_mode:
                         is_verified = await check_tma_verification(message.from_user.id)
@@ -289,7 +289,6 @@ async def start(client, message):
                                 is_verified = True
                 
                 if not is_verified and not is_unlocked:
-                    tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
                     if tma_mode:
                         tma_app_url = f"{URL.rstrip('/')}/tma"
                         tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
@@ -299,18 +298,19 @@ async def start(client, message):
                             protect_content=True,
                             reply_markup=InlineKeyboardMarkup(btn)
                         )
-                    pass
+                    else:
+                        return await message.reply_text("<b>❌ You are not verified! Please verify to access batch files.</b>")
                 else:
                     is_verified = True
             
-            if not token_mode or (token_mode and (is_verified or is_unlocked)):
+            if not token_mode or is_verified or is_unlocked:
                 sts = await message.reply("<b>🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ... ɢᴇᴛᴛɪɴɢ ʙᴀᴛᴄʜ ғɪʟᴇs</b>")
-                file_id = data.split("-", 1)[1]
-                msgs = BATCH_FILES.get(file_id)
+                batch_file_id = data.split("-", 1)[1]
+                msgs = BATCH_FILES.get(batch_file_id)
                 if not msgs:
                     from TechVJ.bot import StreamBot
                     from config import LOG_CHANNEL
-                    decode_file_id = base64.urlsafe_b64decode(file_id + "=" * (-len(file_id) % 4)).decode("ascii")
+                    decode_file_id = base64.urlsafe_b64decode(batch_file_id + "=" * (-len(batch_file_id) % 4)).decode("ascii")
                     # Use Main Bot to get the message from Log Channel
                     msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
                     media = getattr(msg, msg.media.value)
@@ -319,7 +319,7 @@ async def start(client, message):
                     with open(path, "r") as f:
                         msgs = json.load(f)
                     os.remove(path)
-                    BATCH_FILES[file_id] = msgs
+                    BATCH_FILES[batch_file_id] = msgs
                 
                 for m_data in msgs:
                     try:
@@ -533,9 +533,6 @@ async def settings_command(client, message):
     tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
     tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
     buttons = [[
-        InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
-        InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
-    ],[
         InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
         InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if tma_mode else 'OFF 🔴'}", callback_data="toggle_tma")
     ],[
@@ -556,7 +553,7 @@ async def settings_command(client, message):
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
@@ -902,21 +899,23 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('Hᴏᴍᴇ', callback_data='start'),
             InlineKeyboardButton('🔒 Cʟᴏsᴇ', callback_data='close_data')
         ]]
-        bot_doc = mongo_db.bots.find_one({'bot_id': me.id})
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         photo = bot_doc.get("start_photo") if bot_doc else None
         if photo and not photo.startswith("http"): photo = None
         if not photo: photo = random.choice(PICS)
 
-        await client.edit_message_media(
-            query.message.chat.id, 
-            query.message.id, 
-            InputMediaPhoto(photo)
-        )
-        owner = await mongo_db.bots.find_one({'bot_id': me.id})
-        ownerid = int(owner['user_id'])
+        try:
+            await client.edit_message_media(
+                query.message.chat.id, 
+                query.message.id, 
+                InputMediaPhoto(photo)
+            )
+        except Exception:
+            pass
+        owner_id_about = int(bot_doc['user_id']) if bot_doc else 0
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=script.CABOUT_TXT.format(me.mention, ownerid),
+            text=script.CABOUT_TXT.format(me.mention, owner_id_about),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )  
@@ -934,9 +933,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
         tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
         
         buttons = [[
-            InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
-            InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
-        ],[
             InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
             InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if tma_mode else 'OFF 🔴'}", callback_data="toggle_tma")
         ],[
@@ -954,11 +950,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if photo and not photo.startswith("http"): photo = None
         if not photo: photo = random.choice(PICS)
 
-        await client.edit_message_media(
-            query.message.chat.id, 
-            query.message.id, 
-            InputMediaPhoto(photo)
-        )
+        try:
+            await client.edit_message_media(
+                query.message.chat.id, 
+                query.message.id, 
+                InputMediaPhoto(photo)
+            )
+        except Exception:
+            pass
         if bot_doc and int(bot_doc['user_id']) == query.from_user.id:
             from TechVJ.bot import StreamBot
             main_bot_username = (await StreamBot.get_me()).username
@@ -966,7 +965,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
