@@ -239,6 +239,7 @@ async def start(client, message):
             else:
                 token_mode = bot.get("token_verify", False)
                 status_txt = "Enabled ✅" if token_mode else "Disabled ❌"
+                token_btn = "Disable ❌ Token" if token_mode else "Enable ✅ Token"
                 api_key = bot.get("shortener_api") or "Not set"
                 validity = bot.get("token_timeout", 86400) // 3600
                 tutorial = bot.get("token_tutorial", "None")
@@ -246,7 +247,7 @@ async def start(client, message):
                 buttons = [
                     [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
                     [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
-                    [InlineKeyboardButton(f"{'Disable \u274c' if token_mode else 'Enable \u2705'} Token", callback_data=f"token_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
+                    [InlineKeyboardButton(f"{token_btn}", callback_data=f"token_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
                 ]
                 text = (
@@ -1300,10 +1301,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
         tutorial = bot.get("token_tutorial", "None")
         api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
         
+        token_btn = "🔴 Disable Token" if token_mode else "✅ Enable Token"
         buttons = [
             [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
             [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
-            [InlineKeyboardButton(f"{'\ud83d\udd34 Disable' if token_mode else '\u2705 Enable'} Token", callback_data=f"token_{bot_id}"), InlineKeyboardButton(f"TMA Ads: {tma_status}", callback_data=f"tok_tma_{bot_id}")],
+            [InlineKeyboardButton(token_btn, callback_data=f"token_{bot_id}"), InlineKeyboardButton(f"TMA Ads: {tma_status}", callback_data=f"tok_tma_{bot_id}")],
             [InlineKeyboardButton("🧹 Clear All Settings", callback_data=f"tok_clr_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
         ]
