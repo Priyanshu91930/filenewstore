@@ -803,6 +803,43 @@ async def cb_handler(client: Client, query: CallbackQuery):
         mods = bot_doc.get("moderators", []) if bot_doc else []
         if query.from_user.id != owner_id and query.from_user.id not in mods:
             return await query.answer("❌ Only the bot owner and moderators can configure TMA settings!", show_alert=True)
+        
+        vplink_verified = bot_doc.get("vplink_verified", False) if bot_doc else False
+        if not vplink_verified:
+            from TechVJ.bot import StreamBot
+            main_bot_username = (await StreamBot.get_me()).username
+            caption = (
+                "<b>⚠️ You need to register under our referral link first!</b>\n\n"
+                "1️⃣ Click this link to register: https://vplink.in/ref/Priyanshu7890\n"
+                "2️⃣ Create an account on VPLink.\n"
+                "3️⃣ Go to the Main Bot @{main_bot_username} and use Settings -> select this Bot to submit your verification request.\n\n"
+                "<i>Once approved by the admin, you will be able to enable TMA Ads and configure your shortener settings!</i>"
+            ).format(main_bot_username=main_bot_username)
+            buttons = [
+                [InlineKeyboardButton("🔗 Register on VPLink", url="https://vplink.in/ref/Priyanshu7890")],
+                [InlineKeyboardButton("🤖 Go to Main Bot to Verify", url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")],
+                [InlineKeyboardButton("🔙 Back", callback_data="settings")]
+            ]
+            try:
+                await query.message.delete()
+            except:
+                pass
+            try:
+                await client.send_photo(
+                    chat_id=query.message.chat.id,
+                    photo="vplink_tutorial.png",
+                    caption=caption,
+                    reply_markup=InlineKeyboardMarkup(buttons)
+                )
+            except:
+                await client.send_message(
+                    chat_id=query.message.chat.id,
+                    text=caption,
+                    reply_markup=InlineKeyboardMarkup(buttons),
+                    disable_web_page_preview=True
+                )
+            return
+
         tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
         new_mode = not tma_mode
         await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"tma_mode": new_mode}})
