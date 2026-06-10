@@ -863,11 +863,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if photo and not photo.startswith("http"): photo = None
         if not photo: photo = random.choice(PICS)
 
-        await client.edit_message_media(
-            query.message.chat.id, 
-            query.message.id, 
-            InputMediaPhoto(photo)
-        )
+        try:
+            await client.edit_message_media(
+                query.message.chat.id, 
+                query.message.id, 
+                InputMediaPhoto(photo)
+            )
+        except Exception:
+            pass
         await query.message.edit_text(
             text=script.CLONE_START_TXT.format(query.from_user.mention, me.mention),
             reply_markup=reply_markup,
@@ -888,11 +891,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if photo and not photo.startswith("http"): photo = None
         if not photo: photo = random.choice(PICS)
 
-        await client.edit_message_media(
-            query.message.chat.id, 
-            query.message.id, 
-            InputMediaPhoto(photo)
-        )
+        try:
+            await client.edit_message_media(
+                query.message.chat.id, 
+                query.message.id, 
+                InputMediaPhoto(photo)
+            )
+        except Exception:
+            pass
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
             text=script.CHELP_TXT,
