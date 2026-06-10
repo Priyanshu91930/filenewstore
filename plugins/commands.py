@@ -2010,3 +2010,185 @@ async def del_vip_handler(client, message):
         await message.reply_text("<b>❌ Invalid User ID. Must be integer.</b>")
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+# Don't Remove Credit Tg - @viralverse0909
+# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
+# Ask Doubt on telegram @Brainaxe190
+
+@Client.on_message(filters.command("revoke_vplink") & filters.private & filters.user(ADMINS))
+async def revoke_vplink_handler(client, message):
+    """Revoke VPLink referral verification for a clone bot.
+    Usage: /revoke_vplink [bot_id]
+    """
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "<b>📋 Usage:</b> <code>/revoke_vplink [bot_id]</code>\n\n"
+            "Removes the VPLink referral verification from a clone bot.\n"
+            "Use <code>/list_vplink</code> to see all verified bots and their IDs."
+        )
+
+    try:
+        bot_id = int(message.command[1].strip())
+    except ValueError:
+        return await message.reply_text("<b>❌ Invalid Bot ID. Must be a number.</b>")
+
+    bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+    if not bot:
+        return await message.reply_text(f"<b>❌ No clone bot found with ID <code>{bot_id}</code>.</b>")
+
+    vplink_verified = bot.get("vplink_verified", False)
+    bot_username = bot.get("username", "unknown")
+    owner_id = bot.get("user_id")
+
+    if not vplink_verified:
+        return await message.reply_text(
+            f"<b>⚠️ @{bot_username} (<code>{bot_id}</code>) is not VPLink verified. Nothing to revoke.</b>"
+        )
+
+    # Revoke the verification
+    await clone_mongo_db.bots.update_one(
+        {"bot_id": bot_id},
+        {"$set": {"vplink_verified": False}}
+    )
+
+    # Also clear any approved vplink_requests so owner can re-submit fresh
+    await clone_mongo_db.vplink_requests.delete_many({"bot_id": bot_id})
+
+    await message.reply_text(
+        f"<b>✅ VPLink verification revoked!\n\n"
+        f"🤖 Bot: @{bot_username} (<code>{bot_id}</code>)\n\n"
+        f"The bot owner must re-register under the referral link and submit a new verification request to use TMA Ads or set a shortener API.</b>"
+    )
+
+    # Notify the clone bot owner
+    if owner_id:
+        try:
+            from plugins.clone import running_clones
+            clone_client = running_clones.get(bot_id, client)
+            await clone_client.send_message(
+                chat_id=owner_id,
+                text="<b>⚠️ Your VPLink referral verification has been revoked by the admin.\n\n"
+                     "TMA Ads and shortener API settings have been disabled for your bot.\n"
+                     "To re-enable, register using the referral link and submit a new verification request from your bot's settings.</b>"
+            )
+        except Exception as e:
+            logger.error(f"Could not notify clone bot owner {owner_id}: {e}")
+
+
+@Client.on_message(filters.command("list_vplink") & filters.private & filters.user(ADMINS))
+async def list_vplink_handler(client, message):
+    """List clone bots and their VPLink verification status.
+    Usage:
+      /list_vplink           - shows all verified bots
+      /list_vplink all       - shows all bots (verified + unverified)
+      /list_vplink pending   - shows pending verification requests
+    """
+    mode = message.command[1].lower() if len(message.command) > 1 else "verified"
+
+    if mode == "pending":
+        pending = []
+        async for req in clone_mongo_db.vplink_requests.find({"status": "pending"}).sort("requested_at", 1):
+            pending.append(req)
+
+        if not pending:
+            return await message.reply_text("<b>📭 No pending VPLink verification requests.</b>")
+
+        from datetime import datetime
+        text = f"<b>⏳ Pending VPLink Requests ({len(pending)}):</b>\n\n"
+        for i, req in enumerate(pending, 1):
+            req_time = datetime.fromtimestamp(req.get("requested_at", 0)).strftime('%d/%m %H:%M') if req.get("requested_at") else "N/A"
+            text += (
+                f"{i}. 👤 {req.get('user_mention', 'Unknown')} (<code>{req.get('user_id')}</code>)\n"
+                f"   🤖 @{req.get('username', 'N/A')} (ID: <code>{req.get('bot_id')}</code>)\n"
+                f"   📅 {req_time}\n"
+                f"   ▸ Approve: <code>/approve_vplink {req.get('bot_id')}</code>\n\n"
+            )
+        return await message.reply_text(text, parse_mode=enums.ParseMode.HTML, disable_web_page_preview=True)
+
+    query_filter = {} if mode == "all" else {"vplink_verified": True}
+    verified_bots = []
+    async for bot in clone_mongo_db.bots.find(query_filter).sort("bot_id", 1):
+        verified_bots.append(bot)
+
+    if not verified_bots:
+        label = "verified" if mode == "verified" else "registered"
+        return await message.reply_text(f"<b>📭 No {label} clone bots found.</b>")
+
+    label = "Verified" if mode == "verified" else "All"
+    text = f"<b>{'✅' if mode == 'verified' else '📋'} {label} VPLink Bots ({len(verified_bots)}):</b>\n\n"
+
+    for i, bot in enumerate(verified_bots, 1):
+        is_verified = "✅" if bot.get("vplink_verified") else "❌"
+        text += (
+            f"{i}. {is_verified} @{bot.get('username', 'N/A')}\n"
+            f"   🆔 Bot ID: <code>{bot.get('bot_id')}</code>\n"
+            f"   👤 Owner: <code>{bot.get('user_id')}</code>\n"
+            f"   ▸ Revoke: <code>/revoke_vplink {bot.get('bot_id')}</code>\n\n"
+        )
+
+    # Send in chunks if too long
+    if len(text) > 4000:
+        chunks = []
+        current = ""
+        for line in text.split("\n"):
+            if len(current) + len(line) + 1 > 4000:
+                chunks.append(current)
+                current = line + "\n"
+            else:
+                current += line + "\n"
+        if current:
+            chunks.append(current)
+        for chunk in chunks:
+            await message.reply_text(chunk, parse_mode=enums.ParseMode.HTML)
+    else:
+        await message.reply_text(text, parse_mode=enums.ParseMode.HTML)
+
+
+@Client.on_message(filters.command("approve_vplink") & filters.private & filters.user(ADMINS))
+async def approve_vplink_cmd_handler(client, message):
+    """Directly approve a VPLink verification request by bot_id from command.
+    Usage: /approve_vplink [bot_id]
+    """
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "<b>📋 Usage:</b> <code>/approve_vplink [bot_id]</code>\n\n"
+            "Use <code>/list_vplink pending</code> to see pending requests."
+        )
+
+    try:
+        bot_id = int(message.command[1].strip())
+    except ValueError:
+        return await message.reply_text("<b>❌ Invalid Bot ID. Must be a number.</b>")
+
+    import time
+    bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+    if not bot:
+        return await message.reply_text(f"<b>❌ No clone bot found with ID <code>{bot_id}</code>.</b>")
+
+    if bot.get("vplink_verified"):
+        return await message.reply_text(f"<b>⚠️ @{bot.get('username', bot_id)} is already verified!</b>")
+
+    req = await clone_mongo_db.vplink_requests.find_one({"bot_id": bot_id})
+
+    await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"vplink_verified": True}})
+    if req:
+        await clone_mongo_db.vplink_requests.update_one(
+            {"bot_id": bot_id},
+            {"$set": {"status": "approved", "processed_at": time.time()}}
+        )
+
+    await message.reply_text(
+        f"<b>✅ @{bot.get('username', bot_id)} (<code>{bot_id}</code>) has been VPLink verified!</b>"
+    )
+
+    owner_id = req.get("user_id") if req else bot.get("user_id")
+    if owner_id:
+        try:
+            from plugins.clone import running_clones
+            clone_client = running_clones.get(bot_id, client)
+            await clone_client.send_message(
+                chat_id=owner_id,
+                text="<b>✅ You're verified! You can now enable TMA Ads and set your API key.\n\nUse /setting in your clone bot to configure it.</b>"
+            )
+        except Exception as e:
+            logger.error(f"Could not notify owner {owner_id}: {e}")
