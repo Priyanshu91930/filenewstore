@@ -1055,8 +1055,10 @@ async def photo_message_handler(client, message):
                     await client.send_message(
                         chat_id=rcpt,
                         text=f"<b>📩 New VIP Payment Receipt Screenshot!</b>\n\n"
-                             f"👤 <b>From User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
-                             f"To activate, use: `/addvip {message.from_user.id} [days]`"
+                             f"👤 <b>From User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n\n"
+                             f"➜ To activate: `/addvip {message.from_user.id} [days]`\n"
+                             f"➜ To decline: `/declinevip {message.from_user.id} [reason]`\n"
+                             f"➜ To message: `/msg {message.from_user.id} [text]`"
                     )
                 except Exception as e:
                     logger.error(f"Failed to forward screenshot to {rcpt}: {e}")
@@ -1146,5 +1148,63 @@ async def del_vip_handler(client, message):
             
     except ValueError:
         await message.reply_text("<b>❌ Invalid User ID. Must be integer.</b>")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+@Client.on_message(filters.command("declinevip") & filters.private)
+async def decline_vip_handler(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+        
+    if len(message.command) < 2:
+        return await message.reply_text("<b>Usage:</b> `/declinevip [user_id] [optional reason]`")
+        
+    try:
+        user_id = int(message.command[1])
+        reason = "Invalid/Fake screenshot"
+        if len(message.command) >= 3:
+            reason = message.text.split(None, 2)[2]
+            
+        await client.send_message(
+            chat_id=user_id,
+            text=f"❌ <b>Your VIP payment verification has been declined.</b>\n\n"
+                 f"➜ <b>Reason:</b> {reason}\n\n"
+                 f"If you believe this is a mistake, please contact support."
+        )
+        await message.reply_text(f"<b>❌ VIP verification declined and user <code>{user_id}</code> notified.</b>")
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid User ID. Must be an integer.</b>")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+@Client.on_message(filters.command("msg") & filters.private)
+async def msg_user_handler(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+        
+    if len(message.command) < 3:
+        return await message.reply_text("<b>Usage:</b> `/msg [user_id] [message]`")
+        
+    try:
+        user_id = int(message.command[1])
+        msg_text = message.text.split(None, 2)[2]
+        
+        await client.send_message(
+            chat_id=user_id,
+            text=msg_text
+        )
+        await message.reply_text(f"<b>✅ Message sent to User <code>{user_id}</code> successfully!</b>")
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid User ID. Must be an integer.</b>")
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
