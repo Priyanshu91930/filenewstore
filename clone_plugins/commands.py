@@ -1208,3 +1208,42 @@ async def msg_user_handler(client, message):
         await message.reply_text("<b>❌ Invalid User ID. Must be an integer.</b>")
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+@Client.on_message(filters.command("listvip") & filters.private)
+async def list_vip_handler(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+        
+    try:
+        vip_list = []
+        async for user in mongo_db.vip_users.find({"bot_id": me.id}):
+            vip_list.append(user)
+            
+        if not vip_list:
+            return await message.reply_text("<b>📭 No active VIP users found.</b>")
+            
+        from datetime import datetime
+        text = f"<b>✨ <u>Active VIP Users ({len(vip_list)}):</u></b>\n\n"
+        for i, user in enumerate(vip_list, 1):
+            expiry = user.get("expiry")
+            if expiry:
+                expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                expiry_str = "Lifetime"
+            text += f"{i}. User ID: <code>{user['user_id']}</code>\n" \
+                    f"   Expiry: <code>{expiry_str}</code>\n\n"
+                    
+        # Send in chunks if too long
+        if len(text) > 4000:
+            chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+            for chunk in chunks:
+                await message.reply_text(chunk)
+        else:
+            await message.reply_text(text)
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")

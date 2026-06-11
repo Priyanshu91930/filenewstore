@@ -2076,6 +2076,38 @@ async def msg_user_handler(client, message):
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
 
+@Client.on_message(filters.command("listvip") & filters.private & filters.user(ADMINS))
+async def list_vip_handler(client, message):
+    try:
+        me = client.me or await client.get_me()
+        vip_list = []
+        async for user in clone_mongo_db.vip_users.find({"bot_id": me.id}):
+            vip_list.append(user)
+            
+        if not vip_list:
+            return await message.reply_text("<b>📭 No active VIP users found.</b>")
+            
+        from datetime import datetime
+        text = f"<b>✨ <u>Active VIP Users ({len(vip_list)}):</u></b>\n\n"
+        for i, user in enumerate(vip_list, 1):
+            expiry = user.get("expiry")
+            if expiry:
+                expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                expiry_str = "Lifetime"
+            text += f"{i}. User ID: <code>{user['user_id']}</code>\n" \
+                    f"   Expiry: <code>{expiry_str}</code>\n\n"
+                    
+        # Send in chunks if too long
+        if len(text) > 4000:
+            chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+            for chunk in chunks:
+                await message.reply_text(chunk)
+        else:
+            await message.reply_text(text)
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")
+
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
