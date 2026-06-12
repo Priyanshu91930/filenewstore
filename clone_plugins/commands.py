@@ -50,6 +50,27 @@ def get_size(size):
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
 
+async def get_invalid_link_btn(client, user_id, data):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
+    if tma_mode:
+        tma_app_url = f"{URL.rstrip('/')}/tma"
+        file_data = ""
+        if data:
+            if data.startswith("unlock-"):
+                parts = data.split("-", 4)
+                file_data = parts[4] if len(parts) >= 5 else ""
+            elif data.startswith("verify-"):
+                parts = data.split("-", 3)
+                file_data = parts[3] if len(parts) == 4 else ""
+            elif not data.startswith("tma-") and not data.startswith("verify-") and not data.startswith("unlock-"):
+                file_data = data
+        tma_link = await get_tma_link(client, user_id, tma_app_url, file_data=file_data, bot_username=me.username)
+        return InlineKeyboardMarkup([[InlineKeyboardButton("Click Here to Get Verification", web_app=WebAppInfo(url=tma_link))]])
+    else:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]])
+
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     me = client.me or await client.get_me()
@@ -209,9 +230,8 @@ async def start(client, message):
             if str(message.from_user.id) == userid_str:
                 if validate_tma_token(message.from_user.id, token):
                     if await is_token_consumed(token):
-                        me = client.me or await client.get_me()
-                        btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
-                        return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
+                        reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
+                        return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=reply_markup, protect_content=True)
 
                     # Bypass Check: If verified in less than 2.5 min (150 seconds)
                     try:
@@ -243,15 +263,13 @@ async def start(client, message):
                         protect_content=True
                     )
                 else:
-                    me = client.me or await client.get_me()
-                    btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
-                    return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
+                    reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
+                    return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=reply_markup, protect_content=True)
             else:
                 return await message.reply_text(text="<b>This verification link belongs to another user!</b>", protect_content=True)
         else:
-            me = client.me or await client.get_me()
-            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
-            return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
+            reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
+            return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=reply_markup, protect_content=True)
 
     if data.split("-", 1)[0] == "tma":
         parts = data.split("-")
@@ -259,11 +277,10 @@ async def start(client, message):
             tma_uid = int(parts[1])
             tma_token = "-".join(parts[2:])
             if message.from_user.id != tma_uid:
-                me = client.me or await client.get_me()
-                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
                 return await message.reply_text(
                     text="<b>This link is not valid, either it is used or broken.</b>",
-                    reply_markup=InlineKeyboardMarkup(btn),
+                    reply_markup=reply_markup,
                     protect_content=True
                 )
             
@@ -289,11 +306,10 @@ async def start(client, message):
                 logger.error(f"Error in bypass check: {e}")
 
             if await is_token_consumed(tma_token):
-                me = client.me or await client.get_me()
-                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
                 return await message.reply_text(
                     text="<b>This link is not valid, either it is used or broken.</b>",
-                    reply_markup=InlineKeyboardMarkup(btn),
+                    reply_markup=reply_markup,
                     protect_content=True
                 )
 
@@ -305,11 +321,10 @@ async def start(client, message):
                     protect_content=True
                 )
             else:
-                me = client.me or await client.get_me()
-                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
                 await message.reply_text(
                     text="<b>This link is not valid, either it is used or broken.</b>",
-                    reply_markup=InlineKeyboardMarkup(btn),
+                    reply_markup=reply_markup,
                     protect_content=True
                 )
         return
@@ -321,20 +336,18 @@ async def start(client, message):
             _, userid, token = parts[:3]
             file_data = parts[3] if len(parts) == 4 else None
         else:
-            me = client.me or await client.get_me()
-            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+            reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
             return await message.reply_text(
                 text="<b>This link is not valid, either it is used or broken.</b>",
-                reply_markup=InlineKeyboardMarkup(btn),
+                reply_markup=reply_markup,
                 protect_content=True
             )
             
         if str(message.from_user.id) != str(userid):
-            me = client.me or await client.get_me()
-            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+            reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
             return await message.reply_text(
                 text="<b>This link is not valid, either it is used or broken.</b>",
-                reply_markup=InlineKeyboardMarkup(btn),
+                reply_markup=reply_markup,
                 protect_content=True
             )
         
@@ -349,11 +362,10 @@ async def start(client, message):
                 return await start(client, message)
             return
         else:
-            me = client.me or await client.get_me()
-            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+            reply_markup = await get_invalid_link_btn(client, message.from_user.id, data)
             return await message.reply_text(
                 text="<b>This link is not valid, either it is used or broken.</b>",
-                reply_markup=InlineKeyboardMarkup(btn),
+                reply_markup=reply_markup,
                 protect_content=True
             )
 
