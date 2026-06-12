@@ -274,8 +274,12 @@ async def start(client, message):
             except Exception as e:
                 logger.error(f"Error in bypass check: {e}")
 
+            if is_token_consumed(tma_token):
+                return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
+
             ok = await verify_tma_user(tma_uid, tma_token)
             if ok:
+                consume_token(tma_token)
                 await message.reply_text(
                     text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=(bot_doc.get('token_timeout', TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT) // 3600),
                     protect_content=True
