@@ -499,7 +499,7 @@ async def start(client, message):
         is_autodel = bot_owner.get("auto_delete_enabled", True) if bot_owner else True
         if is_autodel:
             del_time = bot_owner.get("auto_delete_time", 5) if bot_owner else 5
-            k = await msg.reply(f"<b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{del_time} mins</u> 🫥 <i></b>(Due to Copyright Issues)</i>.\n\n<b><i>Please forward this File/Video to your Saved Messages and Start Download there</i></b>",quote=True)
+            k = await msg.reply(f"<b><u>❗️❗️❗️IMPORTANT❗️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{del_time} mins</u> 🫥 <i>(Due to Copyright Issues)</i>.\n\nPlease forward this File/Video to your Saved Messages and Start Download there</b>",quote=True)
             
             async def auto_delete_task(m, warning_msg, delay):
                 await asyncio.sleep(delay * 60)
