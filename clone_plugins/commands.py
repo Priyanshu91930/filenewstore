@@ -215,7 +215,7 @@ async def start(client, message):
                             elapsed = time.time() - ts_val
                             if elapsed < 60:
                                 me = client.me or await client.get_me()
-                                plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                                plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
                                 upsell_btn = []
                                 if plan_cfg:
                                     upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
@@ -260,7 +260,7 @@ async def start(client, message):
                 elapsed = time.time() - ts_val
                 if elapsed < 60:
                     me = client.me or await client.get_me()
-                    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                    plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
                     upsell_btn = []
                     if plan_cfg:
                         upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
