@@ -92,32 +92,39 @@ async def tma_route_handler(request: web.Request):
                 else:
                     decode_file_id = decoded
                 
-                msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
-                if msg and msg.media:
-                    media = getattr(msg, msg.media.value)
-                    raw_name = getattr(media, "file_name", "Your File")
-                    # Format name
-                    file_name = ' '.join(filter(lambda x: not x.startswith('http') and not x.startswith('@') and not x.startswith('www.'), raw_name.replace("[", "").replace("]", "").replace("(", "").replace(")", "").split()))
-                    
-                    # Calculate size
-                    size_bytes = float(media.file_size)
-                    units = ["Bytes", "KB", "MB", "GB"]
-                    i = 0
-                    while size_bytes >= 1024.0 and i < len(units) - 1:
-                        i += 1
-                        size_bytes /= 1024.0
-                    file_size = "%.2f %s" % (size_bytes, units[i])
-                    
-                    # Set emoji based on type
-                    mtype = msg.media.value
-                    if mtype in ["video", "animation"]:
-                        file_emoji = "🎬"
-                    elif mtype == "audio":
-                        file_emoji = "🎵"
-                    elif mtype == "photo":
-                        file_emoji = "🖼️"
-                    else:
-                        file_emoji = "📄"
+                if decode_file_id.isdigit():
+                    msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
+                    if msg and msg.media:
+                        media = getattr(msg, msg.media.value)
+                        raw_name = getattr(media, "file_name", "Your File")
+                        # Format name
+                        file_name = ' '.join(filter(lambda x: not x.startswith('http') and not x.startswith('@') and not x.startswith('www.'), raw_name.replace("[", "").replace("]", "").replace("(", "").replace(")", "").split()))
+                        
+                        # Calculate size
+                        size_bytes = float(media.file_size)
+                        units = ["Bytes", "KB", "MB", "GB"]
+                        i = 0
+                        while size_bytes >= 1024.0 and i < len(units) - 1:
+                            i += 1
+                            size_bytes /= 1024.0
+                        file_size = "%.2f %s" % (size_bytes, units[i])
+                        
+                        # Set emoji based on type
+                        mtype = msg.media.value
+                        if mtype in ["video", "animation"]:
+                            file_emoji = "🎬"
+                        elif mtype == "audio":
+                            file_emoji = "🎵"
+                        elif mtype == "photo":
+                            file_emoji = "🖼️"
+                        else:
+                            file_emoji = "📄"
+                else:
+                    from plugins.clone import async_mongo_db
+                    file_doc = await async_mongo_db.clone_files.find_one({"_id": decode_file_id})
+                    if file_doc:
+                        file_name = "Cloned File"
+                        file_emoji = "📁"
             except Exception as e:
                 logging.error(f"Error fetching file details: {e}")
 

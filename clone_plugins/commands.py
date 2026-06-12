@@ -390,7 +390,7 @@ async def start(client, message):
                     if plan_cfg:
                         btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                     return await message.reply_text(
-                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_owner.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_owner else TMA_TIMEOUT // 3600),
+                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_doc.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_doc else TMA_TIMEOUT // 3600),
                         protect_content=True,
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
