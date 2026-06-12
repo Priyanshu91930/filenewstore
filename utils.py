@@ -126,7 +126,15 @@ async def is_subscribed_universal(bot, message):
 
 # ─── Telegram Mini App (Monetag) Verification Helpers ───────────────────────
 
-TMA_VERIFIED = {}  # {user_id: iso_date_string}
+TMA_VERIFIED = {}  # {user_id: unix_timestamp of verification}
+
+# Global TMA timeout in seconds. Can be overridden per-bot via token_timeout in DB.
+# Default: 10800 = 3 hours. Change this to adjust the global default.
+try:
+    from config import TMA_TIMEOUT as _CFG_TMA_TIMEOUT
+except ImportError:
+    _CFG_TMA_TIMEOUT = 10800
+TMA_TIMEOUT = _CFG_TMA_TIMEOUT  # seconds
 
 def _generate_tma_token(user_id: int) -> str:
     """Generate a short-lived HMAC token to verify the TMA ad completion."""
@@ -135,12 +143,13 @@ def _generate_tma_token(user_id: int) -> str:
     sig = hmac.new(TMA_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
     return f"{ts}-{sig}"
 
-def validate_tma_token(user_id: int, token: str, max_age_sec: int = 10800) -> bool:
+def validate_tma_token(user_id: int, token: str, max_age_sec: int = 0) -> bool:
     """Validate a TMA token. Returns True if the token is valid and not expired."""
+    _max_age = max_age_sec or TMA_TIMEOUT
     try:
         ts_str, sig = token.split("-", 1)
         ts = int(ts_str)
-        if int(time.time()) - ts > max_age_sec:
+        if int(time.time()) - ts > _max_age:
             return False
         raw = f"{user_id}:{ts_str}"
         expected_sig = hmac.new(TMA_SECRET_KEY.encode(), raw.encode(), hashlib.sha256).hexdigest()[:16]
@@ -167,19 +176,23 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "", bot
         url += f"&file={quote(file_data)}"
     return url
 
-async def verify_tma_user(user_id: int, token: str) -> bool:
-    """Validate the token and mark the user as TMA-verified for 3 hours."""
-    if not validate_tma_token(user_id, token):
+async def verify_tma_user(user_id: int, token: str, timeout: int = 0) -> bool:
+    """Validate the token and mark the user as TMA-verified.
+    timeout: validity in seconds (0 = use global TMA_TIMEOUT).
+    """
+    if not validate_tma_token(user_id, token, max_age_sec=timeout or TMA_TIMEOUT):
         return False
     TMA_VERIFIED[user_id] = time.time()
     return True
 
-async def check_tma_verification(user_id: int) -> bool:
-    """Return True if the user already completed TMA verification within the last 3 hours.
+async def check_tma_verification(user_id: int, timeout: int = 0) -> bool:
+    """Return True if the user already completed TMA verification within the configured window.
+    timeout: override validity in seconds (0 = use global TMA_TIMEOUT).
     """
+    tmo = timeout or TMA_TIMEOUT
     if user_id in TMA_VERIFIED:
         verified_time = TMA_VERIFIED[user_id]
-        if time.time() - verified_time < 3 * 3600:
+        if time.time() - verified_time < tmo:
             return True
     return False
 

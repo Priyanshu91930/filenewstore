@@ -76,6 +76,10 @@ MONETAG_ZONE_ID = environ.get("MONETAG_ZONE_ID", "")  # Your Monetag Ad Zone ID 
 # Secret key used to sign TMA verification tokens (change this to something random!)
 TMA_SECRET_KEY = environ.get("TMA_SECRET_KEY", "tma-secret-key-change-this!")
 
+# TMA Verification validity window in seconds (default 10800 = 3 hours)
+# Change this to 3600 for 1 hour, 7200 for 2 hours, etc.
+TMA_TIMEOUT = int(environ.get("TMA_TIMEOUT", "10800"))
+
 # Website Info:
 WEBSITE_URL_MODE = is_enabled(environ.get('WEBSITE_URL_MODE', 'False'), False) # Set True or False
 

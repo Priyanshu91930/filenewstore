@@ -69,13 +69,13 @@ async def tma_route_handler(request: web.Request):
     remaining_time = 0
     
     if uid:
-        from utils import check_tma_verification, TMA_VERIFIED
+        from utils import check_tma_verification, TMA_VERIFIED, TMA_TIMEOUT
         import time
         try:
             is_verified = await check_tma_verification(int(uid))
             if is_verified and int(uid) in TMA_VERIFIED:
                 elapsed = time.time() - TMA_VERIFIED[int(uid)]
-                remaining_time = max(0, int((3 * 3600) - elapsed))
+                remaining_time = max(0, int(TMA_TIMEOUT - elapsed))
         except Exception as e:
             logging.error(f"Error checking verification: {e}")
     

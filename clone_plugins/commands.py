@@ -15,7 +15,7 @@ from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait, UserNotParticipant
 from config import BOT_USERNAME, ADMINS, LOG_CHANNEL
 from config import PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL
-from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip
+from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT
 import config
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto, WebAppInfo
 import re
@@ -214,7 +214,7 @@ async def start(client, message):
                         data = file_data
                         await verify_tma_user(message.from_user.id, token)
                         await message.reply_text(
-                            text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
+                            text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
                             protect_content=True
                         )
                     else:
@@ -236,7 +236,7 @@ async def start(client, message):
             ok = await verify_tma_user(tma_uid, tma_token)
             if ok:
                 await message.reply_text(
-                    text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
+                    text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
                     protect_content=True
                 )
             else:
@@ -289,7 +289,7 @@ async def start(client, message):
                     if plan_cfg:
                         btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                     return await message.reply_text(
-                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_owner.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_owner else TMA_TIMEOUT // 3600),
                         protect_content=True,
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
@@ -330,6 +330,23 @@ async def start(client, message):
                         logger.error(f"Batch copy error: {e}")
                 
                 await sts.delete()
+                # ── VIP Upsell for TMA-verified non-VIP users ──
+                if tma_mode and not user_is_vip:
+                    try:
+                        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                        upsell_btn = []
+                        if plan_cfg:
+                            upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
+                        else:
+                            upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
+                        await client.send_message(
+                            chat_id=message.from_user.id,
+                            text=script.TMA_UPSELL_TEXT,
+                            reply_markup=InlineKeyboardMarkup(upsell_btn) if upsell_btn else None,
+                            parse_mode=enums.ParseMode.HTML
+                        )
+                    except Exception:
+                        pass
                 return
         except Exception as e:
             logger.error(f"Batch processing error: {e}")
@@ -377,7 +394,9 @@ async def start(client, message):
         if user_is_vip:
             is_verified = True
         else:
-            is_verified = await check_tma_verification(message.from_user.id)
+            # Use bot's configured token_timeout (in seconds) if set, else global default
+            bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
+            is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout)
         
         logger.info(f"User verified status: {is_verified}")
         if not is_verified and not is_unlocked:
@@ -388,7 +407,7 @@ async def start(client, message):
             if plan_cfg:
                 btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
             return await message.reply_text(
-                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_owner.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_owner else TMA_TIMEOUT // 3600),
                 protect_content=True,
                 reply_markup=InlineKeyboardMarkup(btn)
             )
@@ -438,6 +457,25 @@ async def start(client, message):
                 except: pass
             
             asyncio.create_task(auto_delete_task(msg, k, del_time))
+        # ── VIP Upsell for TMA-verified non-VIP users ──
+        tma_mode_check = bot_owner.get("tma_mode", False) if bot_owner else False
+        user_vip_check = await is_vip(me.id, message.from_user.id)
+        if tma_mode_check and not user_vip_check:
+            try:
+                plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                upsell_btn = []
+                if plan_cfg:
+                    upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
+                else:
+                    upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
+                await client.send_message(
+                    chat_id=message.from_user.id,
+                    text=script.TMA_UPSELL_TEXT,
+                    reply_markup=InlineKeyboardMarkup(upsell_btn) if upsell_btn else None,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            except Exception:
+                pass
         return
     except Exception as e:
         logger.error(f"Clone bot caption/auto-delete error: {e}")
@@ -657,20 +695,22 @@ async def validity_command(client, message):
     if message.from_user.id != owner_id and message.from_user.id not in mods:
         return await message.reply("<b>❌ Only the bot owner and moderators can access this command.</b>")
 
-    from utils import TMA_VERIFIED
+    from utils import TMA_VERIFIED, TMA_TIMEOUT
     import time
     
     text = "<b>📅 <u>Active Verifications</u></b>\n\n"
     
-    # 1. TMA Verifications (3 Hours)
+    # 1. TMA Verifications (dynamic validity from bot config or global TMA_TIMEOUT)
     tma_count = 0
-    tma_text = "<b>⚡ TMA Verifications (3-Hour Validity):</b>\n"
+    bot_tma_timeout = bot_doc.get("token_timeout", TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT
+    tma_hours = bot_tma_timeout // 3600
+    tma_text = f"<b>⚡ TMA Verifications ({tma_hours}-Hour Validity):</b>\n"
     current_time = time.time()
     for uid, verified_time in list(TMA_VERIFIED.items()):
         elapsed = current_time - verified_time
-        if elapsed < 3 * 3600:
+        if elapsed < bot_tma_timeout:
             tma_count += 1
-            remaining = int((3 * 3600) - elapsed)
+            remaining = int(bot_tma_timeout - elapsed)
             hours = remaining // 3600
             mins = (remaining % 3600) // 60
             tma_text += f"• <code>{uid}</code> (Remaining: {hours}h {mins}m)\n"

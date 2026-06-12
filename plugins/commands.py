@@ -13,7 +13,7 @@ from pyrogram import Client, filters, enums
 from plugins.users_api import get_user, update_user_info
 from pyrogram.errors import ChatAdminRequired, FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, CallbackQuery, Message, WebAppInfo
-from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification, is_vip
+from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification, is_vip, TMA_TIMEOUT
 from config import *
 from config import TMA_MODE, MONETAG_ZONE_ID, URL
 import config
@@ -175,7 +175,7 @@ async def start(client, message):
                             await verify_tma_user(message.from_user.id, token)
                             # Notify user of successful verification
                             await message.reply_text(
-                                text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
+                                text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
                                 protect_content=True
                             )
                         else:
@@ -324,7 +324,7 @@ async def start(client, message):
                 ok = await verify_tma_user(tma_uid, tma_token)
                 if ok:
                     await message.reply_text(
-                        text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
+                        text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
                         protect_content=True
                     )
                 else:
@@ -344,7 +344,7 @@ async def start(client, message):
                         if plan_cfg:
                             btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                         await message.reply_text(
-                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
                             protect_content=True,
                             reply_markup=InlineKeyboardMarkup(btn)
                         )
@@ -436,6 +436,24 @@ async def start(client, message):
                 filesarr.append(msg)
                 await asyncio.sleep(1) 
             await sts.delete()
+            # ── VIP Upsell for TMA-verified non-VIP users ──
+            if config.TMA_MODE and not user_is_vip:
+                try:
+                    me = client.me or await client.get_me()
+                    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                    upsell_btn = []
+                    if plan_cfg:
+                        upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
+                    else:
+                        upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
+                    await client.send_message(
+                        chat_id=message.from_user.id,
+                        text=script.TMA_UPSELL_TEXT,
+                        reply_markup=InlineKeyboardMarkup(upsell_btn) if upsell_btn else None,
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                except Exception:
+                    pass
             if AUTO_DELETE_MODE == True:
                 k = await client.send_message(chat_id = message.from_user.id, text=f"<b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{AUTO_DELETE} minutes</u> 🫥 <i></b>(Due to Copyright Issues)</i>.\n\n<b><i>Please forward this File/Video to your Saved Messages and Start Download there</b>")
                 await asyncio.sleep(AUTO_DELETE_TIME)
@@ -467,7 +485,7 @@ async def start(client, message):
                 if plan_cfg:
                     btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                 await message.reply_text(
-                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
                     protect_content=True,
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
@@ -515,6 +533,23 @@ async def start(client, message):
                 del_msg = await msg.copy(chat_id=message.from_user.id, caption=f_caption, reply_markup=reply_markup, protect_content=False)
             else:
                 del_msg = await msg.copy(chat_id=message.from_user.id, protect_content=False)
+            # ── VIP Upsell for TMA-verified non-VIP users ──
+            if config.TMA_MODE and not user_is_vip:
+                try:
+                    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                    upsell_btn = []
+                    if plan_cfg:
+                        upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
+                    else:
+                        upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
+                    await client.send_message(
+                        chat_id=message.from_user.id,
+                        text=script.TMA_UPSELL_TEXT,
+                        reply_markup=InlineKeyboardMarkup(upsell_btn) if upsell_btn else None,
+                        parse_mode=enums.ParseMode.HTML
+                    )
+                except Exception:
+                    pass
             if AUTO_DELETE_MODE == True:
                 k = await client.send_message(chat_id = message.from_user.id, text=f"<b><u>❗️❗️❗️IMPORTANT❗️️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{AUTO_DELETE} minutes</u> 🫥 <i></b>(Due to Copyright Issues)</i>.\n\n<b><i>Please forward this File/Video to your Saved Messages and Start Download there</b>")
                 await asyncio.sleep(AUTO_DELETE_TIME)
@@ -569,20 +604,21 @@ async def stats_handler(client, message):
 
 @Client.on_message(filters.command("validity") & filters.user(ADMINS) & filters.private)
 async def tma_validity_command(client, message):
-    from utils import TMA_VERIFIED, VERIFIED
+    from utils import TMA_VERIFIED, VERIFIED, TMA_TIMEOUT
     import time
     
     text = "<b>📅 <u>Active Verifications</u></b>\n\n"
     
-    # 1. TMA Verifications (3 Hours)
+    # 1. TMA Verifications (dynamic validity from TMA_TIMEOUT)
     tma_count = 0
-    tma_text = "<b>⚡ TMA Verifications (3-Hour Validity):</b>\n"
+    tma_hours = TMA_TIMEOUT // 3600
+    tma_text = f"<b>⚡ TMA Verifications ({tma_hours}-Hour Validity):</b>\n"
     current_time = time.time()
     for uid, verified_time in list(TMA_VERIFIED.items()):
         elapsed = current_time - verified_time
-        if elapsed < 3 * 3600:
+        if elapsed < TMA_TIMEOUT:
             tma_count += 1
-            remaining = int((3 * 3600) - elapsed)
+            remaining = int(TMA_TIMEOUT - elapsed)
             hours = remaining // 3600
             mins = (remaining % 3600) // 60
             tma_text += f"• <code>{uid}</code> (Remaining: {hours}h {mins}m)\n"
@@ -911,16 +947,49 @@ async def cb_handler(client: Client, query: CallbackQuery):
         buttons.append([InlineKeyboardButton("➕ Add Clone", callback_data="add_clone")])
         buttons.append([InlineKeyboardButton("🔙 Back", callback_data="start")])
         
-        await client.edit_message_media(
-            query.message.chat.id, 
-            query.message.id, 
-            InputMediaPhoto(random.choice(PICS))
-        )
-        await query.message.edit_text(
-            text="<b>✨ <u>Manage Clone's</u>\n\nYou can now manage and create your very own identical clone bot, mirroring all my awesome features, using the given buttons.</b>",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode=enums.ParseMode.HTML
-        )
+        manage_text = "<b>✨ <u>Manage Clone's</u>\n\nYou can now manage and create your very own identical clone bot, mirroring all my awesome features, using the given buttons.</b>"
+        reply_markup = InlineKeyboardMarkup(buttons)
+        
+        if query.message.photo:
+            try:
+                await client.edit_message_media(
+                    query.message.chat.id, 
+                    query.message.id, 
+                    InputMediaPhoto(random.choice(PICS))
+                )
+                await query.message.edit_text(
+                    text=manage_text,
+                    reply_markup=reply_markup,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            except Exception:
+                try:
+                    await query.message.delete()
+                except: pass
+                me = client.me or await client.get_me()
+                await client.send_message(
+                    chat_id=query.message.chat.id,
+                    text=manage_text,
+                    reply_markup=reply_markup,
+                    parse_mode=enums.ParseMode.HTML
+                )
+        else:
+            try:
+                await query.message.edit_text(
+                    text=manage_text,
+                    reply_markup=reply_markup,
+                    parse_mode=enums.ParseMode.HTML
+                )
+            except Exception:
+                try:
+                    await query.message.delete()
+                except: pass
+                await client.send_message(
+                    chat_id=query.message.chat.id,
+                    text=manage_text,
+                    reply_markup=reply_markup,
+                    parse_mode=enums.ParseMode.HTML
+                )
 
     elif query.data.startswith("cust_"):
         bot_id = int(query.data.split("_")[-1])
@@ -1455,8 +1524,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
             return await query.answer("Bot not found!", show_alert=True)
         await query.answer("⏳ Restarting bot...", show_alert=True)
         try:
+            from plugins.clone import stop_clone, running_clones
             from pyrogram import Client as PyroClient
-            # Stop existing client if running, then restart
+            
+            # ✅ Stop the existing instance first to avoid duplicate handlers
+            await stop_clone(bot_id)
+            
+            # Start a fresh instance
             bot_token = bot["token"]
             vj = PyroClient(
                 f"clone_{bot_token[:10]}",
@@ -1466,12 +1540,17 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 in_memory=True
             )
             await vj.start()
-            await query.answer(f"✅ @{bot['username']} restarted!", show_alert=True)
+            
+            # ✅ Register the new client so future restarts/stops work correctly
+            running_clones[bot_id] = vj
+            
+            success_text = f"✅ @{bot['username']} restarted successfully!"
         except Exception as e:
-            await query.answer(f"❌ Restart failed: {str(e)[:100]}", show_alert=True)
+            success_text = f"❌ Restart failed: {str(e)[:100]}"
+        
         buttons = [[InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]]
         await query.message.edit_text(
-            text=f"<b>Restart triggered for @{bot.get('username', 'bot')}.\n\nNote: If the bot was already running, it will continue. If stopped, it has been restarted.</b>",
+            text=f"<b>{success_text}\n\nThe bot has been fully stopped and started fresh. All handlers are now running clean.</b>",
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode=enums.ParseMode.HTML
         )

@@ -164,7 +164,7 @@ Nᴀᴍᴇ - {}</b>
 Hey {}, to access this file you need to watch a short ad in our Mini App.
 
 ✅ It only takes <u>5-10 seconds</u>
-✅ Unlocks <u>all files for 3 hours</u>
+✅ Unlocks <u>all files for {hours} hour(s)</u>
 ✅ 100% safe & free
 
 Tap the button below to open the Mini App and watch the ad to unlock!</b>"""
@@ -173,9 +173,14 @@ Tap the button below to open the Mini App and watch the ad to unlock!</b>"""
 
 Hey {}, you've been successfully verified! 🎉
 
-You now have <u>unlimited access to all files for 3 hours</u>.
+You now have <u>unlimited access to all files for {hours} hour(s)</u>.
 
 Enjoy! 🚀</b>"""
+
+    TMA_UPSELL_TEXT = """<b>🚀 Enjoy your file!
+
+💡 <u>Tired of watching ads?</u>
+Get a <b>VIP Plan</b> and enjoy <b>unlimited ad-free downloads</b> forever — no waiting, no ads, instant access to every file!</b>"""
 
     TMA_EXPIRED_TEXT = """<b>⚠️ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ ᴇxᴘɪʀᴇᴅ ᴏʀ ɪɴᴠᴀʟɪᴅ
 
