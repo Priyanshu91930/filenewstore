@@ -363,12 +363,15 @@ async def start(client, message):
                     try:
                         c_id = m_data.get("channel_id")
                         m_id = m_data.get("msg_id")
-                        # Clone bot sends the message to the user
                         is_nofwd = bot_doc.get("no_forward", False) if bot_doc else False
+                        reply_markup = InlineKeyboardMarkup([[
+                            InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+                        ]])
                         await client.copy_message(
                             chat_id=message.from_user.id, 
                             from_chat_id=c_id, 
                             message_id=m_id,
+                            reply_markup=reply_markup,
                             protect_content=is_nofwd
                         )
                     except Exception as e:
@@ -460,9 +463,13 @@ async def start(client, message):
     logger.info("Proceeding to send_cached_media...")
     try:
         is_nofwd = bot_owner.get("no_forward", False) if bot_owner else False
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+        ]])
         msg = await client.send_cached_media(
             chat_id=message.from_user.id,
             file_id=file_id,
+            reply_markup=reply_markup,
             protect_content=is_nofwd
         )
         logger.info(f"send_cached_media successful (protect_content={is_nofwd})")

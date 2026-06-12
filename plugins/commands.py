@@ -462,6 +462,8 @@ async def start(client, message):
                                         InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
                                     ],[
                                         InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                                    ],[
+                                        InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
                                     ]]
                                     reply_markup=InlineKeyboardMarkup(button)
                     try:
@@ -574,6 +576,8 @@ async def start(client, message):
                                 InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
                             ],[
                                 InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                            ],[
+                                InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
                             ]]
                             reply_markup=InlineKeyboardMarkup(button)
                 del_msg = await msg.copy(chat_id=message.from_user.id, caption=f_caption, reply_markup=reply_markup, protect_content=False)

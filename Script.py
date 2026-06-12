@@ -24,9 +24,7 @@ I am {} 🤖, the most advanced and powerful File Store Bot on Telegram!
     
     CAPTION = """<b>📂 ғɪʟᴇɴᴀᴍᴇ : {file_name}
  
-⚙️ sɪᴢᴇ : {file_size}
-
-Jᴏɪɴ [ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ](https://t.me/viralverse0909)</b>""" 
+⚙️ sɪᴢᴇ : {file_size}</b>"""  
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
