@@ -14,7 +14,7 @@ from pyrogram import Client, filters, enums
 from plugins.users_api import get_user, update_user_info
 from pyrogram.errors import ChatAdminRequired, FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, CallbackQuery, Message, WebAppInfo
-from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification, is_vip, TMA_TIMEOUT, is_token_consumed, consume_token
+from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification, is_vip, TMA_TIMEOUT, is_token_consumed, consume_token, validate_tma_token
 from config import *
 from config import TMA_MODE, MONETAG_ZONE_ID, URL
 import config
