@@ -197,15 +197,28 @@ async def check_tma_verification(user_id: int, timeout: int = 0) -> bool:
     return False
 
 # ─── One-time Token Consumption Helper ────────────────────────────────────
-TMA_CONSUMED_TOKENS = set()
-
-def is_token_consumed(token: str) -> bool:
+async def is_token_consumed(token: str) -> bool:
     """Check if the TMA verification token has already been consumed."""
-    return token in TMA_CONSUMED_TOKENS
+    try:
+        from plugins.clone import async_mongo_db
+        res = await async_mongo_db.consumed_tokens.find_one({"_id": token})
+        return res is not None
+    except Exception as e:
+        logger.error(f"Error checking token consumption: {e}")
+        return False
 
-def consume_token(token: str):
+async def consume_token(token: str):
     """Consume the TMA verification token so it cannot be used again."""
-    TMA_CONSUMED_TOKENS.add(token)
+    try:
+        from plugins.clone import async_mongo_db
+        # Store with expireAt so MongoDB automatically cleans it up after 24 hours
+        await async_mongo_db.consumed_tokens.update_one(
+            {"_id": token},
+            {"$set": {"consumed_at": time.time(), "expireAt": datetime.fromtimestamp(time.time() + 86400)}},
+            upsert=True
+        )
+    except Exception as e:
+        logger.error(f"Error consuming token: {e}")
 
 async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_username: str) -> str:
     """Build the target unlock link and shorten it."""

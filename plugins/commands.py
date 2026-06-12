@@ -166,41 +166,40 @@ async def start(client, message):
                 _, userid_str, ts, sig, file_data = parts
                 token = f"{ts}-{sig}"
                 if str(message.from_user.id) == userid_str:
-                    from utils import validate_tma_token, is_token_consumed, consume_token, verify_tma_user
                     if validate_tma_token(message.from_user.id, token):
-                        if not is_token_consumed(token):
-                            # Bypass Check: If verified in less than 1 min (60 seconds)
-                            try:
-                                ts_val = int(ts)
-                                elapsed = time.time() - ts_val
-                                if elapsed < 60:
-                                    me = client.me or await client.get_me()
-                                    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
-                                    upsell_btn = []
-                                    if plan_cfg:
-                                        upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
-                                    else:
-                                        upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
-                                    return await message.reply_text(
-                                        text=script.TMA_BYPASS_WARNING_TEXT.format(message.from_user.mention),
-                                        reply_markup=InlineKeyboardMarkup(upsell_btn) if upsell_btn else None,
-                                        protect_content=True
-                                    )
-                            except Exception as e:
-                                logger.error(f"Error in bypass check: {e}")
-
-                            consume_token(token)
-                            is_unlocked = True
-                            data = file_data
-                            # Mark verified for 3 hours in database/memory
-                            await verify_tma_user(message.from_user.id, token)
-                            # Notify user of successful verification
-                            await message.reply_text(
-                                text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
-                                protect_content=True
-                            )
-                        else:
+                        if await is_token_consumed(token):
                             return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
+
+                        # Bypass Check: If verified in less than 1 min (60 seconds)
+                        try:
+                            ts_val = int(ts)
+                            elapsed = time.time() - ts_val
+                            if elapsed < 60:
+                                me = client.me or await client.get_me()
+                                plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                                upsell_btn = []
+                                if plan_cfg:
+                                    upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
+                                else:
+                                    upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
+                                return await message.reply_text(
+                                    text=script.TMA_BYPASS_WARNING_TEXT.format(message.from_user.mention),
+                                    reply_markup=InlineKeyboardMarkup(upsell_btn) if upsell_btn else None,
+                                    protect_content=True
+                                )
+                        except Exception as e:
+                            logger.error(f"Error in bypass check: {e}")
+
+                        await consume_token(token)
+                        is_unlocked = True
+                        data = file_data
+                        # Mark verified for 3 hours in database/memory
+                        await verify_tma_user(message.from_user.id, token)
+                        # Notify user of successful verification
+                        await message.reply_text(
+                            text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
+                            protect_content=True
+                        )
                     else:
                         return await message.reply_text(text="<b>This verification link has expired! Please watch the ad again.</b>", protect_content=True)
                 else:
@@ -363,12 +362,12 @@ async def start(client, message):
                 except Exception as e:
                     logger.error(f"Error in bypass check: {e}")
 
-                if is_token_consumed(tma_token):
+                if await is_token_consumed(tma_token):
                     return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
 
                 ok = await verify_tma_user(tma_uid, tma_token)
                 if ok:
-                    consume_token(tma_token)
+                    await consume_token(tma_token)
                     await message.reply_text(
                         text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
                         protect_content=True
