@@ -209,13 +209,16 @@ async def start(client, message):
             if str(message.from_user.id) == userid_str:
                 if validate_tma_token(message.from_user.id, token):
                     if await is_token_consumed(token):
-                        return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
+                        me = client.me or await client.get_me()
+                        btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                        return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
 
-                    # Bypass Check: If verified in less than 1 min (60 seconds)
+                    # Bypass Check: If verified in less than 2.5 min (150 seconds)
                     try:
                         ts_val = int(ts)
                         elapsed = time.time() - ts_val
-                        if elapsed < 60:
+                        if elapsed < 150:
+                            await consume_token(token)
                             me = client.me or await client.get_me()
                             plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
                             upsell_btn = []
@@ -240,11 +243,15 @@ async def start(client, message):
                         protect_content=True
                     )
                 else:
-                    return await message.reply_text(text="<b>This verification link has expired! Please watch the ad again.</b>", protect_content=True)
+                    me = client.me or await client.get_me()
+                    btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                    return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
             else:
                 return await message.reply_text(text="<b>This verification link belongs to another user!</b>", protect_content=True)
         else:
-            return await message.reply_text(text="<b>Invalid unlock link!</b>", protect_content=True)
+            me = client.me or await client.get_me()
+            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+            return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
 
     if data.split("-", 1)[0] == "tma":
         parts = data.split("-")
@@ -252,13 +259,20 @@ async def start(client, message):
             tma_uid = int(parts[1])
             tma_token = "-".join(parts[2:])
             if message.from_user.id != tma_uid:
-                return await message.reply_text(text=script.TMA_EXPIRED_TEXT, protect_content=True)
+                me = client.me or await client.get_me()
+                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                return await message.reply_text(
+                    text="<b>This link is not valid, either it is used or broken.</b>",
+                    reply_markup=InlineKeyboardMarkup(btn),
+                    protect_content=True
+                )
             
-            # Bypass Check: If verified in less than 1 min (60 seconds)
+            # Bypass Check: If verified in less than 2.5 min (150 seconds)
             try:
                 ts_val = int(tma_token.split("-")[0])
                 elapsed = time.time() - ts_val
-                if elapsed < 60:
+                if elapsed < 150:
+                    await consume_token(tma_token)
                     me = client.me or await client.get_me()
                     plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
                     upsell_btn = []
@@ -274,18 +288,30 @@ async def start(client, message):
             except Exception as e:
                 logger.error(f"Error in bypass check: {e}")
 
-            if is_token_consumed(tma_token):
-                return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
+            if await is_token_consumed(tma_token):
+                me = client.me or await client.get_me()
+                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                return await message.reply_text(
+                    text="<b>This link is not valid, either it is used or broken.</b>",
+                    reply_markup=InlineKeyboardMarkup(btn),
+                    protect_content=True
+                )
 
             ok = await verify_tma_user(tma_uid, tma_token)
             if ok:
-                consume_token(tma_token)
+                await consume_token(tma_token)
                 await message.reply_text(
                     text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=(bot_doc.get('token_timeout', TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT) // 3600),
                     protect_content=True
                 )
             else:
-                await message.reply_text(text=script.TMA_EXPIRED_TEXT, protect_content=True)
+                me = client.me or await client.get_me()
+                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                await message.reply_text(
+                    text="<b>This link is not valid, either it is used or broken.</b>",
+                    reply_markup=InlineKeyboardMarkup(btn),
+                    protect_content=True
+                )
         return
 
     if data.startswith("verify-"):
@@ -295,10 +321,22 @@ async def start(client, message):
             _, userid, token = parts[:3]
             file_data = parts[3] if len(parts) == 4 else None
         else:
-            return await message.reply_text("<b>Invalid format!</b>", protect_content=True)
+            me = client.me or await client.get_me()
+            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+            return await message.reply_text(
+                text="<b>This link is not valid, either it is used or broken.</b>",
+                reply_markup=InlineKeyboardMarkup(btn),
+                protect_content=True
+            )
             
         if str(message.from_user.id) != str(userid):
-            return await message.reply_text("<b>Invalid link or Expired link!</b>", protect_content=True)
+            me = client.me or await client.get_me()
+            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+            return await message.reply_text(
+                text="<b>This link is not valid, either it is used or broken.</b>",
+                reply_markup=InlineKeyboardMarkup(btn),
+                protect_content=True
+            )
         
         key = f"{me.id}_{userid}"
         if key in CLONE_TOKENS and token in CLONE_TOKENS[key] and not CLONE_TOKENS[key][token]:
@@ -311,7 +349,13 @@ async def start(client, message):
                 return await start(client, message)
             return
         else:
-            return await message.reply_text("<b>Invalid link or Expired link!</b>", protect_content=True)
+            me = client.me or await client.get_me()
+            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+            return await message.reply_text(
+                text="<b>This link is not valid, either it is used or broken.</b>",
+                reply_markup=InlineKeyboardMarkup(btn),
+                protect_content=True
+            )
 
     if data.startswith("BATCH-"):
         logger.info("Detected BATCH payload")

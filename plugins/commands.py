@@ -168,13 +168,16 @@ async def start(client, message):
                 if str(message.from_user.id) == userid_str:
                     if validate_tma_token(message.from_user.id, token):
                         if await is_token_consumed(token):
-                            return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
+                            me = client.me or await client.get_me()
+                            btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                            return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
 
-                        # Bypass Check: If verified in less than 1 min (60 seconds)
+                        # Bypass Check: If verified in less than 2.5 min (150 seconds)
                         try:
                             ts_val = int(ts)
                             elapsed = time.time() - ts_val
-                            if elapsed < 60:
+                            if elapsed < 150:
+                                await consume_token(token)
                                 me = client.me or await client.get_me()
                                 plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
                                 upsell_btn = []
@@ -201,11 +204,15 @@ async def start(client, message):
                             protect_content=True
                         )
                     else:
-                        return await message.reply_text(text="<b>This verification link has expired! Please watch the ad again.</b>", protect_content=True)
+                        me = client.me or await client.get_me()
+                        btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                        return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
                 else:
                     return await message.reply_text(text="<b>This verification link belongs to another user!</b>", protect_content=True)
             else:
-                return await message.reply_text(text="<b>Invalid unlock link!</b>", protect_content=True)
+                me = client.me or await client.get_me()
+                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                return await message.reply_text(text="<b>This link is not valid, either it is used or broken.</b>", reply_markup=InlineKeyboardMarkup(btn), protect_content=True)
 
         
         # Handle clone redirect from button
@@ -317,8 +324,11 @@ async def start(client, message):
             userid = data.split("-", 2)[1]
             token = data.split("-", 3)[2]
             if str(message.from_user.id) != str(userid):
+                me = client.me or await client.get_me()
+                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
                 return await message.reply_text(
-                    text="<b>Invalid link or Expired link !</b>",
+                    text="<b>This link is not valid, either it is used or broken.</b>",
+                    reply_markup=InlineKeyboardMarkup(btn),
                     protect_content=True
                 )
             is_valid = await check_token(client, userid, token)
@@ -329,8 +339,11 @@ async def start(client, message):
                 )
                 await verify_user(client, userid, token)
             else:
+                me = client.me or await client.get_me()
+                btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
                 return await message.reply_text(
-                    text="<b>Invalid link or Expired link !</b>",
+                    text="<b>This link is not valid, either it is used or broken.</b>",
+                    reply_markup=InlineKeyboardMarkup(btn),
                     protect_content=True
                 )
         # TMA verification callback: /start tma-{uid}-{token}
@@ -340,13 +353,20 @@ async def start(client, message):
                 tma_uid = int(parts[1])
                 tma_token = "-".join(parts[2:])  # token may contain a dash
                 if message.from_user.id != tma_uid:
-                    return await message.reply_text(text=script.TMA_EXPIRED_TEXT, protect_content=True)
+                    me = client.me or await client.get_me()
+                    btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                    return await message.reply_text(
+                        text="<b>This link is not valid, either it is used or broken.</b>",
+                        reply_markup=InlineKeyboardMarkup(btn),
+                        protect_content=True
+                    )
                 
-                # Bypass Check: If verified in less than 1 min (60 seconds)
+                # Bypass Check: If verified in less than 2.5 min (150 seconds)
                 try:
                     ts_val = int(tma_token.split("-")[0])
                     elapsed = time.time() - ts_val
-                    if elapsed < 60:
+                    if elapsed < 150:
+                        await consume_token(tma_token)
                         me = client.me or await client.get_me()
                         plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
                         upsell_btn = []
@@ -363,7 +383,13 @@ async def start(client, message):
                     logger.error(f"Error in bypass check: {e}")
 
                 if await is_token_consumed(tma_token):
-                    return await message.reply_text(text="<b>This link has already been used to unlock the file! Please click the file link again to get a fresh ad session.</b>", protect_content=True)
+                    me = client.me or await client.get_me()
+                    btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                    return await message.reply_text(
+                        text="<b>This link is not valid, either it is used or broken.</b>",
+                        reply_markup=InlineKeyboardMarkup(btn),
+                        protect_content=True
+                    )
 
                 ok = await verify_tma_user(tma_uid, tma_token)
                 if ok:
@@ -373,7 +399,13 @@ async def start(client, message):
                         protect_content=True
                     )
                 else:
-                    await message.reply_text(text=script.TMA_EXPIRED_TEXT, protect_content=True)
+                    me = client.me or await client.get_me()
+                    btn = [[InlineKeyboardButton("Click Here to Get Verification", url=f"https://t.me/{me.username}?start=true")]]
+                    await message.reply_text(
+                        text="<b>This link is not valid, either it is used or broken.</b>",
+                        reply_markup=InlineKeyboardMarkup(btn),
+                        protect_content=True
+                    )
             return
         elif data.split("-", 1)[0] == "BATCH":
             try:
