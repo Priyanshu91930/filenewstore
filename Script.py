@@ -169,13 +169,7 @@ Hey {}, to access this file you need to watch a short ad in our Mini App.
 
 Tap the button below to open the Mini App and watch the ad to unlock!</b>"""
 
-    TMA_VERIFIED_TEXT = """<b>✅ ᴠᴇʀɪғɪᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!
-
-Hey {}, you've been successfully verified! 🎉
-
-You now have <u>unlimited access to all files for {hours} hour(s)</u>.
-
-Enjoy! 🚀</b>"""
+    TMA_VERIFIED_TEXT = """<b>Hey {}, you've been successfully verified for {hours} hour(s) 🎉</b>"""
 
     TMA_UPSELL_TEXT = """<b>🚀 Enjoy your file!
 
