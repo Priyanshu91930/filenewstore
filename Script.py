@@ -186,3 +186,11 @@ Get a <b>VIP Plan</b> and enjoy <b>unlimited ad-free downloads</b> forever — n
 
 The verification link has expired or is invalid. Please try opening the file again from the bot!</b>"""
 
+    TMA_BYPASS_WARNING_TEXT = """<b>⚠️ ʙʏᴘᴀss ᴅᴇᴛᴇᴄᴛᴇᴅ!
+
+Hey {}, you are using a bypass script or trick to skip verification. Please support us by watching the ad properly.
+
+💡 Tired of watching ads?
+Get a VIP Plan and enjoy unlimited ad-free downloads forever — no waiting, no ads, instant access to every file!</b>"""
+
+
