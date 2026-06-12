@@ -214,7 +214,7 @@ async def start(client, message):
                         data = file_data
                         await verify_tma_user(message.from_user.id, token)
                         await message.reply_text(
-                            text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
+                            text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=(bot_doc.get('token_timeout', TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT) // 3600),
                             protect_content=True
                         )
                     else:
@@ -236,7 +236,7 @@ async def start(client, message):
             ok = await verify_tma_user(tma_uid, tma_token)
             if ok:
                 await message.reply_text(
-                    text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
+                    text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=(bot_doc.get('token_timeout', TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT) // 3600),
                     protect_content=True
                 )
             else:
