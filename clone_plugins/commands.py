@@ -55,6 +55,9 @@ async def get_invalid_link_btn(client, user_id, data):
     me = client.me or await client.get_me()
     bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
     tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
+    shortener_api = bot_doc.get("shortener_api") if bot_doc else None
+    if not shortener_api:
+        tma_mode = False
     if tma_mode:
         tma_app_url = f"{URL.rstrip('/')}/tma"
         file_data = ""
@@ -375,6 +378,9 @@ async def start(client, message):
         try:
             # Plan and TMA Verification Check for Batch
             tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
+            shortener_api = bot_doc.get("shortener_api") if bot_doc else None
+            if not shortener_api:
+                tma_mode = False
             user_is_vip = await is_vip(me.id, message.from_user.id)
             plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
             is_verified = False
@@ -417,7 +423,7 @@ async def start(client, message):
                 else:
                     is_verified = True
             
-            if not tma_mode or is_verified or is_unlocked:
+            if not tma_mode or is_verified or is_unlocked or user_is_vip:
                 sts = await message.reply("<b>🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ... ɢᴇᴛᴛɪɴɢ ʙᴀᴛᴄʜ ғɪʟᴇs</b>")
                 batch_file_id = data.split("-", 1)[1]
                 msgs = BATCH_FILES.get(batch_file_id)
@@ -512,6 +518,9 @@ async def start(client, message):
 
     # Plan and TMA Verification Check
     tma_mode = bot_owner.get("tma_mode", False) if bot_owner else False
+    shortener_api = bot_owner.get("shortener_api") if bot_owner else None
+    if not shortener_api:
+        tma_mode = False
     user_is_vip = await is_vip(me.id, message.from_user.id)
     plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
     logger.info(f"TMA mode: {tma_mode}, User VIP: {user_is_vip}, Plan configured: {plan_cfg is not None}")
@@ -605,6 +614,9 @@ async def start(client, message):
             asyncio.create_task(auto_delete_task(msg, k, del_time))
         # ── VIP Upsell for TMA-verified non-VIP users ──
         tma_mode_check = bot_owner.get("tma_mode", False) if bot_owner else False
+        shortener_api = bot_owner.get("shortener_api") if bot_owner else None
+        if not shortener_api:
+            tma_mode_check = False
         user_vip_check = await is_vip(me.id, message.from_user.id)
         if tma_mode_check and not user_vip_check:
             try:
