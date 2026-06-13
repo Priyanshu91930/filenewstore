@@ -648,17 +648,21 @@ async def settings_command(client, message):
     prefix = user.get("caption_prefix", "") or "<i>Not set</i>"
     tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
     tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
+    plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
+    plan_status = "Enabled 🟢" if plan_enabled else "Disabled 🔴"
     buttons = [[
         InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
         InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if tma_mode else 'OFF 🔴'}", callback_data="toggle_tma")
     ],[
         InlineKeyboardButton('💳 Configure Plan', callback_data='setplan'),
-        InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl')
+        InlineKeyboardButton(f"VIP Plan: {'ON 🟢' if plan_enabled else 'OFF 🔴'}", callback_data="toggle_plan")
     ],[
-        InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909'),
-        InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help')
+        InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
+        InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
     ],[
-        InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about'),
+        InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
+        InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
+    ],[
         InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
     ]]
     
@@ -670,7 +674,7 @@ async def settings_command(client, message):
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
@@ -956,12 +960,24 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     reply_markup=InlineKeyboardMarkup(buttons),
                     disable_web_page_preview=True
                 )
-            return
 
         tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
         new_mode = not tma_mode
         await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"tma_mode": new_mode}})
         await query.answer(f"TMA Ads {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
+        query.data = "settings"
+        return await cb_handler(client, query)
+    elif query.data == "toggle_plan":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure Plan settings!", show_alert=True)
+        
+        plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
+        new_mode = not plan_enabled
+        await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"plan_enabled": new_mode}})
+        await query.answer(f"VIP Plan {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
         query.data = "settings"
         return await cb_handler(client, query)
     elif query.data == "start":
@@ -1058,18 +1074,22 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
         tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
+        plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
+        plan_status = "Enabled 🟢" if plan_enabled else "Disabled 🔴"
         
         buttons = [[
             InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
             InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if tma_mode else 'OFF 🔴'}", callback_data="toggle_tma")
         ],[
             InlineKeyboardButton('💳 Configure Plan', callback_data='setplan'),
-            InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl')
+            InlineKeyboardButton(f"VIP Plan: {'ON 🟢' if plan_enabled else 'OFF 🔴'}", callback_data="toggle_plan")
         ],[
-            InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909'),
-            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help')
+            InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
+            InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
         ],[
-            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about'),
+            InlineKeyboardButton('💁‍♀️ ʜᴇʟᴘ', callback_data='help'),
+            InlineKeyboardButton('😊 ᴀʙᴏᴜᴛ', callback_data='about')
+        ],[
             InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
         ]]
         
@@ -1093,7 +1113,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
