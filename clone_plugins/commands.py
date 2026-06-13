@@ -28,7 +28,8 @@ from shortzy import Shortzy
 logger = logging.getLogger(__name__)
 
 CLONE_TOKENS = {}
-CLONE_VERIFIED = {}
+from utils import MongoDict
+CLONE_VERIFIED = MongoDict("clone_verifications")
 BATCH_FILES = {}
 
 # Don't Remove Credit Tg - @viralverse0909

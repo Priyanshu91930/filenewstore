@@ -12,7 +12,58 @@ from shortzy import Shortzy
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 TOKENS = {}
-VERIFIED = {}
+
+from collections import UserDict
+import motor.motor_asyncio
+from config import DB_URI
+
+class MongoDict(UserDict):
+    def __init__(self, collection_name):
+        super().__init__()
+        self.collection_name = collection_name
+        self._client = motor.motor_asyncio.AsyncIOMotorClient(DB_URI)
+        self.db = self._client["cloned_vjbotz"]
+        self.col = self.db[collection_name]
+        
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        if loop.is_running():
+            asyncio.create_task(self._async_load())
+        else:
+            loop.run_until_complete(self._async_load())
+
+    async def _async_load(self):
+        try:
+            cursor = self.col.find({})
+            async for doc in cursor:
+                # Keep keys consistent as they might be stored as strings in MongoDB
+                key = doc["_id"]
+                val = doc["val"]
+                # If key is string digits, convert to integer user ID
+                if isinstance(key, str) and key.isdigit():
+                    key = int(key)
+                self.data[key] = val
+        except Exception as e:
+            logger.error(f"Error loading MongoDict {self.collection_name}: {e}")
+
+    def __setitem__(self, key, value):
+        self.data[key] = value
+        asyncio.create_task(self.col.update_one(
+            {"_id": str(key)},
+            {"$set": {"val": value}},
+            upsert=True
+        ))
+
+    def pop(self, key, default=None):
+        val = self.data.pop(key, default)
+        asyncio.create_task(self.col.delete_one({"_id": str(key)}))
+        return val
+
+VERIFIED = MongoDict("std_verifications")
 
 async def get_verify_shorted_link(link, api_key=None, shortener_url=None):
     api = api_key or SHORTLINK_API
@@ -126,7 +177,7 @@ async def is_subscribed_universal(bot, message):
 
 # ─── Telegram Mini App (Monetag) Verification Helpers ───────────────────────
 
-TMA_VERIFIED = {}  # {user_id: unix_timestamp of verification}
+TMA_VERIFIED = MongoDict("tma_verifications")  # {user_id: unix_timestamp of verification}
 
 # Global TMA timeout in seconds. Can be overridden per-bot via token_timeout in DB.
 # Default: 10800 = 3 hours. Change this to adjust the global default.
