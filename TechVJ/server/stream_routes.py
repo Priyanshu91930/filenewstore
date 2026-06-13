@@ -72,9 +72,20 @@ async def tma_route_handler(request: web.Request):
         from utils import check_tma_verification, TMA_VERIFIED, TMA_TIMEOUT
         import time
         try:
-            is_verified = await check_tma_verification(int(uid))
-            if is_verified and int(uid) in TMA_VERIFIED:
-                elapsed = time.time() - TMA_VERIFIED[int(uid)]
+            from TechVJ.bot import StreamBot
+            from plugins.clone import async_mongo_db
+            bot_id = None
+            if bot_username.lower() != StreamBot.username.lower():
+                bot_doc = await async_mongo_db.bots.find_one({"username": bot_username})
+                if bot_doc:
+                    bot_id = bot_doc.get("bot_id")
+            else:
+                bot_id = StreamBot.me.id if (hasattr(StreamBot, 'me') and StreamBot.me) else None
+
+            is_verified = await check_tma_verification(int(uid), bot_id=bot_id)
+            key = f"{bot_id}_{uid}" if (bot_id and f"{bot_id}_{uid}" in TMA_VERIFIED) else int(uid)
+            if is_verified and key in TMA_VERIFIED:
+                elapsed = time.time() - TMA_VERIFIED[key]
                 remaining_time = max(0, int(TMA_TIMEOUT - elapsed))
         except Exception as e:
             logging.error(f"Error checking verification: {e}")
@@ -170,7 +181,17 @@ async def tma_verify_handler(request: web.Request):
     # Validate HMAC token and mark the user as verified for today!
     from utils import verify_tma_user
     try:
-        is_verified = await verify_tma_user(int(uid_str), token)
+        from TechVJ.bot import StreamBot
+        from plugins.clone import async_mongo_db
+        bot_id = None
+        if bot_username.lower() != StreamBot.username.lower():
+            bot_doc = await async_mongo_db.bots.find_one({"username": bot_username})
+            if bot_doc:
+                bot_id = bot_doc.get("bot_id")
+        else:
+            bot_id = StreamBot.me.id if (hasattr(StreamBot, 'me') and StreamBot.me) else None
+
+        is_verified = await verify_tma_user(int(uid_str), token, bot_id=bot_id)
         if not is_verified:
             return web.json_response({'ok': False, 'error': 'invalid_token'}, status=400)
     except Exception as e:

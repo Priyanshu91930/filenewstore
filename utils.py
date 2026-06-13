@@ -52,15 +52,25 @@ class MongoDict(UserDict):
 
     def __setitem__(self, key, value):
         self.data[key] = value
-        asyncio.create_task(self.col.update_one(
-            {"_id": str(key)},
-            {"$set": {"val": value}},
-            upsert=True
-        ))
+        async def do_update():
+            try:
+                await self.col.update_one(
+                    {"_id": str(key)},
+                    {"$set": {"val": value}},
+                    upsert=True
+                )
+            except Exception as e:
+                logger.error(f"Error in MongoDict update: {e}")
+        asyncio.create_task(do_update())
 
     def pop(self, key, default=None):
         val = self.data.pop(key, default)
-        asyncio.create_task(self.col.delete_one({"_id": str(key)}))
+        async def do_delete():
+            try:
+                await self.col.delete_one({"_id": str(key)})
+            except Exception as e:
+                logger.error(f"Error in MongoDict delete: {e}")
+        asyncio.create_task(do_delete())
         return val
 
 VERIFIED = MongoDict("std_verifications")
@@ -227,20 +237,27 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "", bot
         url += f"&file={quote(file_data)}"
     return url
 
-async def verify_tma_user(user_id: int, token: str, timeout: int = 0) -> bool:
+async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: int = None) -> bool:
     """Validate the token and mark the user as TMA-verified.
     timeout: validity in seconds (0 = use global TMA_TIMEOUT).
     """
     if not validate_tma_token(user_id, token, max_age_sec=timeout or TMA_TIMEOUT):
         return False
-    TMA_VERIFIED[user_id] = time.time()
+    key = f"{bot_id}_{user_id}" if bot_id else user_id
+    TMA_VERIFIED[key] = time.time()
     return True
 
-async def check_tma_verification(user_id: int, timeout: int = 0) -> bool:
+async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = None) -> bool:
     """Return True if the user already completed TMA verification within the configured window.
     timeout: override validity in seconds (0 = use global TMA_TIMEOUT).
     """
     tmo = timeout or TMA_TIMEOUT
+    if bot_id:
+        key = f"{bot_id}_{user_id}"
+        if key in TMA_VERIFIED:
+            verified_time = TMA_VERIFIED[key]
+            if time.time() - verified_time < tmo:
+                return True
     if user_id in TMA_VERIFIED:
         verified_time = TMA_VERIFIED[user_id]
         if time.time() - verified_time < tmo:

@@ -51,7 +51,7 @@ FORCE_SUB_CHANNELS = [int(ch) for ch in environ.get("FORCE_SUB_CHANNELS", "").sp
 UNIVERSAL_FORCE_SUB_CHANNEL = int(environ.get("UNIVERSAL_FORCE_SUB_CHANNEL", "-1003632363697")) # This channel will be forced for all clones
 
 # File Caption Information
-CUSTOM_FILE_CAPTION = environ.get("CUSTOM_FILE_CAPTION", f"{script.CAPTION}")
+CUSTOM_FILE_CAPTION = environ.get("CUSTOM_FILE_CAPTION", "")
 BATCH_FILE_CAPTION = environ.get("BATCH_FILE_CAPTION", CUSTOM_FILE_CAPTION)
 
 # Enable - True or Disable - False

@@ -258,7 +258,7 @@ async def start(client, message):
                     await consume_token(token)
                     is_unlocked = True
                     data = file_data
-                    await verify_tma_user(message.from_user.id, token)
+                    await verify_tma_user(message.from_user.id, token, bot_id=me.id)
                     await message.reply_text(
                         text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=(bot_doc.get('token_timeout', TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT) // 3600),
                         protect_content=True
@@ -314,7 +314,7 @@ async def start(client, message):
                     protect_content=True
                 )
 
-            ok = await verify_tma_user(tma_uid, tma_token)
+            ok = await verify_tma_user(tma_uid, tma_token, bot_id=me.id)
             if ok:
                 await consume_token(tma_token)
                 await message.reply_text(
@@ -845,6 +845,12 @@ async def validity_command(client, message):
     if message.from_user.id != owner_id and message.from_user.id not in mods:
         return await message.reply("<b>❌ Only the bot owner and moderators can access this command.</b>")
 
+    # Check if TMA ads are configured
+    tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
+    shortener_api = bot_doc.get("shortener_api") if bot_doc else None
+    if not tma_mode or not shortener_api:
+        return await message.reply_text("<b>❌ You didn't configure TMA ads first. Set them up first.</b>")
+
     from utils import TMA_VERIFIED, TMA_TIMEOUT
     import time
     
@@ -856,16 +862,19 @@ async def validity_command(client, message):
     tma_hours = bot_tma_timeout // 3600
     tma_text = f"<b>⚡ TMA Verifications ({tma_hours}-Hour Validity):</b>\n"
     current_time = time.time()
-    for uid, verified_time in list(TMA_VERIFIED.items()):
-        elapsed = current_time - verified_time
-        if elapsed < bot_tma_timeout:
-            tma_count += 1
-            remaining = int(bot_tma_timeout - elapsed)
-            hours = remaining // 3600
-            mins = (remaining % 3600) // 60
-            tma_text += f"• <code>{uid}</code> (Remaining: {hours}h {mins}m)\n"
-        else:
-            TMA_VERIFIED.pop(uid, None)
+    for key, verified_time in list(TMA_VERIFIED.items()):
+        key_str = str(key)
+        if key_str.startswith(f"{me.id}_"):
+            uid = key_str.split("_")[-1]
+            elapsed = current_time - verified_time
+            if elapsed < bot_tma_timeout:
+                tma_count += 1
+                remaining = int(bot_tma_timeout - elapsed)
+                hours = remaining // 3600
+                mins = (remaining % 3600) // 60
+                tma_text += f"• <code>{uid}</code> (Remaining: {hours}h {mins}m)\n"
+            else:
+                TMA_VERIFIED.pop(key, None)
             
     if tma_count == 0:
         tma_text += "<i>No active TMA verifications.</i>\n"
