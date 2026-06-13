@@ -381,7 +381,7 @@ async def start(client, message):
             
             if plan_cfg and not user_is_vip:
                 if tma_mode:
-                    is_verified = await check_tma_verification(message.from_user.id)
+                    is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
                     if not is_verified and not is_unlocked:
                         tma_app_url = f"{URL.rstrip('/')}/tma"
                         tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
@@ -404,7 +404,7 @@ async def start(client, message):
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
             elif tma_mode and not user_is_vip:
-                is_verified = await check_tma_verification(message.from_user.id)
+                is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
                 if not is_verified and not is_unlocked:
                     tma_app_url = f"{URL.rstrip('/')}/tma"
                     tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
@@ -519,7 +519,7 @@ async def start(client, message):
     if plan_cfg and not user_is_vip:
         if tma_mode:
             bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
-            is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout)
+            is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
             if not is_verified and not is_unlocked:
                 tma_app_url = f"{URL.rstrip('/')}/tma"
                 tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
@@ -541,7 +541,7 @@ async def start(client, message):
             )
     elif tma_mode and not user_is_vip:
         bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
-        is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout)
+        is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
         if not is_verified and not is_unlocked:
             tma_app_url = f"{URL.rstrip('/')}/tma"
             tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
