@@ -372,23 +372,42 @@ async def start(client, message):
     if data.startswith("BATCH-"):
         logger.info("Detected BATCH payload")
         try:
-            # TMA Verification Check for Batch
+            # Plan and TMA Verification Check for Batch
             tma_mode = bot_doc.get("tma_mode", False) if bot_doc else False
+            user_is_vip = await is_vip(me.id, message.from_user.id)
+            plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
             is_verified = False
-            if tma_mode:
-                user_is_vip = await is_vip(me.id, message.from_user.id)
-                if user_is_vip:
-                    is_verified = True
-                else:
+            
+            if plan_cfg and not user_is_vip:
+                if tma_mode:
                     is_verified = await check_tma_verification(message.from_user.id)
-                
+                    if not is_verified and not is_unlocked:
+                        tma_app_url = f"{URL.rstrip('/')}/tma"
+                        tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+                        btn = [
+                            [InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))],
+                            [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
+                        ]
+                        return await message.reply_text(
+                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_doc.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_doc else TMA_TIMEOUT // 3600),
+                            protect_content=True,
+                            reply_markup=InlineKeyboardMarkup(btn)
+                        )
+                    else:
+                        is_verified = True
+                else:
+                    btn = [[InlineKeyboardButton("💳 Buy VIP Plan to Unlock", callback_data="buy_plan")]]
+                    return await message.reply_text(
+                        text=f"<b>🔒 Hey {message.from_user.mention}, this file is locked!\n\nPlease purchase a VIP Plan to get instant access to files.</b>",
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn)
+                    )
+            elif tma_mode and not user_is_vip:
+                is_verified = await check_tma_verification(message.from_user.id)
                 if not is_verified and not is_unlocked:
                     tma_app_url = f"{URL.rstrip('/')}/tma"
                     tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
                     btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-                    plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-                    if plan_cfg:
-                        btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                     return await message.reply_text(
                         text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_doc.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_doc else TMA_TIMEOUT // 3600),
                         protect_content=True,
@@ -490,31 +509,49 @@ async def start(client, message):
     
     logger.info(f"Final file_id to send: {file_id[:20]}...")
 
-    # TMA Verification Check
+    # Plan and TMA Verification Check
     tma_mode = bot_owner.get("tma_mode", False) if bot_owner else False
-    logger.info(f"TMA mode: {tma_mode}")
-    if tma_mode:
-        user_is_vip = await is_vip(me.id, message.from_user.id)
-        if user_is_vip:
-            is_verified = True
-        else:
-            # Use bot's configured token_timeout (in seconds) if set, else global default
+    user_is_vip = await is_vip(me.id, message.from_user.id)
+    plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+    logger.info(f"TMA mode: {tma_mode}, User VIP: {user_is_vip}, Plan configured: {plan_cfg is not None}")
+    
+    if plan_cfg and not user_is_vip:
+        if tma_mode:
             bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
             is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout)
-        
-        logger.info(f"User verified status: {is_verified}")
+            if not is_verified and not is_unlocked:
+                tma_app_url = f"{URL.rstrip('/')}/tma"
+                tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+                btn = [
+                    [InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))],
+                    [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
+                ]
+                return await message.reply_text(
+                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_owner.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_owner else TMA_TIMEOUT // 3600),
+                    protect_content=True,
+                    reply_markup=InlineKeyboardMarkup(btn)
+                )
+        else:
+            btn = [[InlineKeyboardButton("💳 Buy VIP Plan to Unlock", callback_data="buy_plan")]]
+            return await message.reply_text(
+                text=f"<b>🔒 Hey {message.from_user.mention}, this file is locked!\n\nPlease purchase a VIP Plan to get instant access to files.</b>",
+                protect_content=True,
+                reply_markup=InlineKeyboardMarkup(btn)
+            )
+    elif tma_mode and not user_is_vip:
+        bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
+        is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout)
         if not is_verified and not is_unlocked:
             tma_app_url = f"{URL.rstrip('/')}/tma"
             tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
             btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-            plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-            if plan_cfg:
-                btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
             return await message.reply_text(
                 text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_owner.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_owner else TMA_TIMEOUT // 3600),
                 protect_content=True,
                 reply_markup=InlineKeyboardMarkup(btn)
             )
+
+
 
     logger.info("Proceeding to send_cached_media...")
     try:
