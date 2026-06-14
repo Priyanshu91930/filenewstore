@@ -445,7 +445,7 @@ async def start(client, message):
                     try:
                         c_id = m_data.get("channel_id")
                         m_id = m_data.get("msg_id")
-                        is_nofwd = bot_doc.get("no_forward", False) if bot_doc else False
+                        is_nofwd = (bot_doc.get("no_forward", False) if bot_doc else False) and not user_is_vip
                         reply_markup = InlineKeyboardMarkup([[
                             InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
                         ]])
@@ -565,7 +565,7 @@ async def start(client, message):
 
     logger.info("Proceeding to send_cached_media...")
     try:
-        is_nofwd = bot_owner.get("no_forward", False) if bot_owner else False
+        is_nofwd = (bot_owner.get("no_forward", False) if bot_owner else False) and not user_is_vip
         reply_markup = InlineKeyboardMarkup([[
             InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
         ]])
