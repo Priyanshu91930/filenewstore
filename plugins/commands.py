@@ -1205,7 +1205,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             from plugins.clone import stop_clone
             await stop_clone(bot_id)
             # Then remove from DB
-            clone_mongo_db.bots.delete_one({"bot_id": bot_id})
+            await clone_mongo_db.bots.delete_one({"bot_id": bot_id})
             await query.message.edit_text(f"<b>✅ @{bot['username']} has been stopped and deleted.</b>")
             await msg.reply("<b>Bot stopped and deleted successfully. ✅</b>")
         else:
@@ -1215,7 +1215,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot_id = int(query.data.split("_")[-1])
         msg = await client.ask(query.message.chat.id, "<b>Please send the new START TEXT for your clone bot.\n\nUse {mention} for user mention and {mention2} for bot mention.\n\n/cancel to skip.</b>")
         if msg.text == "/cancel": return await msg.reply("Cancelled.")
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_text": msg.text.html}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_text": msg.text.html}})
         await msg.reply("<b>✅ Start Text updated successfully!</b>")
         query.data = f"startmsg_{bot_id}"
         return await cb_handler(client, query)
@@ -1249,13 +1249,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                 else:
                                     raise Exception(f"Upload failed on both providers. Response: {result}")
                 
-                clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_url}})
+                await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_url}})
                 await msg.reply(f"<b>✅ Start Photo updated successfully!\n\nURL: <code>{photo_url}</code></b>")
             except Exception as e:
                 logger.error(f"Media upload error: {e}")
                 await msg.reply(f"<b>❌ Upload failed: {e}\n\nPlease send a direct image URL instead.</b>")
         elif msg.text and msg.text.strip().startswith("http"):
-            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.text.strip()}})
+            await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": msg.text.strip()}})
             await msg.reply("<b>✅ Start Photo URL updated successfully!</b>")
         else:
             return await msg.reply("<b>❌ Invalid input. Please upload a photo or send an http/https URL.</b>")
@@ -1269,7 +1269,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if msg.text == "/cancel": return await msg.reply("Cancelled.")
         try:
             time = int(msg.text.strip())
-            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"auto_delete_time": time}})
+            await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"auto_delete_time": time}})
             await msg.reply(f"<b>✅ Auto-Delete time set to {time} minutes!</b>")
         except:
             await msg.reply("<b>❌ Invalid input. Please send a number.</b>")
@@ -1321,7 +1321,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
             f_chat_title = f_chat_title or str(f_chat_id)
             
-            clone_mongo_db.bots.update_one(
+            await clone_mongo_db.bots.update_one(
                 {"bot_id": bot_id}, 
                 {
                     "$push": {"force_sub_channels": f_chat_id},
@@ -1336,7 +1336,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("clear_fsub_"):
         bot_id = int(query.data.split("_")[-1])
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"force_sub_channels": []}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"force_sub_channels": []}})
         await query.answer("All channels cleared!")
         query.data = f"forcesub_{bot_id}"
         return await cb_handler(client, query)
@@ -1345,7 +1345,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot_id = int(query.data.split("_")[-1])
         bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         new_mode = "joinreq" if bot.get("force_sub_mode", "normal") == "normal" else "normal"
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"force_sub_mode": new_mode}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"force_sub_mode": new_mode}})
         await query.answer(f"Mode switched to {new_mode.upper()}")
         query.data = f"forcesub_{bot_id}"
         return await cb_handler(client, query)
@@ -1372,7 +1372,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if msg.text == "/cancel": return await msg.reply("Cancelled.")
         try:
             mod_id = int(msg.text.strip())
-            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$addToSet": {"moderators": mod_id}})
+            await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$addToSet": {"moderators": mod_id}})
             await msg.reply(f"<b>✅ User <code>{mod_id}</code> added as moderator!</b>")
         except:
             await msg.reply("<b>❌ Invalid User ID. Please send a number.</b>")
@@ -1381,7 +1381,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
     elif query.data.startswith("clear_mod_"):
         bot_id = int(query.data.split("_")[-1])
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"moderators": []}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"moderators": []}})
         await query.answer("All moderators cleared!")
         query.data = f"mods_{bot_id}"
         return await cb_handler(client, query)
@@ -1391,7 +1391,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         is_nofwd = bot.get("no_forward", False)
         new_status = not is_nofwd
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"no_forward": new_status}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"no_forward": new_status}})
         status_txt = "✅ Enabled" if new_status else "❌ Disabled"
         await query.answer(f"No Forward {status_txt}", show_alert=True)
         buttons = [
@@ -1509,7 +1509,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if msg.text == "/cancel": return await msg.reply("Cancelled.")
         try:
             val = int(msg.text.strip())
-            clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_timeout": val * 3600}})
+            await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_timeout": val * 3600}})
             await msg.reply(f"<b>✅ Token Validity set to {val} hours!</b>")
         except:
             await msg.reply("<b>❌ Invalid time. Must be a number.</b>")
@@ -1545,7 +1545,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot_id = int(query.data.split("_")[-1])
         msg = await client.ask(query.message.chat.id, "<b>Send the Tutorial Link URL for how to bypass your shortener.\n\n/cancel to skip.</b>")
         if msg.text == "/cancel": return await msg.reply("Cancelled.")
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_tutorial": msg.text.strip()}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"token_tutorial": msg.text.strip()}})
         await msg.reply(f"<b>✅ Tutorial link updated!</b>")
         query.data = f"tokencfg_{bot_id}"
         return await cb_handler(client, query)
@@ -1596,7 +1596,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         parts = query.data.split("_")
         mode = parts[1]
         bot_id = int(parts[2])
-        clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"bot_mode": mode}})
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"bot_mode": mode}})
         await query.answer(f"Mode set to {mode.upper()}!", show_alert=True)
         query.data = f"mode_{bot_id}"
         return await cb_handler(client, query)
@@ -1623,7 +1623,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             return await query.answer("Bot not found!", show_alert=True)
         await query.answer("⏳ Restarting bot...", show_alert=True)
         try:
-            from plugins.clone import stop_clone, running_clones
+            from plugins.clone import stop_clone, running_clones, set_clone_commands
             from pyrogram import Client as PyroClient
             
             # ✅ Stop the existing instance first to avoid duplicate handlers
@@ -1639,6 +1639,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 in_memory=True
             )
             await vj.start()
+            # Set bot commands so they appear in Telegram menu
+            await set_clone_commands(vj)
             
             # ✅ Register the new client so future restarts/stops work correctly
             running_clones[bot_id] = vj

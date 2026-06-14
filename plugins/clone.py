@@ -28,6 +28,23 @@ mongo_db = mongo_client["cloned_vjbotz"]
 # Global registry: bot_id -> running Pyrogram Client instance
 running_clones = {}
 
+async def set_clone_commands(vj: Client):
+    """Set bot commands for a clone client so they appear in the Telegram menu."""
+    try:
+        await vj.set_bot_commands([
+            BotCommand("start", "Start the bot"),
+            BotCommand("batch", "Generate multi-file links (Interactive)"),
+            BotCommand("link", "Reply to a file to get a shareable link"),
+            BotCommand("broadcast", "Send a message to all bot users"),
+            BotCommand("setting", "Manage your bot settings"),
+            BotCommand("setcaption", "Set your custom file name prefix"),
+            BotCommand("stats", "View bot statistics"),
+            BotCommand("plan", "View VIP status / prices"),
+            BotCommand("validity", "View active user verifications"),
+        ])
+    except Exception as e:
+        logger.error(f"Error setting bot commands for clone: {e}")
+
 async def stop_clone(bot_id: int):
     """Stop a running clone client by bot_id."""
     vj = running_clones.pop(bot_id, None)
@@ -83,20 +100,7 @@ async def clone(client, message):
         # Track the running instance
         running_clones[bot.id] = vj
         # Set bot commands so they appear in Telegram menu
-        try:
-            await vj.set_bot_commands([
-                BotCommand("start", "Start the bot"),
-                BotCommand("batch", "Generate multi-file links (Interactive)"),
-                BotCommand("link", "Reply to a file to get a shareable link"),
-                BotCommand("broadcast", "Send a message to all bot users"),
-                BotCommand("setting", "Manage your bot settings"),
-                BotCommand("setcaption", "Set your custom file name prefix"),
-                BotCommand("stats", "View bot statistics"),
-                BotCommand("plan", "View VIP status / prices"),
-                BotCommand("validity", "View active user verifications"),
-            ])
-        except Exception as e:
-            logger.error(f"Error setting bot commands for clone: {e}")
+        await set_clone_commands(vj)
         details = {
             'bot_id': bot.id,
             'is_bot': True,
@@ -160,6 +164,8 @@ async def restart_bots():
                 in_memory=True
             )
             await vj.start()
+            # Set bot commands so they appear in Telegram menu
+            await set_clone_commands(vj)
             running_clones[bot_id] = vj
         except:
             pass
