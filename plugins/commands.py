@@ -727,6 +727,7 @@ async def stats_handler(client, message):
     try:
         bots = [b async for b in clone_mongo_db.bots.find({})]
         total_clones = len(bots)
+        bots_data = []
         for bot in bots:
             bot_id_str = str(bot.get("bot_id"))
             bot_name = bot.get("name", "Unknown")
@@ -736,7 +737,17 @@ async def stats_handler(client, message):
             except Exception:
                 count = 0
             total_clone_users += count
-            clone_details.append(f"• <b>{bot_name}</b> (@{bot_username}): <code>{count}</code> users")
+            bots_data.append({
+                "name": bot_name,
+                "username": bot_username,
+                "count": count
+            })
+        
+        # Sort bots by user count in descending order
+        bots_data.sort(key=lambda x: x["count"], reverse=True)
+        
+        for item in bots_data:
+            clone_details.append(f"• <b>{item['name']}</b> (@{item['username']}): <code>{item['count']}</code> users")
     except Exception as e:
         logger.error(f"Error fetching clone stats: {e}")
         
