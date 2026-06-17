@@ -1298,11 +1298,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     file_bytes = bytes(photo_data)
                 
                 # Upload to catbox.moe (highly reliable image hosting)
+                import io
                 async with aiohttp.ClientSession() as session:
                     try:
                         form = aiohttp.FormData()
                         form.add_field("reqtype", "fileupload")
-                        form.add_field("fileToUpload", file_bytes, filename="start.jpg", content_type="image/jpeg")
+                        form.add_field("fileToUpload", io.BytesIO(file_bytes), filename="start.jpg")
                         async with session.post("https://catbox.moe/user/api.php", data=form) as resp:
                             res_text = await resp.text()
                             if res_text and res_text.strip().startswith("http"):
@@ -1313,7 +1314,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         logger.error(f"Catbox upload failed: {catbox_err}. Trying fallback...")
                         # Fallback to telegra.ph
                         form_fallback = aiohttp.FormData()
-                        form_fallback.add_field("file", file_bytes, filename="start.jpg", content_type="image/jpeg")
+                        form_fallback.add_field("file", io.BytesIO(file_bytes), filename="start.jpg")
                         try:
                             async with session.post("https://telegra.ph/upload", data=form_fallback) as resp:
                                 result = await resp.json()
@@ -1342,7 +1343,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             return await msg.reply("<b>❌ Invalid input. Please upload a photo or send an http/https URL.</b>")
             
         query.data = f"startmsg_{bot_id}"
-        return await cb_handler(client, query)
+        try:
+            return await cb_handler(client, query)
+        except Exception:
+            pass
 
     elif query.data.startswith("cdeltime_"):
         bot_id = int(query.data.split("_")[-1])
