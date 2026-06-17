@@ -1279,15 +1279,30 @@ async def cb_handler(client: Client, query: CallbackQuery):
             try:
                 import aiohttp
                 # Download photo bytes from Telegram
-                photo_bytes = await client.download_media(msg.photo.file_id, in_memory=True)
-                photo_bytes.seek(0)
+                photo_data = await client.download_media(msg.photo.file_id, in_memory=True)
+                
+                # Retrieve raw bytes from whatever Pyrogram version returns (BytesIO or file path)
+                if isinstance(photo_data, str):
+                    with open(photo_data, "rb") as f:
+                        file_bytes = f.read()
+                    try:
+                        os.remove(photo_data)
+                    except Exception:
+                        pass
+                elif hasattr(photo_data, "getvalue"):
+                    file_bytes = photo_data.getvalue()
+                elif hasattr(photo_data, "read"):
+                    photo_data.seek(0)
+                    file_bytes = photo_data.read()
+                else:
+                    file_bytes = bytes(photo_data)
                 
                 # Upload to catbox.moe (highly reliable image hosting)
                 async with aiohttp.ClientSession() as session:
                     try:
                         form = aiohttp.FormData()
                         form.add_field("reqtype", "fileupload")
-                        form.add_field("fileToUpload", photo_bytes, filename="start.jpg")
+                        form.add_field("fileToUpload", file_bytes, filename="start.jpg", content_type="image/jpeg")
                         async with session.post("https://catbox.moe/user/api.php", data=form) as resp:
                             res_text = await resp.text()
                             if res_text and res_text.strip().startswith("http"):
@@ -1297,9 +1312,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     except Exception as catbox_err:
                         logger.error(f"Catbox upload failed: {catbox_err}. Trying fallback...")
                         # Fallback to telegra.ph
-                        photo_bytes.seek(0)
                         form_fallback = aiohttp.FormData()
-                        form_fallback.add_field("file", photo_bytes, filename="start.jpg")
+                        form_fallback.add_field("file", file_bytes, filename="start.jpg", content_type="image/jpeg")
                         try:
                             async with session.post("https://telegra.ph/upload", data=form_fallback) as resp:
                                 result = await resp.json()
@@ -1309,7 +1323,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                     raise Exception("Telegra.ph upload failed")
                         except Exception:
                             # Fallback to graph.org
-                            photo_bytes.seek(0)
                             async with session.post("https://graph.org/upload", data=form_fallback) as resp2:
                                 result2 = await resp2.json()
                                 if isinstance(result2, list) and result2[0].get("src"):
