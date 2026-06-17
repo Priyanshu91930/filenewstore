@@ -1310,7 +1310,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 
                 # Upload to catbox.moe (highly reliable image hosting)
                 import io
-                async with aiohttp.ClientSession() as session:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+                async with aiohttp.ClientSession(headers=headers) as session:
                     try:
                         form = aiohttp.FormData()
                         form.add_field("reqtype", "fileupload")
@@ -1333,14 +1336,31 @@ async def cb_handler(client: Client, query: CallbackQuery):
                                     photo_url = "https://telegra.ph" + result[0]["src"]
                                 else:
                                     raise Exception("Telegra.ph upload failed")
-                        except Exception:
+                        except Exception as tg_err:
+                            logger.error(f"Telegra.ph upload failed: {tg_err}. Trying graph.org...")
                             # Fallback to graph.org
-                            async with session.post("https://graph.org/upload", data=form_fallback) as resp2:
-                                result2 = await resp2.json()
-                                if isinstance(result2, list) and result2[0].get("src"):
-                                    photo_url = "https://graph.org" + result2[0]["src"]
-                                else:
-                                    raise Exception("Upload failed on all providers (Catbox, Telegraph, Graph).")
+                            try:
+                                async with session.post("https://graph.org/upload", data=form_fallback) as resp2:
+                                    result2 = await resp2.json()
+                                    if isinstance(result2, list) and result2[0].get("src"):
+                                        photo_url = "https://graph.org" + result2[0]["src"]
+                                    else:
+                                        raise Exception("Graph.org upload failed")
+                            except Exception as graph_err:
+                                logger.error(f"Graph.org upload failed: {graph_err}. Trying tmpfiles.org...")
+                                # Fallback to tmpfiles.org
+                                try:
+                                    form_tmp = aiohttp.FormData()
+                                    form_tmp.add_field("file", io.BytesIO(file_bytes), filename="start.jpg")
+                                    async with session.post("https://tmpfiles.org/api/v1/upload", data=form_tmp) as resp3:
+                                        res3 = await resp3.json()
+                                        if res3.get("status") == "success" and "data" in res3 and "url" in res3["data"]:
+                                            raw_url = res3["data"]["url"]
+                                            photo_url = raw_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
+                                        else:
+                                            raise Exception(f"tmpfiles.org invalid response: {res3}")
+                                except Exception as tmp_err:
+                                    raise Exception(f"All providers failed. Catbox: {catbox_err} | Telegraph: {tg_err} | Graph: {graph_err} | Tmpfiles: {tmp_err}")
                 
                 await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"start_photo": photo_url}})
                 await msg.reply(f"<b>✅ Start Photo updated successfully!\n\nURL: <code>{photo_url}</code></b>")
