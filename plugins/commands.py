@@ -341,7 +341,7 @@ async def start(client, message):
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
                 ]
                 text = (
-                    f"<b><u>⚙️ TMA Setting</u></b>\n\n"
+                    f"<b><u>⚙️ TMA Ads Setting</u></b>\n\n"
                     f"  - Status: {status_txt}\n"
                     f"  - Domain: <code>vplink.in</code>\n"
                     f"  - API Key: {api_display}\n"
@@ -1591,7 +1591,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ]
         
         text = (
-            f"<b><u>⚙️ TMA Setting</u></b>\n\n"
+            f"<b><u>⚙️ TMA Ads Setting</u></b>\n\n"
             f"  - Status: {status_txt}\n"
             f"  - Domain: <code>vplink.in</code>\n"
             f"  - API Key: {api_display}\n"

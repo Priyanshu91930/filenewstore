@@ -723,7 +723,7 @@ async def settings_command(client, message):
     main_bot_username = (await StreamBot.get_me()).username
     if bot_doc and int(bot_doc['user_id']) == message.from_user.id:
         buttons.insert(0, [InlineKeyboardButton('⚙️ Bot Settings', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
-    buttons.insert(0, [InlineKeyboardButton('⚙️ TMA Setting', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
+    buttons.insert(0, [InlineKeyboardButton('⚙️ TMA Ads Setting', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
@@ -1171,7 +1171,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         main_bot_username = (await StreamBot.get_me()).username
         if bot_doc and int(bot_doc['user_id']) == query.from_user.id:
             buttons.insert(0, [InlineKeyboardButton('⚙️ Bot Settings', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
-        buttons.insert(0, [InlineKeyboardButton('⚙️ TMA Setting', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
+        buttons.insert(0, [InlineKeyboardButton('⚙️ TMA Ads Setting', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
