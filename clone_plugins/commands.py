@@ -1378,7 +1378,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 title=title,
                 description=f"Get VIP access for {'Lifetime' if days == 0 else f'{days} days'} on this bot. Enjoy ad-free and instant file downloads!",
                 payload=f"vip_stars_{days}",
-                provider_token="",
                 currency="XTR",
                 prices=[LabeledPrice(label=title, amount=amount)],
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back to Plans", callback_data="buy_plan")]])
