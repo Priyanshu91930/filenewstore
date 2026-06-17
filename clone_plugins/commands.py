@@ -47,6 +47,46 @@ def get_size(size):
         size /= 1024.0
     return "%.2f %s" % (size, units[i])
 
+def parse_stars_prices(plans_text):
+    stars_1m = None
+    stars_3m = None
+    stars_lifetime = None
+    
+    if not plans_text:
+        return stars_1m, stars_3m, stars_lifetime
+        
+    # Remove HTML tags to process clean text
+    text = re.sub(r'<[^>]+>', '', plans_text).lower()
+    
+    # Split by lines
+    lines = text.split('\n')
+    for line in lines:
+        line = line.strip()
+        # Find all integers
+        numbers = re.findall(r'\b\d+\b', line)
+        if not numbers:
+            continue
+            
+        # Check matching keywords
+        if any(kw in line for kw in ["1 month", "1month", "30 days", "30days", "monthly"]):
+            price_candidates = [int(n) for n in numbers if n not in ["1", "30"]]
+            if price_candidates:
+                stars_1m = price_candidates[0]
+            elif len(numbers) == 1:
+                stars_1m = int(numbers[0])
+        elif any(kw in line for kw in ["3 month", "3month", "90 days", "90days"]):
+            price_candidates = [int(n) for n in numbers if n not in ["3", "90"]]
+            if price_candidates:
+                stars_3m = price_candidates[0]
+            elif len(numbers) == 1:
+                stars_3m = int(numbers[0])
+        elif any(kw in line for kw in ["lifetime", "life time", "life-time", "forever"]):
+            price_candidates = [int(n) for n in numbers]
+            if price_candidates:
+                stars_lifetime = price_candidates[0]
+                
+    return stars_1m, stars_3m, stars_lifetime
+
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
@@ -1179,27 +1219,67 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         msg_text = await client.ask(
             chat_id=query.message.chat.id,
-            text="<b>✍️ Now please send the plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - $5\n3 Months - $12\nLifetime - $30</code></b>"
+            text="<b>✍️ Now please send the UPI plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - 199\n3 Months - 399\nLifetime - 799</code></b>"
         )
         if msg_text.text and msg_text.text.strip() == "/cancel":
             return await msg_text.reply("<b>Cancelled plan configuration.</b>")
             
         plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
         
+        # Parse prices to verify format and display confirmation
+        stars_1m, stars_3m, stars_lifetime = parse_stars_prices(plans_text)
+        s_1m = stars_1m if stars_1m is not None else 50
+        s_3m = stars_3m if stars_3m is not None else 120
+        s_lifetime = stars_lifetime if stars_lifetime is not None else 300
+        
         await mongo_db.plans_config.update_one(
             {"_id": me.id},
             {"$set": {
                 "payment_qr": qr_file_id,
-                "plans_text": plans_text
+                "plans_text": plans_text,
+                "stars_1m": s_1m,
+                "stars_3m": s_3m,
+                "stars_lifetime": s_lifetime
             }},
             upsert=True
         )
         
-        await msg_text.reply("<b>✅ Payment Plan configured successfully!</b>")
+        await msg_text.reply(
+            f"<b>✅ Payment Plan configured successfully!\n\n"
+            f"⭐ Telegram Stars Prices (auto-extracted from plan text):\n"
+            f"• 1 Month — {s_1m} Stars\n"
+            f"• 3 Months — {s_3m} Stars\n"
+            f"• Lifetime — {s_lifetime} Stars</b>"
+        )
         query.data = "settings"
         return await cb_handler(client, query)
 
     elif query.data == "buy_plan":
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        if not plan_cfg:
+            return await query.answer("Plans not configured!", show_alert=True)
+            
+        await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
+        
+        btn = [
+            [InlineKeyboardButton("💳 UPI Payment", callback_data="buy_upi")],
+            [InlineKeyboardButton("⭐ Telegram Stars", callback_data="buy_stars")],
+            [InlineKeyboardButton("« Back", callback_data="plan_status_back")]
+        ]
+        
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+            
+        await client.send_message(
+            chat_id=query.message.chat.id,
+            text="<b>🌟 <u>Choose Payment Method</u>\n\nSelect How You Would Like To Pay For Premium Access</b>",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        await query.answer()
+
+    elif query.data == "buy_upi":
         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
         if not plan_cfg:
             return await query.answer("Plans not configured!", show_alert=True)
@@ -1226,9 +1306,122 @@ async def cb_handler(client: Client, query: CallbackQuery):
             chat_id=query.message.chat.id,
             photo=qr_file_id,
             caption=caption,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="start")]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="buy_plan")]])
         )
         await query.message.delete()
+        await query.answer()
+
+    elif query.data == "buy_stars":
+        await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
+        
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        parsed_1m, parsed_3m, parsed_lifetime = parse_stars_prices(plan_cfg.get("plans_text", "") if plan_cfg else "")
+        
+        stars_1m = parsed_1m if parsed_1m is not None else (plan_cfg.get("stars_1m", 50) if plan_cfg else 50)
+        stars_3m = parsed_3m if parsed_3m is not None else (plan_cfg.get("stars_3m", 120) if plan_cfg else 120)
+        stars_lifetime = parsed_lifetime if parsed_lifetime is not None else (plan_cfg.get("stars_lifetime", 300) if plan_cfg else 300)
+        
+        text = (
+            "<b>⭐ <u>Telegram Stars Payment</u>\n\n"
+            "Select the VIP plan you want to purchase using Telegram Stars:</b>\n\n"
+            f"• <b>1 Month</b> — <code>{stars_1m} Stars</code>\n"
+            f"• <b>3 Months</b> — <code>{stars_3m} Stars</code>\n"
+            f"• <b>Lifetime</b> — <code>{stars_lifetime} Stars</code>"
+        )
+        btn = [
+            [InlineKeyboardButton(f"⭐ 1 Month ({stars_1m} Stars)", callback_data="pay_stars_30")],
+            [InlineKeyboardButton(f"⭐ 3 Months ({stars_3m} Stars)", callback_data="pay_stars_90")],
+            [InlineKeyboardButton(f"⭐ Lifetime ({stars_lifetime} Stars)", callback_data="pay_stars_0")],
+            [InlineKeyboardButton("« Back", callback_data="buy_plan")]
+        ]
+        
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+            
+        await client.send_message(
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        await query.answer()
+
+    elif query.data.startswith("pay_stars_"):
+        days = int(query.data.split("_")[-1])
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        parsed_1m, parsed_3m, parsed_lifetime = parse_stars_prices(plan_cfg.get("plans_text", "") if plan_cfg else "")
+        
+        stars_1m = parsed_1m if parsed_1m is not None else (plan_cfg.get("stars_1m", 50) if plan_cfg else 50)
+        stars_3m = parsed_3m if parsed_3m is not None else (plan_cfg.get("stars_3m", 120) if plan_cfg else 120)
+        stars_lifetime = parsed_lifetime if parsed_lifetime is not None else (plan_cfg.get("stars_lifetime", 300) if plan_cfg else 300)
+        
+        if days == 30:
+            title = "1 Month VIP Access"
+            amount = stars_1m
+        elif days == 90:
+            title = "3 Months VIP Access"
+            amount = stars_3m
+        else:
+            title = "Lifetime VIP Access"
+            amount = stars_lifetime
+            
+        from pyrogram.types import LabeledPrice
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+            
+        try:
+            await client.send_invoice(
+                chat_id=query.message.chat.id,
+                title=title,
+                description=f"Get VIP access for {'Lifetime' if days == 0 else f'{days} days'} on this bot. Enjoy ad-free and instant file downloads!",
+                payload=f"vip_stars_{days}",
+                provider_token="",
+                currency="XTR",
+                prices=[LabeledPrice(label=title, amount=amount)],
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back to Plans", callback_data="buy_plan")]])
+            )
+        except Exception as e:
+            logger.error(f"Error sending invoice: {e}")
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=f"<b>❌ Error sending invoice: {e}</b>\n\nPlease try again later or use UPI payment.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back to Plans", callback_data="buy_plan")]])
+            )
+        await query.answer()
+
+
+    elif query.data == "plan_status_back":
+        try:
+            await query.message.delete()
+        except:
+            pass
+            
+        user_vip = await is_vip(me.id, query.from_user.id)
+        if user_vip:
+            from datetime import datetime
+            vip_user = await mongo_db.vip_users.find_one({"bot_id": me.id, "user_id": query.from_user.id})
+            expiry = vip_user.get("expiry")
+            expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S') if expiry else "Lifetime"
+            
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=f"<b>✨ <u>VIP Plan Status</u>\n\n"
+                     f"➜ Status: Active VIP Member ✅\n"
+                     f"➜ Expiry: <code>{expiry_str}</code>\n\n"
+                     f"Thank you for supporting us! You bypass all shortlink/TMA verifications.</b>"
+            )
+        else:
+            btn = [[InlineKeyboardButton("🛒 Buy Plan", callback_data="buy_plan")]]
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=f"<b>❌ <u>VIP Plan Status</u>\n\n"
+                     f"➜ Status: No Active Plan ❌\n\n"
+                     f"You will need to bypass verifications to download files. Get a VIP plan to unlock instant downloads!</b>",
+                reply_markup=InlineKeyboardMarkup(btn)
+            )
         await query.answer()
 
 @Client.on_message(filters.command("plan") & filters.private)
@@ -1262,6 +1455,67 @@ async def plan_command_handler(client, message):
             f"You will need to bypass verifications to download files. Get a VIP plan to unlock instant downloads!</b>",
             reply_markup=InlineKeyboardMarkup(btn)
         )
+
+@Client.on_pre_checkout_query()
+async def pre_checkout_handler(client, pre_checkout_query):
+    await pre_checkout_query.answer(ok=True)
+
+@Client.on_message(filters.successful_payment)
+async def successful_payment_handler(client, message):
+    me = client.me or await client.get_me()
+    payment = message.successful_payment
+    payload = payment.invoice_payload
+    
+    if payload.startswith("vip_stars_"):
+        try:
+            days = int(payload.split("_")[-1])
+        except ValueError:
+            days = 30
+            
+        import time
+        from datetime import datetime
+        if days == 0:
+            expiry = None
+            days_label = "Lifetime"
+            expiry_str = "Lifetime"
+        else:
+            expiry = time.time() + days * 86400
+            days_label = f"{days} Days"
+            expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+            
+        user_id = message.from_user.id
+        
+        await mongo_db.vip_users.update_one(
+            {"bot_id": me.id, "user_id": user_id},
+            {"$set": {"expiry": expiry}},
+            upsert=True
+        )
+        
+        await message.reply_text(
+            f"🎉 <b>VIP Activation Successful!</b>\n\n"
+            f"Thank you for your payment of <b>{payment.total_amount} Telegram Stars</b>.\n\n"
+            f"➜ Plan: <b>{days_label} VIP Access</b>\n"
+            f"➜ Expiry: <code>{expiry_str}</code>\n\n"
+            f"You bypass all shortlinks and TMA verifications! Enjoy instant downloads."
+        )
+        
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        
+        recipients = [owner_id] + list(mods)
+        for rcpt in recipients:
+            if rcpt:
+                try:
+                    await client.send_message(
+                        chat_id=rcpt,
+                        text=f"<b>⭐ New VIP Purchase via Telegram Stars!</b>\n\n"
+                             f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{user_id}</code>)\n"
+                             f"💵 <b>Amount:</b> <code>{payment.total_amount} Stars</code>\n"
+                             f"📅 <b>Plan:</b> {days_label}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to notify recipient {rcpt} of successful payment: {e}")
 
 @Client.on_message(filters.photo & filters.private & filters.incoming)
 async def photo_message_handler(client, message):
