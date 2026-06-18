@@ -8,14 +8,23 @@
   <meta name="description" content="Watch a short ad to unlock your file instantly. Powered by AnihubYT." />
   <meta name="monetag" content="4a363b007c4dacad168ad59f9dc204f0">
 
-  <!-- Telegram Web App SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Telegram Web App SDK (self-hosted to avoid ISP blocks on telegram.org) -->
+  <script src="/static/telegram-web-app.js" onerror="loadTgJsFallback()"></script>
+  <script>
+    function loadTgJsFallback() {
+      // Fallback: try loading from telegram.org if self-hosted fails
+      var s = document.createElement('script');
+      s.src = 'https://telegram.org/js/telegram-web-app.js';
+      document.head.appendChild(s);
+    }
+  </script>
 
-  <!-- Google Fonts -->
+  <!-- Google Fonts: loaded asynchronously so ISP block won't freeze page -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
-    rel="stylesheet" />
+    rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" /></noscript>
 
   <style>
     :root {
@@ -44,7 +53,7 @@
     html,
     body {
       height: 100%;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: var(--bg);
       color: var(--text);
       overflow-x: hidden;

@@ -34,9 +34,48 @@ def mini_app():
     short_link   = ""
     if uid and token and file_data:
         try:
-            short_link = asyncio.run(get_tma_shortlink(int(uid), token, file_data, bot_username))
+            # Use a timeout so a slow/blocked shortlink API won't freeze the page
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                short_link = loop.run_until_complete(
+                    asyncio.wait_for(
+                        get_tma_shortlink(int(uid), token, file_data, bot_username),
+                        timeout=4.0   # give up after 4 seconds
+                    )
+                )
+            except asyncio.TimeoutError:
+                print("Warning: shortlink generation timed out — using direct bot link fallback")
+                short_link = ""
+            finally:
+                loop.close()
         except Exception as e:
             print(f"Error generating shortlink: {e}")
+
+    # Check if user is already TMA-verified
+    is_verified = False
+    remaining_time = 0
+    if uid and token:
+        try:
+            from utils import check_tma_verification, TMA_TIMEOUT
+            import time as _time
+            loop2 = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop2)
+            try:
+                is_verified = loop2.run_until_complete(
+                    asyncio.wait_for(check_tma_verification(int(uid)), timeout=3.0)
+                )
+            finally:
+                loop2.close()
+            if is_verified:
+                # Calculate remaining time
+                from utils import TMA_VERIFIED
+                key = int(uid)
+                if key in TMA_VERIFIED:
+                    elapsed = _time.time() - TMA_VERIFIED[key]
+                    remaining_time = max(0, int(TMA_TIMEOUT - elapsed))
+        except Exception as e:
+            print(f"Error checking TMA verification: {e}")
 
     return render_template(
         'index.html',
@@ -47,7 +86,10 @@ def mini_app():
         file_id         = file_data,          # passed to JS for display/share
         file_deeplink   = file_data,          # used to build the bot ?start= link
         short_link      = short_link,
+        is_verified     = is_verified,
+        remaining_time  = remaining_time,
     )
+
 
 @app.route('/tma-verify', methods=['POST'])
 def tma_verify():

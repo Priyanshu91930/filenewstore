@@ -66,7 +66,36 @@ except Exception as import_err:
 loop = asyncio.get_event_loop()
 
 
+
+# ── Auto-download Telegram WebApp JS (self-host to avoid user-side ISP blocks) ──
+def _ensure_tg_webapp_js():
+    """Download telegram-web-app.js from telegram.org at startup so it can be
+    served from our own domain. This means users with blocked telegram.org (ISP
+    bans) can still load the Mini App SDK correctly."""
+    import os, urllib.request
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    os.makedirs(static_dir, exist_ok=True)
+    dest = os.path.join(static_dir, "telegram-web-app.js")
+    # Only download if file doesn't exist or is older than 24 hours
+    should_download = not os.path.exists(dest)
+    if not should_download:
+        import time
+        if time.time() - os.path.getmtime(dest) > 86400:  # 24 hours
+            should_download = True
+    if should_download:
+        try:
+            url = "https://telegram.org/js/telegram-web-app.js"
+            logger.info(f"Downloading {url} → {dest}")
+            urllib.request.urlretrieve(url, dest)
+            logger.info("telegram-web-app.js downloaded successfully (self-hosted)")
+        except Exception as e:
+            logger.warning(f"Could not download telegram-web-app.js: {e} — CDN fallback will be used")
+
+_ensure_tg_webapp_js()
+# ─────────────────────────────────────────────────────────────────────────────
+
 async def start():
+
     logger.info("=== async start() called ===")
     try:
         logger.info("Starting StreamBot...")
