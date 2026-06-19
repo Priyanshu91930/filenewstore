@@ -713,7 +713,7 @@ async def start(client, message):
                 pass
         
         if f_caption:
-            await msg.edit_caption(f_caption)
+            await msg.edit_caption(caption=f_caption, reply_markup=reply_markup)
         
         # Dynamic Auto Delete
         is_autodel = bot_owner.get("auto_delete_enabled", True) if bot_owner else True
