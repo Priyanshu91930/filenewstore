@@ -322,7 +322,7 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
 
     mime_type = file_id.mime_type
     file_name = file_id.file_name
-    disposition = "inline"
+    disposition = "attachment"
 
     if mime_type:
         if not file_name:
@@ -346,5 +346,6 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
             "Content-Length": str(req_length),
             "Content-Disposition": f'{disposition}; filename="{file_name}"',
             "Accept-Ranges": "bytes",
+            "X-Accel-Buffering": "no",
         },
     )
