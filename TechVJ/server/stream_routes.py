@@ -220,15 +220,22 @@ async def sw_route_handler(_):
 async def stream_handler(request: web.Request):
     try:
         path = request.match_info["path"]
+        filename = None
         match = re.search(r"^([a-zA-Z0-9_-]{6})(\d+)$", path)
         if match:
             secure_hash = match.group(1)
             id = int(match.group(2))
         else:
-            id = int(re.search(r"(\d+)(?:\/\S+)?", path).group(1))
+            first_part = path.split("/")[0]
+            if first_part.isdigit():
+                id = int(first_part)
+            else:
+                id = first_part
+            if "/" in path:
+                filename = "/".join(path.split("/")[1:])
             secure_hash = request.rel_url.query.get("hash")
         bot = request.rel_url.query.get("bot")
-        return web.Response(text=await render_page(id, secure_hash, bot=bot), content_type='text/html')
+        return web.Response(text=await render_page(id, secure_hash, bot=bot, filename=filename), content_type='text/html')
     except InvalidHash as e:
         raise web.HTTPForbidden(text=e.message)
     except FIleNotFound as e:
@@ -250,7 +257,11 @@ async def stream_handler(request: web.Request):
             secure_hash = match.group(1)
             id = int(match.group(2))
         else:
-            id = int(re.search(r"(\d+)(?:\/\S+)?", path).group(1))
+            first_part = path.split("/")[0]
+            if first_part.isdigit():
+                id = int(first_part)
+            else:
+                id = first_part
             secure_hash = request.rel_url.query.get("hash")
         return await media_streamer(request, id, secure_hash)
     except InvalidHash as e:
@@ -306,9 +317,18 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
         logging.debug(f"Creating new ByteStreamer object for client {index}")
         tg_connect = ByteStreamer(faster_client)
         class_cache[faster_client] = tg_connect
-    logging.debug("before calling get_file_properties")
-    file_id = await tg_connect.get_file_properties(id)
-    logging.debug("after calling get_file_properties")
+    if isinstance(id, str):
+        from plugins.clone import async_mongo_db
+        from pyrogram.file_id import FileId
+        file_doc = await async_mongo_db.clone_files.find_one({"_id": id})
+        if not file_doc:
+            logging.debug(f"Clone file with ID {id} not found in DB")
+            raise FIleNotFound
+        file_id = FileId.decode(file_doc["file_id"])
+    else:
+        logging.debug("before calling get_file_properties")
+        file_id = await tg_connect.get_file_properties(id)
+        logging.debug("after calling get_file_properties")
     
     if file_id.unique_id[:6] != secure_hash:
         logging.debug(f"Invalid hash for message with ID {id}")

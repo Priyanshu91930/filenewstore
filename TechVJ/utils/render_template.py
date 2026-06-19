@@ -13,9 +13,20 @@ import logging
 import aiohttp
 
 
-async def render_page(id, secure_hash, src=None, bot=None):
-    file = await StreamBot.get_messages(int(LOG_CHANNEL), int(id))
-    file_data = await get_file_ids(StreamBot, int(LOG_CHANNEL), int(id))
+async def render_page(id, secure_hash, src=None, bot=None, filename=None):
+    if isinstance(id, str):
+        from plugins.clone import async_mongo_db
+        from pyrogram.file_id import FileId
+        file_doc = await async_mongo_db.clone_files.find_one({"_id": id})
+        if not file_doc:
+            raise InvalidHash
+        file_data = FileId.decode(file_doc["file_id"])
+        resolved_filename = filename or getattr(file_data, "file_name", "Cloned File")
+    else:
+        file = await StreamBot.get_messages(int(LOG_CHANNEL), int(id))
+        file_data = await get_file_ids(StreamBot, int(LOG_CHANNEL), int(id))
+        resolved_filename = filename or file_data.file_name or ""
+
     if file_data.unique_id[:6] != secure_hash:
         logging.debug(f"link hash: {secure_hash} - {file_data.unique_id[:6]}")
         logging.debug(f"Invalid hash for message with - ID {id}")
@@ -23,7 +34,7 @@ async def render_page(id, secure_hash, src=None, bot=None):
 
     src = urllib.parse.urljoin(
         URL,
-        f"{id}/{urllib.parse.quote_plus(file_data.file_name)}?hash={secure_hash}",
+        f"{id}/{urllib.parse.quote_plus(resolved_filename)}?hash={secure_hash}",
     )
     if bot:
         src += f"&bot={bot}"
@@ -41,7 +52,7 @@ async def render_page(id, secure_hash, src=None, bot=None):
     with open(template_file) as f:
         template = jinja2.Template(f.read())
 
-    f_name = file_data.file_name or ""
+    f_name = resolved_filename or ""
     file_name = f_name.replace("_", " ")
 
     return template.render(

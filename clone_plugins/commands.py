@@ -639,53 +639,15 @@ async def start(client, message):
                 reply_markup=InlineKeyboardMarkup(btn)
             )
 
-
-
     logger.info("Proceeding to send_cached_media...")
     try:
         is_nofwd = (bot_owner.get("no_forward", False) if bot_owner else False) and not user_is_vip
         is_stream = bot_owner.get("stream_mode", False) if bot_owner else False
-        reply_markup = None
-        if is_stream:
-            try:
-                log_msg_id = file_doc.get("log_msg_id") if file_doc else None
-                if not log_msg_id:
-                    from TechVJ.bot import StreamBot
-                    from config import LOG_CHANNEL
-                    sent_msg = await StreamBot.send_cached_media(chat_id=LOG_CHANNEL, file_id=file_id)
-                    log_msg_id = sent_msg.id
-                    if file_doc:
-                        await mongo_db.clone_files.update_one({"_id": decoded_id}, {"$set": {"log_msg_id": log_msg_id}})
-                
-                if log_msg_id:
-                    from TechVJ.bot import StreamBot
-                    from config import LOG_CHANNEL
-                    log_msg = await StreamBot.get_messages(LOG_CHANNEL, log_msg_id)
-                    if log_msg and (log_msg.video or log_msg.document):
-                        from urllib.parse import quote_plus
-                        from TechVJ.utils.file_properties import get_name, get_hash
-                        
-                        me = client.me or await client.get_me()
-                        stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}"
-                        download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}"
-                        
-                        if stream and download and (stream.startswith("http://") or stream.startswith("https://")) and (download.startswith("http://") or download.startswith("https://")):
-                            button = [[
-                                InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
-                                InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
-                            ],[
-                                InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
-                            ],[
-                                InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
-                            ]]
-                            reply_markup = InlineKeyboardMarkup(button)
-            except Exception as e:
-                logger.error(f"Error generating stream links for clone: {e}")
-                
-        if not reply_markup:
-            reply_markup = InlineKeyboardMarkup([[
-                InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
-            ]])
+        
+        reply_markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+        ]])
+        
         msg = await client.send_cached_media(
             chat_id=message.from_user.id,
             file_id=file_id,
@@ -700,7 +662,6 @@ async def start(client, message):
     try:
         filetype = msg.media
         file = getattr(msg, filetype.value)
-        # Build title: strip existing @mentions/URLs, then prepend owner's prefix
         old_title = getattr(file, "file_name", "") or ""
         clean_name = ' '.join(filter(lambda x: not x.startswith('[') and not x.startswith('@') and not x.startswith('http') and not x.startswith('www.'), old_title.split()))
         title = (caption_prefix + ' ' + clean_name).strip() if caption_prefix else clean_name
@@ -712,8 +673,37 @@ async def start(client, message):
             except:
                 pass
         
+        if is_stream:
+            try:
+                from urllib.parse import quote_plus
+                from pyrogram.file_id import FileId
+                
+                log_msg_id = file_doc.get("log_msg_id") if file_doc else None
+                parsed_file_id = FileId.decode(file_id)
+                secure_hash = parsed_file_id.unique_id[:6]
+                
+                stream_id = str(log_msg_id) if log_msg_id else decoded_id
+                me = client.me or await client.get_me()
+                
+                stream = f"{URL}watch/{stream_id}/{quote_plus(clean_name)}?hash={secure_hash}&bot={me.username}"
+                download = f"{URL}{stream_id}/{quote_plus(clean_name)}?hash={secure_hash}&bot={me.username}"
+                
+                button = [[
+                    InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
+                    InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
+                ],[
+                    InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                ],[
+                    InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+                ]]
+                reply_markup = InlineKeyboardMarkup(button)
+            except Exception as e:
+                logger.error(f"Error generating stream links for clone: {e}")
+
         if f_caption:
             await msg.edit_caption(caption=f_caption, reply_markup=reply_markup)
+        else:
+            await msg.edit_reply_markup(reply_markup=reply_markup)
         
         # Dynamic Auto Delete
         is_autodel = bot_owner.get("auto_delete_enabled", True) if bot_owner else True
