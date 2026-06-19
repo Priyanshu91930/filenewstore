@@ -489,6 +489,43 @@ async def start(client, message):
                         reply_markup = InlineKeyboardMarkup([[
                             InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
                         ]])
+                        
+                        stream_mode = bot_doc.get("stream_mode", False) if bot_doc else False
+                        if stream_mode:
+                            try:
+                                info = await client.get_messages(c_id, int(m_id))
+                                if info.video or info.document:
+                                    if int(c_id) == int(LOG_CHANNEL):
+                                        log_msg_id = m_id
+                                    else:
+                                        from TechVJ.bot import StreamBot
+                                        from config import LOG_CHANNEL
+                                        sent_msg = await StreamBot.send_cached_media(chat_id=LOG_CHANNEL, file_id=getattr(info, info.media.value).file_id)
+                                        log_msg_id = sent_msg.id
+                                    
+                                    from TechVJ.bot import StreamBot
+                                    from config import LOG_CHANNEL
+                                    log_msg = await StreamBot.get_messages(LOG_CHANNEL, log_msg_id)
+                                    
+                                    from urllib.parse import quote_plus
+                                    from TechVJ.utils.file_properties import get_name, get_hash
+                                    
+                                    stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                                    download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                                    
+                                    if stream and download and (stream.startswith("http://") or stream.startswith("https://")) and (download.startswith("http://") or download.startswith("https://")):
+                                        button = [[
+                                            InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
+                                            InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
+                                        ],[
+                                            InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                                        ],[
+                                            InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+                                        ]]
+                                        reply_markup = InlineKeyboardMarkup(button)
+                            except Exception as e:
+                                logger.error(f"Clone batch stream button error: {e}")
+                        
                         await client.copy_message(
                             chat_id=message.from_user.id, 
                             from_chat_id=c_id, 
@@ -606,9 +643,47 @@ async def start(client, message):
     logger.info("Proceeding to send_cached_media...")
     try:
         is_nofwd = (bot_owner.get("no_forward", False) if bot_owner else False) and not user_is_vip
-        reply_markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
-        ]])
+        is_stream = bot_owner.get("stream_mode", False) if bot_owner else False
+        reply_markup = None
+        if is_stream:
+            try:
+                log_msg_id = file_doc.get("log_msg_id") if file_doc else None
+                if not log_msg_id:
+                    from TechVJ.bot import StreamBot
+                    from config import LOG_CHANNEL
+                    sent_msg = await StreamBot.send_cached_media(chat_id=LOG_CHANNEL, file_id=file_id)
+                    log_msg_id = sent_msg.id
+                    if file_doc:
+                        await mongo_db.clone_files.update_one({"_id": decoded_id}, {"$set": {"log_msg_id": log_msg_id}})
+                
+                if log_msg_id:
+                    from TechVJ.bot import StreamBot
+                    from config import LOG_CHANNEL
+                    log_msg = await StreamBot.get_messages(LOG_CHANNEL, log_msg_id)
+                    if log_msg and (log_msg.video or log_msg.document):
+                        from urllib.parse import quote_plus
+                        from TechVJ.utils.file_properties import get_name, get_hash
+                        
+                        stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                        download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                        
+                        if stream and download and (stream.startswith("http://") or stream.startswith("https://")) and (download.startswith("http://") or download.startswith("https://")):
+                            button = [[
+                                InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
+                                InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
+                            ],[
+                                InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                            ],[
+                                InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+                            ]]
+                            reply_markup = InlineKeyboardMarkup(button)
+            except Exception as e:
+                logger.error(f"Error generating stream links for clone: {e}")
+                
+        if not reply_markup:
+            reply_markup = InlineKeyboardMarkup([[
+                InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+            ]])
         msg = await client.send_cached_media(
             chat_id=message.from_user.id,
             file_id=file_id,
@@ -703,12 +778,16 @@ async def settings_command(client, message):
     tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
     plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
     plan_status = "Enabled 🟢" if plan_enabled else "Disabled 🔴"
+    stream_mode = bot_doc.get("stream_mode", False) if bot_doc else False
+    stream_status = "Enabled 🟢" if stream_mode else "Disabled 🔴"
     buttons = [[
         InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
         InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if tma_mode else 'OFF 🔴'}", callback_data="toggle_tma")
     ],[
         InlineKeyboardButton('💳 Configure Plan', callback_data='setplan'),
         InlineKeyboardButton(f"VIP Plan: {'ON 🟢' if plan_enabled else 'OFF 🔴'}", callback_data="toggle_plan")
+    ],[
+        InlineKeyboardButton(f"Stream: {'ON 🟢' if stream_mode else 'OFF 🔴'}", callback_data="toggle_stream")
     ],[
         InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
         InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -727,10 +806,11 @@ async def settings_command(client, message):
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
+
 
 
 @Client.on_message(filters.command('setcaption') & filters.private)
@@ -1040,6 +1120,19 @@ async def cb_handler(client: Client, query: CallbackQuery):
         new_mode = not plan_enabled
         await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"plan_enabled": new_mode}})
         await query.answer(f"VIP Plan {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
+        query.data = "settings"
+        return await cb_handler(client, query)
+    elif query.data == "toggle_stream":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure Stream settings!", show_alert=True)
+        
+        stream_mode = bot_doc.get("stream_mode", False) if bot_doc else False
+        new_mode = not stream_mode
+        await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"stream_mode": new_mode}})
+        await query.answer(f"Stream Mode {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
         query.data = "settings"
         return await cb_handler(client, query)
     elif query.data == "start":

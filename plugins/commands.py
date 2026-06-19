@@ -538,7 +538,7 @@ async def start(client, message):
                     if f_caption is None:
                         f_caption = f"@viralverse0909 {title}"
                     reply_markup = None
-                    if STREAM_MODE == True:
+                    if config.STREAM_MODE == True:
                             if info.video or info.document:
                                 log_msg = info
                                 fileName = {quote_plus(get_name(log_msg))}
@@ -652,7 +652,7 @@ async def start(client, message):
                     except:
                         f_caption = f"@viralverse0909 <code>{title}</code>"
                 reply_markup = None
-                if STREAM_MODE == True:
+                if config.STREAM_MODE == True:
                     if msg.video or msg.document:
                         log_msg = msg
                         fileName = {quote_plus(get_name(log_msg))}
@@ -835,17 +835,19 @@ async def settings_command(client, message):
     user_id = message.from_user.id
     user = await get_user(user_id)
     tma_status = "Enabled 🟢" if config.TMA_MODE else "Disabled 🔴"
+    stream_status = "Enabled 🟢" if config.STREAM_MODE else "Disabled 🔴"
     buttons = [[
         InlineKeyboardButton('sᴇᴛ sʜᴏʀᴛɴᴇʀ ᴀᴘɪ', callback_data='set_api'),
         InlineKeyboardButton('sᴇᴛ ʙᴀsᴇ sɪᴛᴇ', callback_data='set_site')
     ],[
-        InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if config.TMA_MODE else 'OFF 🔴'}", callback_data="toggle_tma")
+        InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if config.TMA_MODE else 'OFF 🔴'}", callback_data="toggle_tma"),
+        InlineKeyboardButton(f"Stream: {'ON 🟢' if config.STREAM_MODE else 'OFF 🔴'}", callback_data="toggle_stream")
     ],[
         InlineKeyboardButton('🔙 ʙᴀᴄᴋ', callback_data='start')
     ]]
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code></b>",
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code></b>",
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
@@ -1819,7 +1821,26 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if query.from_user.id not in ADMINS:
             return await query.answer("❌ Only the bot owner can configure TMA settings!", show_alert=True)
         config.TMA_MODE = not config.TMA_MODE
+        await clone_mongo_db.settings.update_one(
+            {"_id": "main_settings"},
+            {"$set": {"tma_mode": config.TMA_MODE}},
+            upsert=True
+        )
         await query.answer(f"TMA Ads {'Enabled 🟢' if config.TMA_MODE else 'Disabled 🔴'}", show_alert=True)
+        query.data = "settings"
+        return await cb_handler(client, query)
+
+    elif query.data == "toggle_stream":
+        from config import ADMINS
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ Only the bot owner can configure Stream settings!", show_alert=True)
+        config.STREAM_MODE = not config.STREAM_MODE
+        await clone_mongo_db.settings.update_one(
+            {"_id": "main_settings"},
+            {"$set": {"stream_mode": config.STREAM_MODE}},
+            upsert=True
+        )
+        await query.answer(f"Stream Mode {'Enabled 🟢' if config.STREAM_MODE else 'Disabled 🔴'}", show_alert=True)
         query.data = "settings"
         return await cb_handler(client, query)
 
@@ -1828,6 +1849,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         user_id = query.from_user.id
         user = await get_user(user_id)
         tma_status = "Enabled 🟢" if config.TMA_MODE else "Disabled 🔴"
+        stream_status = "Enabled 🟢" if config.STREAM_MODE else "Disabled 🔴"
         
         # Base settings buttons for every user
         buttons = [[
@@ -1838,10 +1860,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
         ]]
         
-        # Only render and allow the global TMA toggle button for bot owners/admins
+        # Only render and allow the global TMA/Stream toggle buttons for bot owners/admins
         if user_id in ADMINS:
             buttons.append([
                 InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if config.TMA_MODE else 'OFF 🔴'}", callback_data="toggle_tma"),
+                InlineKeyboardButton(f"Stream: {'ON 🟢' if config.STREAM_MODE else 'OFF 🔴'}", callback_data="toggle_stream")
+            ])
+            buttons.append([
                 InlineKeyboardButton("💳 Configure Plan", callback_data="setplan")
             ])
             
@@ -1854,10 +1879,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code></b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code></b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+
 
     elif query.data == "set_api":
         await query.message.edit_text(

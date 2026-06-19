@@ -106,6 +106,22 @@ async def start():
         StreamBot.username = bot_info.username
         logger.info(f"Main bot: @{bot_info.username} (id={bot_info.id})")
 
+        # Load main bot settings from MongoDB
+        try:
+            from plugins.clone import async_mongo_db
+            db_config = await async_mongo_db.settings.find_one({"_id": "main_settings"})
+            if db_config:
+                import config
+                if "stream_mode" in db_config:
+                    config.STREAM_MODE = db_config["stream_mode"]
+                    logger.info(f"Loaded STREAM_MODE={config.STREAM_MODE} from DB")
+                if "tma_mode" in db_config:
+                    config.TMA_MODE = db_config["tma_mode"]
+                    logger.info(f"Loaded TMA_MODE={config.TMA_MODE} from DB")
+        except Exception as e:
+            logger.error(f"Error loading main bot settings from db: {e}")
+
+
         logger.info("Initializing multi-clients...")
         await initialize_clients()
         logger.info("Clients initialized")
