@@ -280,6 +280,7 @@ class_cache = {}
 
 async def media_streamer(request: web.Request, id: int, secure_hash: str):
     range_header = request.headers.get("Range", 0)
+    logging.info(f"media_streamer called: id={id} ({type(id)}), secure_hash={secure_hash}")
     
     bot_param = request.rel_url.query.get("bot")
     faster_client = None
