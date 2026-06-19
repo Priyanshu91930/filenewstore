@@ -1233,6 +1233,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         tma_status = "Enabled 🟢" if tma_mode else "Disabled 🔴"
         plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
         plan_status = "Enabled 🟢" if plan_enabled else "Disabled 🔴"
+        stream_mode = bot_doc.get("stream_mode", False) if bot_doc else False
+        stream_status = "Enabled 🟢" if stream_mode else "Disabled 🔴"
         
         buttons = [[
             InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
@@ -1240,6 +1242,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ],[
             InlineKeyboardButton('💳 Configure Plan', callback_data='setplan'),
             InlineKeyboardButton(f"VIP Plan: {'ON 🟢' if plan_enabled else 'OFF 🔴'}", callback_data="toggle_plan")
+        ],[
+            InlineKeyboardButton(f"Stream: {'ON 🟢' if stream_mode else 'OFF 🔴'}", callback_data="toggle_stream")
         ],[
             InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -1270,7 +1274,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
