@@ -665,7 +665,18 @@ async def start(client, message):
         old_title = getattr(file, "file_name", "") or ""
         clean_name = ' '.join(filter(lambda x: not x.startswith('[') and not x.startswith('@') and not x.startswith('http') and not x.startswith('www.'), old_title.split()))
         title = (caption_prefix + ' ' + clean_name).strip() if caption_prefix else clean_name
-        size = get_size(getattr(file, "file_size", 0))
+        size_bytes = getattr(file, "file_size", 0)
+        size = get_size(size_bytes)
+        
+        if file_doc and "file_size" not in file_doc:
+            try:
+                await mongo_db.clone_files.update_one(
+                    {"_id": decoded_id},
+                    {"$set": {"file_size": size_bytes}}
+                )
+            except:
+                pass
+                
         f_caption = f"<code>{title}</code>" if title else ""
         if CUSTOM_FILE_CAPTION:
             try:

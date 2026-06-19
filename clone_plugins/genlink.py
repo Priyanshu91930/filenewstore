@@ -145,13 +145,15 @@ async def gen_link_s(client: Client, message):
         short_id = str(uuid.uuid4())[:8]
         bot_username = me.username
 
+        file_size = getattr(media, "file_size", 0)
         try:
             await mongo_db.clone_files.insert_one({
                 "_id": short_id,
                 "bot_username": bot_username,
-                "file_id": file_id
+                "file_id": file_id,
+                "file_size": file_size
             })
-            logger.debug(f"[/link] Stored file in DB with short_id={short_id}")
+            logger.debug(f"[/link] Stored file in DB with short_id={short_id}, size={file_size}")
         except Exception as e:
             logger.error(f"[/link] DB insert failed: {e}")
             return await message.reply(f'<b>❌ DB error: {e}</b>')

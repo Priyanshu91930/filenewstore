@@ -337,6 +337,8 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
         file_id = FileId.decode(file_doc["file_id"])
         safe_hash = secure_hash or ""
         setattr(file_id, "unique_id", safe_hash + "xxxxx")
+        db_file_size = file_doc.get("file_size") or (2 * 1024 * 1024 * 1024)
+        setattr(file_id, "file_size", db_file_size)
     else:
         logging.debug("before calling get_file_properties")
         file_id = await tg_connect.get_file_properties(id)
