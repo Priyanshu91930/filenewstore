@@ -366,22 +366,18 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
         file_id, index, offset, first_part_cut, last_part_cut, part_count, chunk_size
     )
 
-    mime_type = file_id.mime_type
-    file_name = file_id.file_name
+    url_filename = None
+    path_param = request.match_info.get("path", "")
+    if "/" in path_param:
+        url_filename = path_param.split("/")[-1]
+    
+    file_name = getattr(file_id, "file_name", None) or url_filename or f"{secrets.token_hex(4)}"
+    mime_type = getattr(file_id, "mime_type", None)
+    
+    if not mime_type:
+        mime_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+        
     disposition = "attachment"
-
-    if mime_type:
-        if not file_name:
-            try:
-                file_name = f"{secrets.token_hex(2)}.{mime_type.split('/')[1]}"
-            except (IndexError, AttributeError):
-                file_name = f"{secrets.token_hex(2)}.unknown"
-    else:
-        if file_name:
-            mime_type = mimetypes.guess_type(file_id.file_name)[0] or "application/octet-stream"
-        else:
-            mime_type = "application/octet-stream"
-            file_name = f"{secrets.token_hex(2)}.unknown"
 
     return web.Response(
         status=206 if range_header else 200,
