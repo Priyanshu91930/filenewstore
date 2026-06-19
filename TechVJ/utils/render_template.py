@@ -21,6 +21,7 @@ async def render_page(id, secure_hash, src=None, bot=None, filename=None):
         if not file_doc:
             raise InvalidHash
         file_data = FileId.decode(file_doc["file_id"])
+        setattr(file_data, "unique_id", secure_hash + "xxxxx")
         resolved_filename = filename or getattr(file_data, "file_name", "Cloned File")
     else:
         file = await StreamBot.get_messages(int(LOG_CHANNEL), int(id))

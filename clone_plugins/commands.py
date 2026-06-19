@@ -680,7 +680,8 @@ async def start(client, message):
                 
                 log_msg_id = file_doc.get("log_msg_id") if file_doc else None
                 parsed_file_id = FileId.decode(file_id)
-                secure_hash = parsed_file_id.unique_id[:6]
+                secure_hash = decoded_id[:6]
+                setattr(parsed_file_id, "unique_id", secure_hash + "xxxxx")
                 
                 stream_id = str(log_msg_id) if log_msg_id else decoded_id
                 me = client.me or await client.get_me()

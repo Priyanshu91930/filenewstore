@@ -325,6 +325,7 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
             logging.debug(f"Clone file with ID {id} not found in DB")
             raise FIleNotFound
         file_id = FileId.decode(file_doc["file_id"])
+        setattr(file_id, "unique_id", secure_hash + "xxxxx")
     else:
         logging.debug("before calling get_file_properties")
         file_id = await tg_connect.get_file_properties(id)
