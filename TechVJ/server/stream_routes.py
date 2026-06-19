@@ -321,7 +321,16 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
     if isinstance(id, str):
         from plugins.clone import async_mongo_db
         from pyrogram.file_id import FileId
-        file_doc = await async_mongo_db.clone_files.find_one({"_id": id})
+        try:
+            logging.info(f"Querying MongoDB clone_files collection for _id={id} inside database: {async_mongo_db.name}")
+            cols = await async_mongo_db.list_collection_names()
+            logging.info(f"Available collections in {async_mongo_db.name}: {cols}")
+            file_doc = await async_mongo_db.clone_files.find_one({"_id": id})
+            logging.info(f"Query result for _id={id}: {file_doc}")
+        except Exception as db_err:
+            logging.error(f"MongoDB query error: {db_err}")
+            file_doc = None
+
         if not file_doc:
             logging.debug(f"Clone file with ID {id} not found in DB")
             raise FIleNotFound
