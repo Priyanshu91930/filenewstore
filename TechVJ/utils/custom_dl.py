@@ -16,6 +16,12 @@ from pyrogram.errors import AuthBytesInvalid
 from TechVJ.server.exceptions import FIleNotFound
 from pyrogram.file_id import FileId, FileType, ThumbnailSource
 
+# Maximum number of concurrent Telegram GetFile (chunk) requests allowed at once.
+# With 1 user: the semaphore is always free → full speed.
+# With many users: requests wait their turn → no Telegram 503/FloodWait.
+MAX_CONCURRENT_CHUNKS = 15
+_chunk_semaphore = asyncio.Semaphore(MAX_CONCURRENT_CHUNKS)
+
 
 class ByteStreamer:
     def __init__(self, client: Client):
@@ -188,14 +194,21 @@ class ByteStreamer:
         location = await self.get_location(file_id)
 
         async def fetch_chunk(session, loc, off, limit, retries=5):
-            """Fetch a single chunk with retry on Telegram 503 Timeout."""
+            """Fetch a single chunk with retry on Telegram 503 Timeout.
+            
+            Uses a global semaphore (_chunk_semaphore) to limit how many
+            concurrent GetFile calls are active at once across ALL users.
+            - 1 user  → semaphore is always free → full Telegram speed.
+            - N users → each waits briefly for a free slot → no rate-limit.
+            """
             for attempt in range(retries):
                 try:
-                    return await session.send(
-                        raw.functions.upload.GetFile(
-                            location=loc, offset=off, limit=limit
-                        ),
-                    )
+                    async with _chunk_semaphore:  # acquire slot before calling Telegram
+                        return await session.send(
+                            raw.functions.upload.GetFile(
+                                location=loc, offset=off, limit=limit
+                            ),
+                        )
                 except Exception as e:
                     err_str = str(e)
                     # Retry on Telegram 503 Timeout or FloodWait
