@@ -227,7 +227,8 @@ async def stream_handler(request: web.Request):
         else:
             id = int(re.search(r"(\d+)(?:\/\S+)?", path).group(1))
             secure_hash = request.rel_url.query.get("hash")
-        return web.Response(text=await render_page(id, secure_hash), content_type='text/html')
+        bot = request.rel_url.query.get("bot")
+        return web.Response(text=await render_page(id, secure_hash, bot=bot), content_type='text/html')
     except InvalidHash as e:
         raise web.HTTPForbidden(text=e.message)
     except FIleNotFound as e:
@@ -269,11 +270,34 @@ class_cache = {}
 async def media_streamer(request: web.Request, id: int, secure_hash: str):
     range_header = request.headers.get("Range", 0)
     
-    index = min(work_loads, key=work_loads.get)
-    faster_client = multi_clients[index]
-    
-    if MULTI_CLIENT:
-        logging.info(f"Client {index} is now serving {request.remote}")
+    bot_param = request.rel_url.query.get("bot")
+    faster_client = None
+    index = None
+
+    if bot_param:
+        try:
+            from plugins.clone import running_clones
+            target_bot_id = None
+            if bot_param.isdigit():
+                target_bot_id = int(bot_param)
+            else:
+                from plugins.clone import async_mongo_db
+                bot_doc = await async_mongo_db.bots.find_one({"username": re.compile(f"^{bot_param}$", re.IGNORECASE)})
+                if bot_doc:
+                    target_bot_id = bot_doc.get("bot_id")
+            
+            if target_bot_id and target_bot_id in running_clones:
+                faster_client = running_clones[target_bot_id]
+                index = target_bot_id
+                logging.info(f"Using cloned bot client {bot_param} (ID: {target_bot_id}) to serve request")
+        except Exception as e:
+            logging.error(f"Error resolving clone bot client for download: {e}")
+
+    if not faster_client:
+        index = min(work_loads, key=work_loads.get)
+        faster_client = multi_clients[index]
+        if MULTI_CLIENT:
+            logging.info(f"Client {index} is now serving {request.remote}")
 
     if faster_client in class_cache:
         tg_connect = class_cache[faster_client]

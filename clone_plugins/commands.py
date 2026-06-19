@@ -510,8 +510,9 @@ async def start(client, message):
                                     from urllib.parse import quote_plus
                                     from TechVJ.utils.file_properties import get_name, get_hash
                                     
-                                    stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
-                                    download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                                    me = client.me or await client.get_me()
+                                    stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}"
+                                    download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}"
                                     
                                     if stream and download and (stream.startswith("http://") or stream.startswith("https://")) and (download.startswith("http://") or download.startswith("https://")):
                                         button = [[
@@ -664,8 +665,9 @@ async def start(client, message):
                         from urllib.parse import quote_plus
                         from TechVJ.utils.file_properties import get_name, get_hash
                         
-                        stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
-                        download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                        me = client.me or await client.get_me()
+                        stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}"
+                        download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}"
                         
                         if stream and download and (stream.startswith("http://") or stream.startswith("https://")) and (download.startswith("http://") or download.startswith("https://")):
                             button = [[

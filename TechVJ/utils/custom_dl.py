@@ -186,6 +186,7 @@ class ByteStreamer:
         Thanks to Eyaadh <https://github.com/eyaadh>
         """
         client = self.client
+        work_loads.setdefault(index, 0)
         work_loads[index] += 1
         logging.debug(f"Starting to yielding file with client {index}.")
         media_session = await self.generate_media_session(client, file_id)
@@ -255,7 +256,8 @@ class ByteStreamer:
             logging.error(f"Unhandled error in yield_file: {e}")
         finally:
             logging.debug("Finished yielding file with {current_part} parts.")
-            work_loads[index] -= 1
+            if index in work_loads:
+                work_loads[index] -= 1
 
     
     async def clean_cache(self) -> None:

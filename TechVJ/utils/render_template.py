@@ -13,7 +13,7 @@ import logging
 import aiohttp
 
 
-async def render_page(id, secure_hash, src=None):
+async def render_page(id, secure_hash, src=None, bot=None):
     file = await StreamBot.get_messages(int(LOG_CHANNEL), int(id))
     file_data = await get_file_ids(StreamBot, int(LOG_CHANNEL), int(id))
     if file_data.unique_id[:6] != secure_hash:
@@ -25,6 +25,8 @@ async def render_page(id, secure_hash, src=None):
         URL,
         f"{id}/{urllib.parse.quote_plus(file_data.file_name)}?hash={secure_hash}",
     )
+    if bot:
+        src += f"&bot={bot}"
 
     tag = file_data.mime_type.split("/")[0].strip()
     file_size = humanbytes(file_data.file_size)
