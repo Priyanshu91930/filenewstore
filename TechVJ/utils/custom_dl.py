@@ -188,13 +188,33 @@ class ByteStreamer:
         current_part = 1
         location = await self.get_location(file_id)
 
+        async def fetch_chunk(session, loc, off, limit, retries=5):
+            """Fetch a single chunk with retry on Telegram 503 Timeout."""
+            for attempt in range(retries):
+                try:
+                    return await session.send(
+                        raw.functions.upload.GetFile(
+                            location=loc, offset=off, limit=limit
+                        ),
+                    )
+                except Exception as e:
+                    err_str = str(e)
+                    # Retry on Telegram 503 Timeout or FloodWait
+                    if "-503" in err_str or "Timeout" in err_str or "FloodWait" in err_str:
+                        wait = 2 ** attempt  # 1s, 2s, 4s, 8s, 16s
+                        logging.warning(
+                            f"Telegram timeout on chunk (attempt {attempt+1}/{retries}), "
+                            f"retrying in {wait}s: {e}"
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+                    raise  # re-raise non-retryable errors
+            logging.error(f"All {retries} retries exhausted for chunk at offset {off}")
+            return None
+
         try:
-            r = await media_session.send(
-                raw.functions.upload.GetFile(
-                    location=location, offset=offset, limit=chunk_size
-                ),
-            )
-            if isinstance(r, raw.types.upload.File):
+            r = await fetch_chunk(media_session, location, offset, chunk_size)
+            if r and isinstance(r, raw.types.upload.File):
                 while True:
                     chunk = r.bytes
                     if not chunk:
@@ -214,13 +234,13 @@ class ByteStreamer:
                     if current_part > part_count:
                         break
 
-                    r = await media_session.send(
-                        raw.functions.upload.GetFile(
-                            location=location, offset=offset, limit=chunk_size
-                        ),
-                    )
+                    r = await fetch_chunk(media_session, location, offset, chunk_size)
+                    if r is None:
+                        break  # retries exhausted, stop gracefully
         except (TimeoutError, AttributeError):
             pass
+        except Exception as e:
+            logging.error(f"Unhandled error in yield_file: {e}")
         finally:
             logging.debug("Finished yielding file with {current_part} parts.")
             work_loads[index] -= 1
