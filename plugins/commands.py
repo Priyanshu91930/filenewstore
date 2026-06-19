@@ -23,6 +23,7 @@ import json
 import base64
 from urllib.parse import quote_plus
 from TechVJ.utils.file_properties import get_name, get_hash, get_media_file_size
+from TechVJ.bot import StreamBot
 from plugins.clone import async_mongo_db as clone_mongo_db
 from clone_plugins.dbusers import clonedb
 logger = logging.getLogger(__name__)
@@ -540,7 +541,16 @@ async def start(client, message):
                     reply_markup = None
                     if config.STREAM_MODE == True:
                             if info.video or info.document:
-                                log_msg = info
+                                try:
+                                    # Forward file to LOG_CHANNEL so the stream server can access it by msg ID
+                                    log_msg = await StreamBot.copy_message(
+                                        chat_id=LOG_CHANNEL,
+                                        from_chat_id=info.chat.id,
+                                        message_id=info.id
+                                    )
+                                except Exception as _fwd_err:
+                                    logger.warning(f"Batch stream: could not forward to LOG_CHANNEL: {_fwd_err}")
+                                    log_msg = info  # fallback (stream link may not work)
                                 fileName = {quote_plus(get_name(log_msg))}
                                 stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
                                 download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
