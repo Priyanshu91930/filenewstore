@@ -53,6 +53,15 @@ async def render_page(id, secure_hash, src=None, bot=None, filename=None):
         src += f"&bot={bot}"
 
     tag = file_data.mime_type.split("/")[0].strip()
+    filename_lower = resolved_filename.lower()
+    if tag not in ["video", "audio"]:
+        if filename_lower.endswith(('.mkv', '.mp4', '.webm', '.avi', '.mov', '.flv', '.3gp', '.mpeg', '.mpg')):
+            tag = "video"
+            setattr(file_data, "mime_type", "video/mp4")
+        elif filename_lower.endswith(('.mp3', '.ogg', '.wav', '.flac', '.m4a', '.aac')):
+            tag = "audio"
+            setattr(file_data, "mime_type", "audio/mpeg")
+
     file_size = humanbytes(file_data.file_size)
     if tag in ["video", "audio"]:
         template_file = "TechVJ/template/req.html"
