@@ -663,7 +663,10 @@ async def start(client, message):
         filetype = msg.media
         file = getattr(msg, filetype.value)
         old_title = getattr(file, "file_name", "") or ""
-        clean_name = ' '.join(filter(lambda x: not x.startswith('[') and not x.startswith('@') and not x.startswith('http') and not x.startswith('www.'), old_title.split()))
+        clean_name = old_title
+        for c in ["[", "]", "(", ")"]:
+            clean_name = clean_name.replace(c, "")
+        clean_name = ' '.join(filter(lambda x: not x.startswith('@') and not x.startswith('http') and not x.startswith('www.'), clean_name.split()))
         title = (caption_prefix + ' ' + clean_name).strip() if caption_prefix else clean_name
         size_bytes = getattr(file, "file_size", 0)
         size = get_size(size_bytes)
