@@ -38,6 +38,22 @@ async def root_route_handler(_):
             }
         )
 
+import asyncio
+async def check_and_track_referral_click(bot_username: str, user_id: str, file_id: str):
+    if not bot_username or not user_id:
+        return
+    try:
+        from plugins.clone import async_mongo_db
+        bot_doc = await async_mongo_db.bots.find_one({"username": re.compile(f"^{bot_username}$", re.IGNORECASE)})
+        if bot_doc:
+            bot_id = bot_doc.get("bot_id")
+            if bot_id:
+                from clone_plugins.db_referral import is_campaign_active, track_click
+                if await is_campaign_active(bot_id):
+                    await track_click(bot_id, int(user_id), file_id)
+    except Exception as e:
+        logging.error(f"Error tracking referral click: {e}")
+
 @routes.get("/tma", allow_head=True)
 async def tma_route_handler(request: web.Request):
     from config import MONETAG_ZONE_ID, BOT_USERNAME, LOG_CHANNEL
@@ -235,6 +251,9 @@ async def stream_handler(request: web.Request):
                 filename = "/".join(path.split("/")[1:])
             secure_hash = request.rel_url.query.get("hash")
         bot = request.rel_url.query.get("bot")
+        user = request.rel_url.query.get("user")
+        if bot and user:
+            asyncio.create_task(check_and_track_referral_click(bot, user, str(id)))
         return web.Response(text=await render_page(id, secure_hash, bot=bot, filename=filename), content_type='text/html')
     except InvalidHash as e:
         raise web.HTTPForbidden(text=e.message)
@@ -283,6 +302,9 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
     logging.info(f"media_streamer called: id={id} ({type(id)}), secure_hash={secure_hash}")
     
     bot_param = request.rel_url.query.get("bot")
+    user_param = request.rel_url.query.get("user")
+    if bot_param and user_param:
+        asyncio.create_task(check_and_track_referral_click(bot_param, user_param, str(id)))
     faster_client = None
     index = None
 

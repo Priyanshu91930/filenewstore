@@ -10,6 +10,7 @@ from Script import script
 from validators import domain
 from clone_plugins.dbusers import clonedb
 from clone_plugins.users_api import get_user, update_user_info
+from clone_plugins.genlink import _ask
 from pyrogram import Client, filters, enums
 from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait, UserNotParticipant
@@ -264,7 +265,70 @@ async def start(client, message):
 
     data = message.command[1]
     logger.info(f"Processing payload data: {data}")
-    
+
+    # ── Referral Campaign Start Handler ──
+    if data == "joinref":
+        from clone_plugins.db_referral import is_campaign_active
+        if not await is_campaign_active(me.id):
+            return await message.reply_text("<b>❌ No active referral campaign is running at the moment.</b>")
+        
+        buttons = [
+            [InlineKeyboardButton("✅ Confirm & Join", callback_data="confirm_join_ref")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="close_data")]
+        ]
+        return await message.reply_text(
+            text="<b>📢 Referral Program</b>\n\nAre you sure you want to join this referral program and generate your own referral link?",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    if data.startswith("ref_"):
+        try:
+            referrer_id = int(data.split("_")[1])
+        except Exception:
+            return await message.reply_text("<b>❌ Invalid referral link.</b>")
+            
+        from clone_plugins.db_referral import is_campaign_active, get_campaign, add_referral
+        
+        if not await is_campaign_active(me.id):
+            return await message.reply_text("<b>❌ This referral campaign has expired or is inactive.</b>")
+            
+        if referrer_id == message.from_user.id:
+            return await message.reply_text("<b>❌ You cannot refer yourself!</b>")
+            
+        camp = await get_campaign(me.id)
+        channel_id = camp.get("channel") if camp else None
+        if channel_id:
+            try:
+                member = await client.get_chat_member(channel_id, message.from_user.id)
+                if member.status in [enums.ChatMemberStatus.BANNED, enums.ChatMemberStatus.LEFT]:
+                    chat = await client.get_chat(channel_id)
+                    link = chat.invite_link or (f"https://t.me/{chat.username}" if chat.username else None)
+                    buttons = [
+                        [InlineKeyboardButton("📢 Join Campaign Channel", url=link)],
+                        [InlineKeyboardButton("🔄 Try Again", url=f"https://t.me/{me.username}?start=ref_{referrer_id}")]
+                    ]
+                    return await message.reply_text(
+                        text=f"<b>📢 To support the referrer, you must join our campaign channel first!</b>",
+                        reply_markup=InlineKeyboardMarkup(buttons)
+                    )
+            except Exception as e:
+                logger.error(f"Error checking referral channel subscription: {e}")
+                
+        success = await add_referral(me.id, message.from_user.id, referrer_id)
+        if success:
+            try:
+                await client.send_message(
+                    chat_id=referrer_id,
+                    text=f"<b>🎉 New Referral!</b>\n\nA user has successfully joined using your link."
+                )
+            except Exception:
+                pass
+            await message.reply_text("<b>✅ You have successfully supported your referrer!</b>")
+            
+        message.command = ["start"]
+        return await start(client, message)
+    # ─────────────────────────────────────
+
     is_unlocked = False
     if data.split("-", 1)[0] == "unlock":
         parts = data.split("-", 4)
@@ -511,8 +575,8 @@ async def start(client, message):
                                     from TechVJ.utils.file_properties import get_name, get_hash
                                     
                                     me = client.me or await client.get_me()
-                                    stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}"
-                                    download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}"
+                                    stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}&user={message.from_user.id}"
+                                    download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}&bot={me.username}&user={message.from_user.id}"
                                     
                                     if stream and download and (stream.startswith("http://") or stream.startswith("https://")) and (download.startswith("http://") or download.startswith("https://")):
                                         button = [[
@@ -709,8 +773,8 @@ async def start(client, message):
                 stream_id = str(log_msg_id) if log_msg_id else decoded_id
                 me = client.me or await client.get_me()
                 
-                stream = f"{URL}watch/{stream_id}/{quote_plus(clean_name)}?hash={secure_hash}&bot={me.username}"
-                download = f"{URL}{stream_id}/{quote_plus(clean_name)}?hash={secure_hash}&bot={me.username}"
+                stream = f"{URL}watch/{stream_id}/{quote_plus(clean_name)}?hash={secure_hash}&bot={me.username}&user={message.from_user.id}"
+                download = f"{URL}{stream_id}/{quote_plus(clean_name)}?hash={secure_hash}&bot={me.username}&user={message.from_user.id}"
                 
                 button = [[
                     InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
@@ -815,9 +879,16 @@ async def settings_command(client, message):
     ]]
     
     from TechVJ.bot import StreamBot
+    from clone_plugins.db_referral import is_participant
     main_bot_username = (await StreamBot.get_me()).username
-    if bot_doc and int(bot_doc['user_id']) == message.from_user.id:
+    is_owner = bot_doc and int(bot_doc['user_id']) == message.from_user.id
+    
+    if is_owner:
         buttons.insert(0, [InlineKeyboardButton('⚙️ Bot Settings', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
+        buttons.insert(3, [InlineKeyboardButton('📢 Referral Campaign', callback_data='ref_campaign_menu')])
+    elif await is_participant(me.id, message.from_user.id):
+        buttons.insert(3, [InlineKeyboardButton('🔗 My Referral Link', callback_data='get_user_ref_link')])
+        
     buttons.insert(0, [InlineKeyboardButton('⚙️ TMA Ads Setting', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
 
     reply_markup = InlineKeyboardMarkup(buttons)
@@ -1075,6 +1146,162 @@ async def join_reqs_handler(client, join_request):
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
     me = client.me or await client.get_me()
+    
+    if query.data == "ref_campaign_menu":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        if query.from_user.id != owner_id:
+            return await query.answer("❌ Only the bot owner can access referral campaign settings!", show_alert=True)
+        
+        from clone_plugins.db_referral import get_campaign
+        camp = await get_campaign(me.id)
+        enabled = camp.get("enabled", False) if camp else False
+        duration = camp.get("duration_days", 7) if camp else 7
+        channel = camp.get("channel", "Not set") if camp else "Not set"
+        
+        status_txt = "Active 🟢" if enabled else "Inactive 🔴"
+        
+        buttons = [
+            [InlineKeyboardButton(f"Toggle Status: {'OFF 🔴' if enabled else 'ON 🟢'}", callback_data="toggle_ref_camp")],
+            [InlineKeyboardButton("⏱ Set Duration", callback_data="set_ref_duration"), InlineKeyboardButton("📢 Set Channel", callback_data="set_ref_channel")],
+            [InlineKeyboardButton("📊 Leaderboard", callback_data="ref_leaderboard"), InlineKeyboardButton("🔗 Join Link", callback_data="get_campaign_link")],
+            [InlineKeyboardButton("🔙 Back", callback_data="settings")]
+        ]
+        
+        await query.message.edit_text(
+            text=(
+                f"<b>📢 <u>Referral Campaign Manager</u></b>\n\n"
+                f"• Status: <code>{status_txt}</code>\n"
+                f"• Duration: <code>{duration} Days</code>\n"
+                f"• Channel: <code>{channel}</code>\n\n"
+                f"Configure your bot's referral program here. Users joining through the link will get their referral buttons in settings."
+            ),
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+        return
+        
+    elif query.data == "toggle_ref_camp":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        if query.from_user.id != owner_id:
+            return await query.answer("❌ Unauthorized!", show_alert=True)
+            
+        from clone_plugins.db_referral import get_campaign, set_campaign
+        camp = await get_campaign(me.id)
+        current = camp.get("enabled", False) if camp else False
+        await set_campaign(me.id, enabled=not current)
+        await query.answer(f"Campaign {'enabled' if not current else 'disabled'} successfully!")
+        query.data = "ref_campaign_menu"
+        return await cb_handler(client, query)
+        
+    elif query.data == "set_ref_duration":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        if query.from_user.id != owner_id:
+            return await query.answer("❌ Unauthorized!", show_alert=True)
+            
+        try:
+            prompt = await _ask(client, query.message.chat.id, "<b>Please enter the campaign duration in days (e.g. 7 or 30):</b>")
+            days = int(prompt.text.strip())
+            from clone_plugins.db_referral import set_campaign
+            await set_campaign(me.id, duration=days)
+            await prompt.reply_text(f"<b>✅ Campaign duration set to: {days} Days</b>")
+        except ValueError:
+            await client.send_message(query.message.chat.id, "<b>❌ Invalid input. Please enter a number next time.</b>")
+        except Exception as e:
+            logger.error(f"Error setting ref duration: {e}")
+            
+        query.data = "ref_campaign_menu"
+        return await cb_handler(client, query)
+        
+    elif query.data == "set_ref_channel":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        if query.from_user.id != owner_id:
+            return await query.answer("❌ Unauthorized!", show_alert=True)
+            
+        try:
+            prompt = await _ask(client, query.message.chat.id, "<b>Please forward a message from the target channel, or send the channel ID (e.g. -100123456789):</b>")
+            channel_id = None
+            if prompt.forward_from_chat:
+                channel_id = prompt.forward_from_chat.id
+            else:
+                channel_id = int(prompt.text.strip())
+                
+            try:
+                chat = await client.get_chat(channel_id)
+                from clone_plugins.db_referral import set_campaign
+                await set_campaign(me.id, channel=channel_id)
+                await prompt.reply_text(f"<b>✅ Campaign channel set to: {chat.title} ({channel_id})</b>")
+            except Exception as chat_err:
+                await prompt.reply_text(f"<b>❌ Error: Make sure the bot is admin in the target channel first!\n\nError: {chat_err}</b>")
+        except Exception as e:
+            logger.error(f"Error setting ref channel: {e}")
+            
+        query.data = "ref_campaign_menu"
+        return await cb_handler(client, query)
+        
+    elif query.data == "get_campaign_link":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        if query.from_user.id != owner_id:
+            return await query.answer("❌ Unauthorized!", show_alert=True)
+            
+        link = f"https://t.me/{me.username}?start=joinref"
+        await query.message.reply_text(
+            text=f"<b>🔗 <u>Campaign Invite Link</u></b>\n\nShare this link to invite users to participate in the referral program:\n<code>{link}</code>",
+            disable_web_page_preview=True
+        )
+        await query.answer()
+        return
+        
+    elif query.data == "get_user_ref_link":
+        from clone_plugins.db_referral import is_participant
+        if not await is_participant(me.id, query.from_user.id):
+            return await query.answer("❌ You are not registered in the Referral Program!", show_alert=True)
+            
+        link = f"https://t.me/{me.username}?start=ref_{query.from_user.id}"
+        await query.message.reply_text(
+            text=f"<b>🔗 <u>Your Personal Referral Link</u></b>\n\nShare this link. When new users join, you will earn points:\n<code>{link}</code>",
+            disable_web_page_preview=True
+        )
+        await query.answer()
+        return
+        
+    elif query.data == "ref_leaderboard":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        if query.from_user.id != owner_id:
+            return await query.answer("❌ Unauthorized!", show_alert=True)
+            
+        from clone_plugins.db_referral import get_leaderboard
+        board = await get_leaderboard(me.id)
+        
+        text = "<b>🏆 <u>Referral Campaign Leaderboard</u></b>\n\n"
+        if not board:
+            text += "<i>No stats available yet. Share the campaign link!</i>"
+        else:
+            for idx, user in enumerate(board[:15], 1):
+                text += f"{idx}. User ID: <code>{user['user_id']}</code>\n   ➔ Referrals: <code>{user['referral_count']}</code> | Unique Link Clicks: <code>{user['clicks_count']}</code>\n\n"
+                
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="ref_campaign_menu")]]
+        await query.message.edit_text(
+            text=text,
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode=enums.ParseMode.HTML
+        )
+        return
+        
+    elif query.data == "confirm_join_ref":
+        from clone_plugins.db_referral import add_participant
+        await add_participant(me.id, query.from_user.id)
+        await query.message.edit_text(
+            text="<b>🎉 Congratulations! You have successfully joined the Referral Program.</b>\n\nGo to settings to get your personal referral link!",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Open Settings", callback_data="settings")]])
+        )
+        return
+
     if query.data == "close_data":
         await query.message.delete()
     elif query.data == "toggle_tma":
