@@ -232,6 +232,9 @@ async def start(client, message):
         try:
             start_txt = start_txt.format(message.from_user.mention, me.mention, mention=message.from_user.mention, mention2=me.mention)
         except: pass
+        
+        if getattr(message, "referral_supported", False):
+            start_txt = "<b>✅ You have successfully supported your referrer!</b>\n\n" + start_txt
             
         start_photo = bot_doc.get("start_photo") if bot_doc else None
         
@@ -323,15 +326,7 @@ async def start(client, message):
                 )
             except Exception:
                 pass
-            
-            ref_msg = await message.reply_text("<b>✅ You have successfully supported your referrer!</b>")
-            async def auto_delete_ref_msg(m):
-                await asyncio.sleep(5)
-                try:
-                    await m.delete()
-                except:
-                    pass
-            asyncio.create_task(auto_delete_ref_msg(ref_msg))
+            message.referral_supported = True
             
         message.command = ["start"]
         return await start(client, message)
