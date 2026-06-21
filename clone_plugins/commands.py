@@ -323,7 +323,15 @@ async def start(client, message):
                 )
             except Exception:
                 pass
-            await message.reply_text("<b>✅ You have successfully supported your referrer!</b>")
+            
+            ref_msg = await message.reply_text("<b>✅ You have successfully supported your referrer!</b>")
+            async def auto_delete_ref_msg(m):
+                await asyncio.sleep(5)
+                try:
+                    await m.delete()
+                except:
+                    pass
+            asyncio.create_task(auto_delete_ref_msg(ref_msg))
             
         message.command = ["start"]
         return await start(client, message)
