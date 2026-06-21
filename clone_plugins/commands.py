@@ -1508,9 +1508,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
         except Exception:
             pass
         from TechVJ.bot import StreamBot
+        from clone_plugins.db_referral import is_participant
         main_bot_username = (await StreamBot.get_me()).username
-        if bot_doc and int(bot_doc['user_id']) == query.from_user.id:
+        is_owner = bot_doc and int(bot_doc['user_id']) == query.from_user.id
+        
+        if is_owner:
             buttons.insert(0, [InlineKeyboardButton('⚙️ Bot Settings', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
+            buttons.insert(3, [InlineKeyboardButton('📢 Referral Campaign', callback_data='ref_campaign_menu')])
+        elif await is_participant(me.id, query.from_user.id):
+            buttons.insert(3, [InlineKeyboardButton('🔗 My Referral Link', callback_data='get_user_ref_link')])
+            
         buttons.insert(0, [InlineKeyboardButton('⚙️ TMA Ads Setting', url=f"https://t.me/{main_bot_username}?start=verifyclone_{me.id}")])
 
         reply_markup = InlineKeyboardMarkup(buttons)
