@@ -1206,9 +1206,17 @@ async def cb_handler(client: Client, query: CallbackQuery):
             days = int(prompt.text.strip())
             from clone_plugins.db_referral import set_campaign
             await set_campaign(me.id, duration=days)
-            await prompt.reply_text(f"<b>✅ Campaign duration set to: {days} Days</b>")
+            await query.answer(f"✅ Campaign duration set to: {days} Days", show_alert=True)
+            try:
+                await client.delete_messages(query.message.chat.id, [prompt.prompt_message_id, prompt.id])
+            except:
+                pass
         except ValueError:
-            await client.send_message(query.message.chat.id, "<b>❌ Invalid input. Please enter a number next time.</b>")
+            await query.answer("❌ Invalid input. Please enter a number.", show_alert=True)
+            try:
+                await client.delete_messages(query.message.chat.id, [prompt.prompt_message_id, prompt.id])
+            except:
+                pass
         except Exception as e:
             logger.error(f"Error setting ref duration: {e}")
             
@@ -1233,9 +1241,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 chat = await client.get_chat(channel_id)
                 from clone_plugins.db_referral import set_campaign
                 await set_campaign(me.id, channel=channel_id)
-                await prompt.reply_text(f"<b>✅ Campaign channel set to: {chat.title} ({channel_id})</b>")
+                await query.answer(f"✅ Campaign channel set to: {chat.title} ({channel_id})", show_alert=True)
             except Exception as chat_err:
-                await prompt.reply_text(f"<b>❌ Error: Make sure the bot is admin in the target channel first!\n\nError: {chat_err}</b>")
+                await query.answer(f"❌ Error: Make sure the bot is admin in the target channel first!\n\nError: {chat_err}", show_alert=True)
+                
+            try:
+                await client.delete_messages(query.message.chat.id, [prompt.prompt_message_id, prompt.id])
+            except:
+                pass
         except Exception as e:
             logger.error(f"Error setting ref channel: {e}")
             

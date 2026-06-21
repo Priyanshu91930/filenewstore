@@ -36,7 +36,7 @@ async def _ask_listener(client: Client, message):
 async def _ask(client: Client, chat_id: int, text: str, timeout: int = 120):
     """Send a question and wait for the user's next message."""
     logger.debug(f"[_ask] Sending prompt to chat_id={chat_id}")
-    await client.send_message(chat_id, text, parse_mode=enums.ParseMode.HTML)
+    sent_msg = await client.send_message(chat_id, text, parse_mode=enums.ParseMode.HTML)
     key = (id(client), chat_id)
     loop = asyncio.get_event_loop()
     future = loop.create_future()
@@ -44,9 +44,14 @@ async def _ask(client: Client, chat_id: int, text: str, timeout: int = 120):
     try:
         result = await asyncio.wait_for(future, timeout=timeout)
         logger.debug(f"[_ask] Got response from chat_id={chat_id}")
+        result.prompt_message_id = sent_msg.id
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[_ask] Timed out waiting for response from chat_id={chat_id}")
+        try:
+            await sent_msg.delete()
+        except:
+            pass
         raise
     finally:
         _pending_asks.pop(key, None)
