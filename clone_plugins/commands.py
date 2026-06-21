@@ -671,14 +671,30 @@ async def start(client, message):
         size_bytes = getattr(file, "file_size", 0)
         size = get_size(size_bytes)
         
-        if file_doc and "file_size" not in file_doc:
-            try:
-                await mongo_db.clone_files.update_one(
-                    {"_id": decoded_id},
-                    {"$set": {"file_size": size_bytes}}
-                )
-            except:
-                pass
+        log_msg_id = file_doc.get("log_msg_id") if file_doc else None
+        if file_doc and ("file_size" not in file_doc or "log_msg_id" not in file_doc):
+            update_fields = {}
+            if "file_size" not in file_doc:
+                update_fields["file_size"] = size_bytes
+            if "log_msg_id" not in file_doc:
+                try:
+                    from TechVJ.bot import StreamBot
+                    from config import LOG_CHANNEL
+                    sent_msg = await StreamBot.send_cached_media(chat_id=LOG_CHANNEL, file_id=file_id)
+                    log_msg_id = sent_msg.id
+                    update_fields["log_msg_id"] = log_msg_id
+                    logger.info(f"Cached existing file {decoded_id} to LOG_CHANNEL: log_msg_id={log_msg_id}")
+                except Exception as cache_err:
+                    logger.error(f"Failed to cache existing file to LOG_CHANNEL on the fly: {cache_err}")
+            
+            if update_fields:
+                try:
+                    await mongo_db.clone_files.update_one(
+                        {"_id": decoded_id},
+                        {"$set": update_fields}
+                    )
+                except Exception as update_err:
+                    logger.error(f"Failed to update clone_files metadata: {update_err}")
                 
         f_caption = f"<code>{title}</code>" if title else ""
         if CUSTOM_FILE_CAPTION:
@@ -692,7 +708,6 @@ async def start(client, message):
                 from urllib.parse import quote_plus
                 from pyrogram.file_id import FileId
                 
-                log_msg_id = file_doc.get("log_msg_id") if file_doc else None
                 parsed_file_id = FileId.decode(file_id)
                 secure_hash = decoded_id[:6]
                 setattr(parsed_file_id, "unique_id", secure_hash + "xxxxx")
