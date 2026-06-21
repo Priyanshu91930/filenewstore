@@ -8,7 +8,7 @@
     <meta property="og:image" content="https://i.ibb.co/qJyZWCv/20230629-081948-0000.png" itemprop="thumbnailUrl">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>%s | Brainaxe</title>
+    <title>{{file_name}} | Brainaxe</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.js"></script>    
@@ -140,7 +140,7 @@
             <div id="file-name" class="tex-center text-lg max:w-74  p-2 flex-wrap text-center justify-center items-center">
                 <p class="fw-bold"> 
                     <span id="myDiv" class="h6 flex-wrap text-center justify-center items-center card-title wow animate__animated animate__fadeInRight" >
-                        %s
+                        {{file_name}}
                     </span>
                 </p>
             </div>
@@ -148,12 +148,9 @@
     </div>
 
     <div class="container flex justify-center items-center min-h-screen ">
-        <a class="w-full flex justify-center items-center " href=%s>
+        <a class="w-full flex justify-center items-center " href="{{file_url}}">
             <div class="col-lg-4 p-2 col-12 rounded-3xl bg-dark text-white text-center align-items-center hover:bg-gradient-to-r from-pink-500 to-violet-500 hover:shadow-md hover:shadow-gray-100 hover:translate-y-[-5px] transition transition-all duration-300 wow animate__animated animate__rubberBand">
-                Download
-                <span aria-hidden>_</span>
-                <span aria-hidden class="">_404 Error</span>
-                <span aria-hidden class="">_%s</span>
+                Download Now ({{file_size}})
             </div>
         </a>
     </div>
