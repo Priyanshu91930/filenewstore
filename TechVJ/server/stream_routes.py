@@ -389,7 +389,14 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
     if not mime_type:
         mime_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
         
+    import urllib.parse
     disposition = "attachment"
+    safe_file_name = file_name.replace('"', '\\"')
+    try:
+        encoded_filename = urllib.parse.quote(file_name)
+        content_disposition = f'{disposition}; filename="{safe_file_name}"; filename*=UTF-8\'\'{encoded_filename}'
+    except Exception:
+        content_disposition = f'{disposition}; filename="{safe_file_name}"'
 
     return web.Response(
         status=206 if range_header else 200,
@@ -398,7 +405,7 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
             "Content-Type": f"{mime_type}",
             "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
             "Content-Length": str(req_length),
-            "Content-Disposition": f'{disposition}; filename="{file_name}"',
+            "Content-Disposition": content_disposition,
             "Accept-Ranges": "bytes",
             "X-Accel-Buffering": "no",
         },

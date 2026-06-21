@@ -17,6 +17,7 @@ async def render_page(id, secure_hash, src=None, bot=None, filename=None):
     if isinstance(id, str):
         from plugins.clone import async_mongo_db
         from pyrogram.file_id import FileId
+        import mimetypes
         file_doc = await async_mongo_db.clone_files.find_one({"_id": id})
         if not file_doc:
             raise InvalidHash
@@ -24,10 +25,20 @@ async def render_page(id, secure_hash, src=None, bot=None, filename=None):
         safe_hash = secure_hash or ""
         setattr(file_data, "unique_id", safe_hash + "xxxxx")
         resolved_filename = filename or getattr(file_data, "file_name", "Cloned File")
+        setattr(file_data, "file_size", file_doc.get("file_size") or 0)
+        guessed_mime = mimetypes.guess_type(resolved_filename)[0] or "application/octet-stream"
+        setattr(file_data, "mime_type", file_doc.get("mime_type") or guessed_mime)
     else:
         file = await StreamBot.get_messages(int(LOG_CHANNEL), int(id))
         file_data = await get_file_ids(StreamBot, int(LOG_CHANNEL), int(id))
         resolved_filename = filename or file_data.file_name or ""
+
+    if not hasattr(file_data, "file_size") or file_data.file_size is None:
+        setattr(file_data, "file_size", 0)
+    if not hasattr(file_data, "mime_type") or not file_data.mime_type:
+        import mimetypes
+        guessed_mime = mimetypes.guess_type(resolved_filename)[0] or "application/octet-stream"
+        setattr(file_data, "mime_type", guessed_mime)
 
     if file_data.unique_id[:6] != secure_hash:
         logging.debug(f"link hash: {secure_hash} - {file_data.unique_id[:6]}")
