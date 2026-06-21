@@ -1469,7 +1469,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if len(bot.get("force_sub_channels", [])) >= 6:
             return await query.answer("Max 6 channels allowed!", show_alert=True)
             
-        msg = await client.ask(query.message.chat.id, "<b>Please forward a message from the channel you want to add as Force Sub.\n\nMake sure your clone bot is ADMIN in that channel!</b>")
+        sent_msg = await client.send_message(
+            query.message.chat.id, 
+            "<b>Please forward a message from the channel you want to add as Force Sub.\n\nMake sure your clone bot is ADMIN in that channel!</b>"
+        )
+        msg = await client.listen(query.message.chat.id)
+        
         if msg.forward_from_chat:
             f_chat_id = msg.forward_from_chat.id
             f_chat_title = msg.forward_from_chat.title
@@ -1495,10 +1500,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.answer("❌ Please forward a message from a channel.", show_alert=True)
             
         try:
-            msgs_to_delete = [msg.id]
-            if hasattr(msg, "request") and msg.request:
-                msgs_to_delete.append(msg.request.id)
-            await client.delete_messages(query.message.chat.id, msgs_to_delete)
+            await client.delete_messages(query.message.chat.id, [sent_msg.id, msg.id])
         except Exception as e:
             logger.error(f"Error deleting force sub messages: {e}")
             
