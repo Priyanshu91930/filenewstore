@@ -232,9 +232,6 @@ async def start(client, message):
         try:
             start_txt = start_txt.format(message.from_user.mention, me.mention, mention=message.from_user.mention, mention2=me.mention)
         except: pass
-        
-        if getattr(message, "referral_supported", False):
-            start_txt = "<b>✅ You have successfully supported your referrer!</b>\n\n" + start_txt
             
         start_photo = bot_doc.get("start_photo") if bot_doc else None
         
@@ -326,10 +323,10 @@ async def start(client, message):
                 )
             except Exception:
                 pass
-            message.referral_supported = True
-            
-        message.command = ["start"]
-        return await start(client, message)
+            await message.reply_text("<b>✅ You have successfully supported your referrer!</b>")
+        else:
+            await message.reply_text("<b>✅ You have already supported your referrer!</b>")
+        return
     # ─────────────────────────────────────
 
     is_unlocked = False
