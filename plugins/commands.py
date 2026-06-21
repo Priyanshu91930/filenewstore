@@ -1411,23 +1411,57 @@ async def cb_handler(client: Client, query: CallbackQuery):
         mode = bot.get("force_sub_mode", "normal")
         channel_names = bot.get("channel_names") or {}
         
-        text = f"<b><u>Force Subscribe Management</u></b>\n\n"
-        if channels:
-            text += "<b>Current Channels:</b>\n"
-            for i, c in enumerate(channels, 1):
-                title = channel_names.get(str(c), str(c))
-                text += f"{i}. <code>{title}</code>\n"
-        else:
-            text += "<i>No channels added yet.</i>\n"
+        text = (
+            "<b><u>Force Sub</u></b>\n\n"
+            "<i>Users can only use your clone bot after joining all force sub channels. "
+            "Clone bots now also support join request mode.</i>\n\n"
+            "You can add up to 6 channels.\n\n"
+            f"<b>Current Mode:</b> <code>{mode.upper()}</code>"
+        )
         
-        text += f"\n<b>Current Mode:</b> <code>{mode.upper()}</code>"
+        buttons = []
+        # Add each channel as a row with a deletion button
+        for c in channels:
+            title = channel_names.get(str(c), str(c))
+            buttons.append([
+                InlineKeyboardButton(f"• {title}", callback_data=f"info_fsub_{bot_id}_{c}"),
+                InlineKeyboardButton("❌", callback_data=f"rem_fsub_{bot_id}_{c}")
+            ])
+            
+        buttons.append([
+            InlineKeyboardButton("➕ Add Channel", callback_data=f"add_fsub_{bot_id}"),
+            InlineKeyboardButton("🧹 Clear All", callback_data=f"clear_fsub_{bot_id}")
+        ])
+        buttons.append([
+            InlineKeyboardButton(f"Switch to {'JOIN REQ' if mode=='normal' else 'NORMAL'} Mode", callback_data=f"mode_fsub_{bot_id}")
+        ])
+        buttons.append([
+            InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")
+        ])
         
-        buttons = [
-            [InlineKeyboardButton("➕ Add Channel", callback_data=f"add_fsub_{bot_id}"), InlineKeyboardButton("🧹 Clear All", callback_data=f"clear_fsub_{bot_id}")],
-            [InlineKeyboardButton(f"Switch to {'JOIN REQ' if mode=='normal' else 'NORMAL'} Mode", callback_data=f"mode_fsub_{bot_id}")],
-            [InlineKeyboardButton("🔙 back", callback_data=f"cust_{bot_id}")]
-        ]
         await query.message.edit_text(text=text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode=enums.ParseMode.HTML)
+
+    elif query.data.startswith("rem_fsub_"):
+        parts = query.data.split("_")
+        bot_id = int(parts[2])
+        channel_id = int(parts[3])
+        
+        await clone_mongo_db.bots.update_one(
+            {"bot_id": bot_id},
+            {
+                "$pull": {"force_sub_channels": channel_id},
+                "$unset": {f"channel_names.{channel_id}": ""}
+            }
+        )
+        await query.answer("✅ Channel removed successfully!", show_alert=True)
+        query.data = f"forcesub_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("info_fsub_"):
+        parts = query.data.split("_")
+        channel_id = parts[3]
+        await query.answer(f"Channel ID: {channel_id}", show_alert=True)
+        return
 
     elif query.data.startswith("add_fsub_"):
         bot_id = int(query.data.split("_")[-1])
