@@ -1456,9 +1456,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     "$set": {f"channel_names.{f_chat_id}": f_chat_title}
                 }
             )
-            await msg.reply(f"<b>✅ Channel '{f_chat_title}' added successfully!</b>")
+            await query.answer(f"✅ Channel '{f_chat_title}' added successfully!", show_alert=True)
         else:
-            await msg.reply("<b>❌ Please forward a message from a channel.</b>")
+            await query.answer("❌ Please forward a message from a channel.", show_alert=True)
+            
+        try:
+            msgs_to_delete = [msg.id]
+            if hasattr(msg, "request") and msg.request:
+                msgs_to_delete.append(msg.request.id)
+            await client.delete_messages(query.message.chat.id, msgs_to_delete)
+        except Exception as e:
+            logger.error(f"Error deleting force sub messages: {e}")
+            
         query.data = f"forcesub_{bot_id}"
         return await cb_handler(client, query)
 
