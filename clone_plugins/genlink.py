@@ -146,26 +146,16 @@ async def gen_link_s(client: Client, message):
         bot_username = me.username
 
         file_size = getattr(media, "file_size", 0)
-        log_msg_id = None
         try:
-            from config import LOG_CHANNEL
-            sent_msg = await StreamBot.send_cached_media(chat_id=LOG_CHANNEL, file_id=file_id)
-            log_msg_id = sent_msg.id
-            logger.info(f"[/link] Cached file to LOG_CHANNEL: log_msg_id={log_msg_id}")
-        except Exception as cache_err:
-            logger.error(f"[/link] Failed to cache file to LOG_CHANNEL: {cache_err}")
-
-        try:
-            db_doc = {
+            await mongo_db.clone_files.insert_one({
                 "_id": short_id,
                 "bot_username": bot_username,
                 "file_id": file_id,
-                "file_size": file_size
-            }
-            if log_msg_id:
-                db_doc["log_msg_id"] = log_msg_id
-            await mongo_db.clone_files.insert_one(db_doc)
-            logger.debug(f"[/link] Stored file in DB with short_id={short_id}, size={file_size}, log_msg_id={log_msg_id}")
+                "file_size": file_size,
+                "chat_id": replied.chat.id,
+                "message_id": replied.id
+            })
+            logger.debug(f"[/link] Stored file in DB with short_id={short_id}, size={file_size}, chat_id={replied.chat.id}, message_id={replied.id}")
         except Exception as e:
             logger.error(f"[/link] DB insert failed: {e}")
             return await message.reply(f'<b>❌ DB error: {e}</b>')

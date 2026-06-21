@@ -334,7 +334,29 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
         if not file_doc:
             logging.debug(f"Clone file with ID {id} not found in DB")
             raise FIleNotFound
-        file_id = FileId.decode(file_doc["file_id"])
+            
+        import time
+        refreshed_at = file_doc.get("refreshed_at", 0)
+        chat_id = file_doc.get("chat_id")
+        message_id = file_doc.get("message_id")
+        raw_file_id = file_doc["file_id"]
+        
+        if chat_id and message_id and (time.time() - refreshed_at > 7200):
+            try:
+                logging.info(f"Refreshing file reference for cloned file {id} on the fly...")
+                msg = await faster_client.get_messages(chat_id, message_id)
+                if msg and msg.media:
+                    media = getattr(msg, msg.media.value)
+                    raw_file_id = media.file_id
+                    await async_mongo_db.clone_files.update_one(
+                        {"_id": id},
+                        {"$set": {"file_id": raw_file_id, "refreshed_at": time.time()}}
+                    )
+                    logging.info(f"Successfully refreshed file reference for {id}")
+            except Exception as ref_err:
+                logging.error(f"Failed to refresh file reference for {id}: {ref_err}")
+                
+        file_id = FileId.decode(raw_file_id)
         safe_hash = secure_hash or ""
         setattr(file_id, "unique_id", safe_hash + "xxxxx")
         db_file_size = file_doc.get("file_size") or (2 * 1024 * 1024 * 1024)
