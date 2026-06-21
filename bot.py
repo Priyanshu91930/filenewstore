@@ -10,6 +10,8 @@ from pathlib import Path
 from pyrogram import idle
 import logging
 import logging.config
+# Load global small-caps font patcher
+import font_patcher
 
 # Force stdout to flush immediately — critical for Docker log visibility
 sys.stdout.reconfigure(line_buffering=True)
