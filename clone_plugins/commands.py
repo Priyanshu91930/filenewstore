@@ -14,10 +14,8 @@ from clone_plugins.genlink import _ask
 from pyrogram import Client, filters, enums
 from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait, UserNotParticipant
-from config import BOT_USERNAME, ADMINS, LOG_CHANNEL
-from config import PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL
-from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT
-import config
+from config import BOT_USERNAME, ADMINS, LOG_CHANNEL, PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL
+from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT, MongoDict
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto, WebAppInfo
 import re
 import json
@@ -29,7 +27,6 @@ from shortzy import Shortzy
 logger = logging.getLogger(__name__)
 
 CLONE_TOKENS = {}
-from utils import MongoDict
 CLONE_VERIFIED = MongoDict("clone_verifications")
 BATCH_FILES = {}
 
