@@ -538,7 +538,6 @@ async def start(client, message):
                 msgs = BATCH_FILES.get(batch_file_id)
                 if not msgs:
                     from TechVJ.bot import StreamBot
-                    from config import LOG_CHANNEL
                     decode_file_id = base64.urlsafe_b64decode(batch_file_id + "=" * (-len(batch_file_id) % 4)).decode("ascii")
                     # Use Main Bot to get the message from Log Channel
                     msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
@@ -568,12 +567,10 @@ async def start(client, message):
                                         log_msg_id = m_id
                                     else:
                                         from TechVJ.bot import StreamBot
-                                        from config import LOG_CHANNEL
                                         sent_msg = await StreamBot.send_cached_media(chat_id=LOG_CHANNEL, file_id=getattr(info, info.media.value).file_id)
                                         log_msg_id = sent_msg.id
                                     
                                     from TechVJ.bot import StreamBot
-                                    from config import LOG_CHANNEL
                                     log_msg = await StreamBot.get_messages(LOG_CHANNEL, log_msg_id)
                                     
                                     from urllib.parse import quote_plus
