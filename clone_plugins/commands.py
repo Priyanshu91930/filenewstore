@@ -349,8 +349,9 @@ async def start(client, message):
                             await consume_token(token)
                             me = client.me or await client.get_me()
                             plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                            plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
                             upsell_btn = []
-                            if plan_cfg:
+                            if plan_cfg and plan_enabled:
                                 upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
                             else:
                                 upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
@@ -400,8 +401,9 @@ async def start(client, message):
                     await consume_token(tma_token)
                     me = client.me or await client.get_me()
                     plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                    plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
                     upsell_btn = []
-                    if plan_cfg:
+                    if plan_cfg and plan_enabled:
                         upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
                     else:
                         upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
@@ -487,9 +489,10 @@ async def start(client, message):
                 tma_mode = False
             user_is_vip = await is_vip(me.id, message.from_user.id)
             plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+            plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
             is_verified = False
             
-            if plan_cfg and not user_is_vip:
+            if plan_cfg and plan_enabled and not user_is_vip:
                 if tma_mode:
                     is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
                     if not is_verified and not is_unlocked:
@@ -527,7 +530,9 @@ async def start(client, message):
                 else:
                     is_verified = True
             
-            if not tma_mode or is_verified or is_unlocked or user_is_vip:
+            # Deliver files if: TMA is off (no ad wall), OR user passed TMA, OR user already unlocked, OR user is VIP
+            # Also deliver if plan is disabled (plan_enabled=False) regardless of TMA state
+            if not tma_mode or is_verified or is_unlocked or user_is_vip or not plan_enabled:
                 sts = await message.reply("<b>🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ... ɢᴇᴛᴛɪɴɢ ʙᴀᴛᴄʜ ғɪʟᴇs</b>")
                 batch_file_id = data.split("-", 1)[1]
                 msgs = BATCH_FILES.get(batch_file_id)
@@ -606,8 +611,9 @@ async def start(client, message):
                 if tma_mode and not user_is_vip:
                     try:
                         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                        plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
                         upsell_btn = []
-                        if plan_cfg:
+                        if plan_cfg and plan_enabled:
                             upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
                         else:
                             upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
@@ -665,9 +671,10 @@ async def start(client, message):
         tma_mode = False
     user_is_vip = await is_vip(me.id, message.from_user.id)
     plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-    logger.info(f"TMA mode: {tma_mode}, User VIP: {user_is_vip}, Plan configured: {plan_cfg is not None}")
+    plan_enabled = bot_owner.get("plan_enabled", True) if bot_owner else True
+    logger.info(f"TMA mode: {tma_mode}, User VIP: {user_is_vip}, Plan configured: {plan_cfg is not None}, Plan enabled: {plan_enabled}")
     
-    if plan_cfg and not user_is_vip:
+    if plan_cfg and plan_enabled and not user_is_vip:
         if tma_mode:
             bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
             is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
@@ -816,8 +823,9 @@ async def start(client, message):
         if tma_mode_check and not user_vip_check:
             try:
                 plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                plan_enabled = bot_owner.get("plan_enabled", True) if bot_owner else True
                 upsell_btn = []
-                if plan_cfg:
+                if plan_cfg and plan_enabled:
                     upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", callback_data="buy_plan")])
                 else:
                     upsell_btn.append([InlineKeyboardButton("💳 Get VIP Plan — Watch Ad-Free!", url=f"https://t.me/{me.username}?start=true")])
@@ -1786,8 +1794,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
 @Client.on_message(filters.command("plan") & filters.private)
 async def plan_command_handler(client, message):
     me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    plan_enabled = bot_doc.get("plan_enabled", True) if bot_doc else True
     plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-    if not plan_cfg:
+    if not plan_cfg or not plan_enabled:
         return await message.reply_text("<b>⚠️ This bot does not have a plan configured yet. Please check back later!</b>")
         
     user_vip = await is_vip(me.id, message.from_user.id)
