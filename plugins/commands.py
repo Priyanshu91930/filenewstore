@@ -733,6 +733,7 @@ async def stats_handler(client, message):
     total_clones = 0
     total_clone_users = 0
     clone_details = []
+    buttons = []
     
     try:
         bots = [b async for b in clone_mongo_db.bots.find({})]
@@ -742,12 +743,14 @@ async def stats_handler(client, message):
             bot_id_str = str(bot.get("bot_id"))
             bot_name = bot.get("name", "Unknown")
             bot_username = bot.get("username", "Unknown")
+            bot_id = bot.get("bot_id")
             try:
                 count = await clonedb.db[bot_id_str].count_documents({})
             except Exception:
                 count = 0
             total_clone_users += count
             bots_data.append({
+                "bot_id": bot_id,
                 "name": bot_name,
                 "username": bot_username,
                 "count": count
@@ -758,6 +761,7 @@ async def stats_handler(client, message):
         
         for item in bots_data:
             clone_details.append(f"• <b>{item['name']}</b> (@{item['username']}): <code>{item['count']}</code> users")
+            buttons.append([InlineKeyboardButton(f"🗑 Delete @{item['username']}", callback_data=f"delbot_{item['bot_id']}")])
     except Exception as e:
         logger.error(f"Error fetching clone stats: {e}")
         
@@ -769,7 +773,8 @@ async def stats_handler(client, message):
         f"🤖 Total Clones Made: <code>{total_clones}</code>\n"
         f"👥 Total Users Across Clones: <code>{total_clone_users}</code>\n\n"
         f"📋 <u>Cloned Bots List:</u>\n"
-        f"{clones_list_text}</b>"
+        f"{clones_list_text}</b>",
+        reply_markup=InlineKeyboardMarkup(buttons) if buttons else None
     )
 
 @Client.on_message(filters.command("validity") & filters.user(ADMINS) & filters.private)
@@ -1030,6 +1035,32 @@ async def clear_force_sub_handler(client, message):
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
+    if query.data.startswith("delbot_"):
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ Only the bot owner can delete cloned bots.", show_alert=True)
+        try:
+            bot_id = int(query.data.split("_")[1])
+            cloned_bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+            if cloned_bot:
+                from plugins.clone import stop_clone
+                bot_username = cloned_bot.get('username')
+                await stop_clone(bot_id)
+                await clone_mongo_db.bots.delete_one({"bot_id": bot_id})
+                try:
+                    await clone_mongo_db[str(bot_id)].drop()
+                except:
+                    pass
+                await query.answer(f"✅ @{bot_username} stopped and deleted successfully!", show_alert=True)
+                try:
+                    await query.message.delete()
+                except:
+                    pass
+            else:
+                await query.answer("⚠️ Bot not found.", show_alert=True)
+        except Exception as e:
+            await query.answer(f"❌ Error: {e}", show_alert=True)
+        return
+
     # Force Sub Mode selection (from /setforcesub)
     if query.data.startswith("fsub_nm_") or query.data.startswith("fsub_jr_"):
         parts = query.data.split("_")
@@ -1110,6 +1141,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
 # Ask Doubt on telegram @Brainaxe190
     
     elif query.data == "clone_manage":
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ Only the bot owner can manage/create clone bots.", show_alert=True)
         user_id = query.from_user.id
         bots = [b async for b in clone_mongo_db.bots.find({"user_id": user_id})]
         buttons = []

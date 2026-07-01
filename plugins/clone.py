@@ -8,7 +8,7 @@ from Script import script
 from pyrogram import Client, filters
 from pyrogram.types import Message, BotCommand
 from pyrogram.errors.exceptions.bad_request_400 import AccessTokenExpired, AccessTokenInvalid
-from config import API_ID, API_HASH, DB_URI, DB_NAME, CLONE_MODE, UNIVERSAL_FORCE_SUB_CHANNEL
+from config import API_ID, API_HASH, DB_URI, DB_NAME, CLONE_MODE, UNIVERSAL_FORCE_SUB_CHANNEL, ADMINS
 from utils import is_subscribed_universal
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import logging
@@ -58,6 +58,9 @@ async def stop_clone(bot_id: int):
 async def clone(client, message):
     if CLONE_MODE == False:
         return 
+    
+    if message.from_user.id not in ADMINS:
+        return await message.reply_text("<b>❌ Only the bot owner can create cloned bots.</b>")
     
     # Universal Force Sub Check
     chk = await is_subscribed_universal(client, message)
@@ -124,6 +127,10 @@ async def clone(client, message):
 async def delete_cloned_bot(client, message):
     if CLONE_MODE == False:
         return 
+    
+    if message.from_user.id not in ADMINS:
+        return await message.reply_text("<b>❌ Only the bot owner can delete cloned bots.</b>")
+        
     try:
         techvj = await client.ask(message.chat.id, "**Send Me Bot Token To Delete**")
         bot_token_find = re.findall(r"\b(\d+:[A-Za-z0-9_-]+)\b", techvj.text)
@@ -147,6 +154,36 @@ async def delete_cloned_bot(client, message):
     except Exception as e:
         logger.error(f"Error deleting bot: {e}")
         await message.reply_text("An error occurred while deleting the cloned bot.")
+
+@Client.on_message(filters.command("purgeotherclones") & filters.private)
+async def purge_other_clones(client, message):
+    if message.from_user.id not in ADMINS:
+        return await message.reply_text("<b>❌ Only the main bot owner can run this command.</b>")
+    
+    msg = await message.reply_text("<b>🧹 Purging all cloned bots created by other users... Please wait.</b>")
+    purged_count = 0
+    
+    try:
+        cursor = async_mongo_db.bots.find()
+        async for bot in cursor:
+            owner_id = bot.get("user_id")
+            if owner_id not in ADMINS:
+                bot_id = bot['bot_id']
+                # Stop the running bot instance
+                await stop_clone(int(bot_id))
+                # Remove from DB
+                await async_mongo_db.bots.delete_one({"bot_id": bot_id})
+                # Drop users collection for this clone
+                try:
+                    await async_mongo_db[str(bot_id)].drop()
+                except:
+                    pass
+                purged_count += 1
+        
+        await msg.edit_text(f"<b>✅ Successfully purged <code>{purged_count}</code> clone bots belonging to other users.</b>")
+    except Exception as e:
+        logger.error(f"Error purging other clones: {e}")
+        await msg.edit_text(f"<b>❌ Error purging clones: <code>{e}</code></b>")
 
 async def restart_bots():
     cursor = async_mongo_db.bots.find()
