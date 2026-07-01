@@ -2919,6 +2919,72 @@ async def approve_vplink_cmd_handler(client, message):
         except Exception as e:
             logger.error(f"Could not notify owner {owner_id}: {e}")
 
+async def upload_image(client, photo) -> str:
+    """Download photo to memory and upload to Catbox (with Telegraph/Graph/Tmpfiles fallbacks)."""
+    import io
+    import aiohttp
+    
+    try:
+        photo_bytes = await client.download_media(photo, in_memory=True)
+        if not photo_bytes:
+            return None
+            
+        file_bytes = bytes(photo_bytes)
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        async with aiohttp.ClientSession(headers=headers) as session:
+            # 1. Catbox.moe
+            try:
+                form = aiohttp.FormData()
+                form.add_field("reqtype", "fileupload")
+                form.add_field("fileToUpload", io.BytesIO(file_bytes), filename="image.jpg")
+                async with session.post("https://catbox.moe/user/api.php", data=form) as resp:
+                    res_text = await resp.text()
+                    if res_text and res_text.strip().startswith("http"):
+                        return res_text.strip()
+            except Exception as e:
+                logger.error(f"Catbox upload failed: {e}")
+                
+            # 2. Telegra.ph
+            try:
+                form_fallback = aiohttp.FormData()
+                form_fallback.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
+                async with session.post("https://telegra.ph/upload", data=form_fallback) as resp:
+                    result = await resp.json()
+                    if isinstance(result, list) and result[0].get("src"):
+                        return "https://telegra.ph" + result[0]["src"]
+            except Exception as e:
+                logger.error(f"Telegra.ph upload failed: {e}")
+                
+            # 3. Graph.org
+            try:
+                form_fallback = aiohttp.FormData()
+                form_fallback.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
+                async with session.post("https://graph.org/upload", data=form_fallback) as resp:
+                    result = await resp.json()
+                    if isinstance(result, list) and result[0].get("src"):
+                        return "https://graph.org" + result[0]["src"]
+            except Exception as e:
+                logger.error(f"Graph.org upload failed: {e}")
+                
+            # 4. Tmpfiles.org
+            try:
+                form_tmp = aiohttp.FormData()
+                form_tmp.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
+                async with session.post("https://tmpfiles.org/api/v1/upload", data=form_tmp) as resp:
+                    res3 = await resp.json()
+                    if res3.get("status") == "success" and "data" in res3 and "url" in res3["data"]:
+                        raw_url = res3["data"]["url"]
+                        return raw_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
+            except Exception as e:
+                logger.error(f"Tmpfiles upload failed: {e}")
+                
+    except Exception as e:
+        logger.error(f"Error in upload_image helper: {e}")
+    return None
+
 @Client.on_message(filters.command("addpost") & filters.private & filters.user(ADMINS))
 async def add_post_cmd_handler(client, message):
     replied = message.reply_to_message
@@ -2952,37 +3018,14 @@ async def add_post_cmd_handler(client, message):
                         category = parsed_cat
                         break
                         
-        sts = await message.reply_text("<b>⏳ Uploading poster and adding post...</b>")
+        sts = await message.reply_text("<b>⏳ Uploading poster (Catbox) and adding post...</b>")
         
-        import requests
-        import os
+        image_url = await upload_image(client, replied.photo)
+        if not image_url:
+            return await sts.edit_text("<b>❌ Failed to upload photo to Catbox or any backup image host.</b>")
+            
         import uuid
         import time
-        
-        def upload_to_graph_org(photo_path):
-            try:
-                with open(photo_path, 'rb') as f:
-                    r = requests.post('https://graph.org/upload', files={'file': f})
-                    if r.status_code == 200:
-                        res = r.json()
-                        if isinstance(res, list) and len(res) > 0:
-                            return "https://graph.org" + res[0]['src']
-            except Exception as e:
-                logger.error(f"Error uploading to graph.org: {e}")
-            return None
-
-        temp_photo = await client.download_media(replied.photo)
-        image_url = None
-        if temp_photo:
-            image_url = upload_to_graph_org(temp_photo)
-            try:
-                os.remove(temp_photo)
-            except:
-                pass
-                
-        if not image_url:
-            return await sts.edit_text("<b>❌ Failed to upload photo to graph.org.</b>")
-            
         post_id = str(uuid.uuid4())[:8]
         await clone_mongo_db.posts.insert_one({
             "_id": post_id,
@@ -3137,21 +3180,8 @@ async def bulk_add_post_cmd_handler(client, message):
     imported_count = 0
     skipped_count = 0
     
-    import requests
     import uuid
     import time
-    
-    def upload_to_graph_org(photo_path):
-        try:
-            with open(photo_path, 'rb') as f:
-                r = requests.post('https://graph.org/upload', files={'file': f})
-                if r.status_code == 200:
-                    res = r.json()
-                    if isinstance(res, list) and len(res) > 0:
-                        return "https://graph.org" + res[0]['src']
-        except Exception as e:
-            logger.error(f"Error uploading to graph.org: {e}")
-        return None
 
     for msg_id in range(start_msg_id, end_msg_id + 1):
         try:
@@ -3193,16 +3223,8 @@ async def bulk_add_post_cmd_handler(client, message):
                         category = parsed_cat
                         break
             
-            # Download and upload photo
-            temp_photo = await client.download_media(msg.photo)
-            image_url = None
-            if temp_photo:
-                image_url = upload_to_graph_org(temp_photo)
-                try:
-                    os.remove(temp_photo)
-                except:
-                    pass
-                    
+            # Download and upload photo using multi-provider helper
+            image_url = await upload_image(client, msg.photo)
             if not image_url:
                 image_url = "/static/LOGO.jpg"
                 
