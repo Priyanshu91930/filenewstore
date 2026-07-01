@@ -1035,6 +1035,7 @@ async def clear_force_sub_handler(client, message):
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
+    from config import ADMINS
     if query.data.startswith("delbot_"):
         if query.from_user.id not in ADMINS:
             return await query.answer("❌ Only the bot owner can delete cloned bots.", show_alert=True)
