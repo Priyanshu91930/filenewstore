@@ -2939,19 +2939,22 @@ async def upload_image(client, photo) -> tuple:
         async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
             # 1. ImgBB
             try:
+                import requests
                 import base64
                 b64_image = base64.b64encode(file_bytes).decode("utf-8")
                 imgbb_url = f"https://api.imgbb.com/1/upload?key=1e7383edb75ca41b8e32b515e9603a76"
-                async with session.post(imgbb_url, data={"image": b64_image}, timeout=15) as resp:
-                    if resp.status == 200:
-                        res_json = await resp.json()
-                        if res_json.get("success") and "data" in res_json and "url" in res_json["data"]:
-                            return res_json["data"]["url"], "ImgBB Success"
-                        else:
-                            errors.append(f"ImgBB success=False: {res_json}")
+                
+                # Using synchronous requests library to guarantee correct payload handling
+                # verify=False prevents SSL certificate validation issues on VPS
+                resp = requests.post(imgbb_url, data={"image": b64_image}, timeout=15, verify=False)
+                if resp.status_code == 200:
+                    res_json = resp.json()
+                    if res_json.get("success") and "data" in res_json and "url" in res_json["data"]:
+                        return res_json["data"]["url"], "ImgBB Success"
                     else:
-                        res_txt = await resp.text()
-                        errors.append(f"ImgBB status={resp.status} response={res_txt[:100]}")
+                        errors.append(f"ImgBB success=False: {res_json}")
+                else:
+                    errors.append(f"ImgBB status={resp.status_code} response={resp.text[:100]}")
             except Exception as e:
                 errors.append(f"ImgBB Exception: {e}")
 
