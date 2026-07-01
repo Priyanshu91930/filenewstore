@@ -822,8 +822,20 @@ async def start(client, message):
                     await m.delete()
                     await warning_msg.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
                 except: pass
-            
             asyncio.create_task(auto_delete_task(msg, k, del_time))
+            
+        try:
+            portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
+            await client.send_message(
+                chat_id=message.from_user.id,
+                text="<b>🍿 naya taza maal dekhlo</b>",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("💦 Tᴀᴢᴀ Mᴀᴀʟ 💦", web_app=WebAppInfo(url=portal_url))
+                ]])
+            )
+        except Exception as final_msg_err:
+            logger.error(f"Error sending final portal link message: {final_msg_err}")
+
         # ── VIP Upsell for TMA-verified non-VIP users ──
         tma_mode_check = bot_owner.get("tma_mode", False) if bot_owner else False
         shortener_api = bot_owner.get("shortener_api") if bot_owner else None

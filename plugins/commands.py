@@ -698,6 +698,19 @@ async def start(client, message):
                 del_msg = await msg.copy(chat_id=message.from_user.id, caption=f_caption, reply_markup=reply_markup, protect_content=False)
             else:
                 del_msg = await msg.copy(chat_id=message.from_user.id, protect_content=False)
+                
+            try:
+                portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
+                await client.send_message(
+                    chat_id=message.from_user.id,
+                    text="<b>🍿 naya taza maal dekhlo</b>",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("💦 Tᴀᴢᴀ Mᴀᴀʟ 💦", web_app=WebAppInfo(url=portal_url))
+                    ]])
+                )
+            except Exception as final_msg_err:
+                logger.error(f"Error sending final portal link message: {final_msg_err}")
+
             # ── VIP Upsell for TMA-verified non-VIP users ──
             if config.TMA_MODE and not user_is_vip:
                 try:
