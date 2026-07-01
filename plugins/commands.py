@@ -2962,7 +2962,7 @@ async def upload_image(client, photo) -> tuple:
                 async with session.post("https://catbox.moe/user/api.php", data=form, timeout=10) as resp:
                     res_text = await resp.text()
                     if res_text and res_text.strip().startswith("http"):
-                        return res_text.strip(), "Catbox Success"
+                        return res_text.strip(), f"Catbox Success (Failures: {'; '.join(errors)})"
                     else:
                         errors.append(f"Catbox: {res_text}")
             except Exception as e:
@@ -2975,7 +2975,7 @@ async def upload_image(client, photo) -> tuple:
                 async with session.post("https://telegra.ph/upload", data=form_fallback, timeout=10) as resp:
                     result = await resp.json()
                     if isinstance(result, list) and result[0].get("src"):
-                        return "https://telegra.ph" + result[0]["src"], "Telegra.ph Success"
+                        return "https://telegra.ph" + result[0]["src"], f"Telegra.ph Success (Failures: {'; '.join(errors)})"
                     else:
                         errors.append(f"Telegra.ph: {result}")
             except Exception as e:
@@ -2988,7 +2988,7 @@ async def upload_image(client, photo) -> tuple:
                 async with session.post("https://graph.org/upload", data=form_fallback, timeout=10) as resp:
                     result = await resp.json()
                     if isinstance(result, list) and result[0].get("src"):
-                        return "https://graph.org" + result[0]["src"], "Graph.org Success"
+                        return "https://graph.org" + result[0]["src"], f"Graph.org Success (Failures: {'; '.join(errors)})"
                     else:
                         errors.append(f"Graph.org: {result}")
             except Exception as e:
@@ -3002,7 +3002,7 @@ async def upload_image(client, photo) -> tuple:
                     res3 = await resp.json()
                     if res3.get("status") == "success" and "data" in res3 and "url" in res3["data"]:
                         raw_url = res3["data"]["url"]
-                        return raw_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/"), "Tmpfiles Success"
+                        return raw_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/"), f"Tmpfiles Success (Failures: {'; '.join(errors)})"
                     else:
                         errors.append(f"Tmpfiles: {res3}")
             except Exception as e:
