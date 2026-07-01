@@ -170,7 +170,8 @@ def portal_data():
             'title': doc.get('title', ''),
             'image_url': doc.get('image_url', ''),
             'category': doc.get('category', ''),
-            'file_deeplink': doc.get('file_deeplink', '')
+            'file_deeplink': doc.get('file_deeplink', ''),
+            'bot_username': doc.get('bot_username', '')
         })
 
     # Get unique categories

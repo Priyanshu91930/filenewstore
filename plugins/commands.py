@@ -3010,13 +3010,19 @@ async def add_post_cmd_handler(client, message):
             return await message.reply_text("<b>❌ The replied message must have a photo and a caption.</b>")
             
         import re
-        links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", replied.caption)
-        if not links:
+        bot_username = None
+        # Try to find full link e.g. https://t.me/my_clone_bot?start=payload
+        bot_match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)\?start=([A-Za-z0-9_-]+)", replied.caption)
+        if bot_match:
+            bot_username = bot_match.group(1)
+            deeplink = bot_match.group(2)
+        else:
             links = re.findall(r"start=([A-Za-z0-9_-]+)", replied.caption)
-        if not links:
-            return await message.reply_text("<b>❌ Could not find a bot start link (payload) in the caption.</b>")
-            
-        deeplink = links[0]
+            if not links:
+                links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", replied.caption)
+            if not links:
+                return await message.reply_text("<b>❌ Could not find a bot start link (payload) in the caption.</b>")
+            deeplink = links[0]
         
         lines = [l.strip() for l in replied.caption.split('\n') if l.strip()]
         title = lines[0] if lines else "Untitled"
@@ -3050,10 +3056,11 @@ async def add_post_cmd_handler(client, message):
             "image_url": image_url,
             "category": category,
             "file_deeplink": deeplink,
+            "bot_username": bot_username,
             "created_at": time.time()
         })
         
-        return await sts.edit_text(f"<b>✅ Post added successfully by reply!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}</b>")
+        return await sts.edit_text(f"<b>✅ Post added successfully by reply!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}\nBot Username: {bot_username or 'Default'}</b>")
 
     # Traditional manual add fallback
     if len(message.command) < 2:
@@ -3071,6 +3078,14 @@ async def add_post_cmd_handler(client, message):
     category = args[2].strip()
     deeplink = args[3].strip()
     
+    bot_username = None
+    if "t.me/" in deeplink:
+        import re
+        bot_match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)\?start=([A-Za-z0-9_-]+)", deeplink)
+        if bot_match:
+            bot_username = bot_match.group(1)
+            deeplink = bot_match.group(2)
+
     import uuid
     import time
     post_id = str(uuid.uuid4())[:8]
@@ -3081,10 +3096,11 @@ async def add_post_cmd_handler(client, message):
         "image_url": image_url,
         "category": category,
         "file_deeplink": deeplink,
+        "bot_username": bot_username,
         "created_at": time.time()
     })
     
-    await message.reply_text(f"<b>✅ Post added successfully!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}</b>")
+    await message.reply_text(f"<b>✅ Post added successfully!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}\nBot Username: {bot_username or 'Default'}</b>")
 
 
 @Client.on_message(filters.command("delpost") & filters.private & filters.user(ADMINS))
@@ -3215,15 +3231,20 @@ async def bulk_add_post_cmd_handler(client, message):
                 skipped_count += 1
                 continue
                 
-            # Parse start payload link
-            links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", msg.caption)
-            if not links:
+            # Parse start payload link and bot username
+            bot_username = None
+            bot_match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)\?start=([A-Za-z0-9_-]+)", msg.caption)
+            if bot_match:
+                bot_username = bot_match.group(1)
+                deeplink = bot_match.group(2)
+            else:
                 links = re.findall(r"start=([A-Za-z0-9_-]+)", msg.caption)
-            if not links:
-                skipped_count += 1
-                continue
-                
-            deeplink = links[0]
+                if not links:
+                    links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", msg.caption)
+                if not links:
+                    skipped_count += 1
+                    continue
+                deeplink = links[0]
             
             # Parse title & category
             lines = [l.strip() for l in msg.caption.split('\n') if l.strip()]
@@ -3252,6 +3273,7 @@ async def bulk_add_post_cmd_handler(client, message):
                 "image_url": image_url,
                 "category": category,
                 "file_deeplink": deeplink,
+                "bot_username": bot_username,
                 "created_at": time.time()
             })
             imported_count += 1

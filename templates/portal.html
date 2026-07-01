@@ -392,7 +392,7 @@
                 <div class="movie-title">${post.title}</div>
               </div>
             `;
-            card.addEventListener('click', () => handleCardClick(post.file_deeplink));
+            card.addEventListener('click', () => handleCardClick(post.file_deeplink, post.bot_username));
             moviesGrid.appendChild(card);
           });
           moviesGrid.style.display = 'grid';
@@ -414,8 +414,8 @@
     }
 
     // Handle Card Click (Redirect directly to the bot with file payload)
-    function handleCardClick(deeplink) {
-      const username = botUsername || 'filesstoreclone_bot';
+    function handleCardClick(deeplink, cardBotUsername) {
+      const username = cardBotUsername || botUsername || 'filesstoreclone_bot';
       const redirectUrl = `https://t.me/${username}?start=${deeplink}`;
       if (tg) {
         tg.openTelegramLink(redirectUrl);
