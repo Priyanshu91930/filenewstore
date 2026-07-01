@@ -2919,15 +2919,16 @@ async def approve_vplink_cmd_handler(client, message):
         except Exception as e:
             logger.error(f"Could not notify owner {owner_id}: {e}")
 
-async def upload_image(client, photo) -> str:
-    """Download photo to memory and upload to ImgBB (primary) with Catbox/Telegraph/Tmpfiles fallbacks."""
+async def upload_image(client, photo) -> tuple:
+    """Download photo to memory and upload to ImgBB (primary) with fallbacks. Returns (url, debug_info)."""
     import io
     import aiohttp
     
+    errors = []
     try:
         photo_bytes = await client.download_media(photo, in_memory=True)
         if not photo_bytes:
-            return None
+            return None, "Failed to download photo from Telegram"
             
         file_bytes = bytes(photo_bytes)
         
@@ -2936,68 +2937,81 @@ async def upload_image(client, photo) -> str:
         }
         connector = aiohttp.TCPConnector(ssl=False)
         async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
-            # 1. ImgBB (100% permanent, works on cloud servers, doesn't expire)
+            # 1. ImgBB
             try:
                 form = aiohttp.FormData()
                 form.add_field("image", io.BytesIO(file_bytes), filename="image.jpg")
                 imgbb_url = f"https://api.imgbb.com/1/upload?key=1e7383edb75ca41b8e32b515e9603a76"
-                async with session.post(imgbb_url, data=form) as resp:
+                async with session.post(imgbb_url, data=form, timeout=10) as resp:
                     if resp.status == 200:
                         res_json = await resp.json()
                         if res_json.get("success") and "data" in res_json and "url" in res_json["data"]:
-                            return res_json["data"]["url"]
+                            return res_json["data"]["url"], "ImgBB Success"
+                        else:
+                            errors.append(f"ImgBB status=200 but success=False: {res_json}")
+                    else:
+                        errors.append(f"ImgBB status={resp.status}")
             except Exception as e:
-                logger.error(f"ImgBB upload failed: {e}")
+                errors.append(f"ImgBB Exception: {e}")
 
             # 2. Catbox.moe
             try:
                 form = aiohttp.FormData()
                 form.add_field("reqtype", "fileupload")
                 form.add_field("fileToUpload", io.BytesIO(file_bytes), filename="image.jpg")
-                async with session.post("https://catbox.moe/user/api.php", data=form) as resp:
+                async with session.post("https://catbox.moe/user/api.php", data=form, timeout=10) as resp:
                     res_text = await resp.text()
                     if res_text and res_text.strip().startswith("http"):
-                        return res_text.strip()
+                        return res_text.strip(), "Catbox Success"
+                    else:
+                        errors.append(f"Catbox: {res_text}")
             except Exception as e:
-                logger.error(f"Catbox upload failed: {e}")
+                errors.append(f"Catbox Exception: {e}")
                 
             # 3. Telegra.ph
             try:
                 form_fallback = aiohttp.FormData()
                 form_fallback.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
-                async with session.post("https://telegra.ph/upload", data=form_fallback) as resp:
+                async with session.post("https://telegra.ph/upload", data=form_fallback, timeout=10) as resp:
                     result = await resp.json()
                     if isinstance(result, list) and result[0].get("src"):
-                        return "https://telegra.ph" + result[0]["src"]
+                        return "https://telegra.ph" + result[0]["src"], "Telegra.ph Success"
+                    else:
+                        errors.append(f"Telegra.ph: {result}")
             except Exception as e:
-                logger.error(f"Telegra.ph upload failed: {e}")
+                errors.append(f"Telegra.ph Exception: {e}")
                 
             # 4. Graph.org
             try:
                 form_fallback = aiohttp.FormData()
                 form_fallback.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
-                async with session.post("https://graph.org/upload", data=form_fallback) as resp:
+                async with session.post("https://graph.org/upload", data=form_fallback, timeout=10) as resp:
                     result = await resp.json()
                     if isinstance(result, list) and result[0].get("src"):
-                        return "https://graph.org" + result[0]["src"]
+                        return "https://graph.org" + result[0]["src"], "Graph.org Success"
+                    else:
+                        errors.append(f"Graph.org: {result}")
             except Exception as e:
-                logger.error(f"Graph.org upload failed: {e}")
+                errors.append(f"Graph.org Exception: {e}")
                 
             # 5. Tmpfiles.org
             try:
                 form_tmp = aiohttp.FormData()
                 form_tmp.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
-                async with session.post("https://tmpfiles.org/api/v1/upload", data=form_tmp) as resp:
+                async with session.post("https://tmpfiles.org/api/v1/upload", data=form_tmp, timeout=10) as resp:
                     res3 = await resp.json()
                     if res3.get("status") == "success" and "data" in res3 and "url" in res3["data"]:
                         raw_url = res3["data"]["url"]
-                        return raw_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
+                        return raw_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/"), "Tmpfiles Success"
+                    else:
+                        errors.append(f"Tmpfiles: {res3}")
             except Exception as e:
-                logger.error(f"Tmpfiles upload failed: {e}")
+                errors.append(f"Tmpfiles Exception: {e}")
                 
     except Exception as e:
-        logger.error(f"Error in upload_image helper: {e}")
-    return None
+        errors.append(f"Global download/bytes error: {e}")
+        
+    return None, " | ".join(errors)
 
 @Client.on_message(filters.command("addpost") & filters.private & filters.user(ADMINS))
 async def add_post_cmd_handler(client, message):
@@ -3038,11 +3052,11 @@ async def add_post_cmd_handler(client, message):
                         category = parsed_cat
                         break
                         
-        sts = await message.reply_text("<b>⏳ Uploading poster (Catbox) and adding post...</b>")
+        sts = await message.reply_text("<b>⏳ Uploading poster (ImgBB) and adding post...</b>")
         
-        image_url = await upload_image(client, replied.photo)
+        image_url, debug_info = await upload_image(client, replied.photo)
         if not image_url:
-            return await sts.edit_text("<b>❌ Failed to upload photo to Catbox or any backup image host.</b>")
+            return await sts.edit_text(f"<b>❌ Failed to upload photo to any host.</b>\n\nDebug: <code>{debug_info}</code>")
             
         import uuid
         import time
@@ -3057,7 +3071,7 @@ async def add_post_cmd_handler(client, message):
             "created_at": time.time()
         })
         
-        return await sts.edit_text(f"<b>✅ Post added successfully by reply!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}\nBot Username: {bot_username or 'Default'}</b>")
+        return await sts.edit_text(f"<b>✅ Post added successfully by reply!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}\nBot Username: {bot_username or 'Default'}\nUploader: {debug_info}</b>")
 
     # Traditional manual add fallback
     if len(message.command) < 2:
@@ -3288,7 +3302,7 @@ async def bulk_add_post_cmd_handler(client, message):
                         break
             
             # Download and upload photo using multi-provider helper
-            image_url = await upload_image(client, msg.photo)
+            image_url, debug_info = await upload_image(client, msg.photo)
             if not image_url:
                 image_url = "/static/LOGO.jpg"
                 
