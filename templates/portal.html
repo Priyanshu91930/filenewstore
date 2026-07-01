@@ -329,7 +329,14 @@
     // Get Query Parameters
     const urlParams = new URLSearchParams(window.location.search);
     const uid = urlParams.get('uid') || '';
-    const botUsername = urlParams.get('bot') || '';
+    let botUsername = urlParams.get('bot') || '';
+
+    // Save and load bot username from localStorage to persist clone bot context
+    if (botUsername) {
+      localStorage.setItem('portal_bot_username', botUsername);
+    } else {
+      botUsername = localStorage.getItem('portal_bot_username') || '';
+    }
 
     // State Variables
     let currentPage = 1;
@@ -412,7 +419,6 @@
       const redirectUrl = `https://t.me/${username}?start=${deeplink}`;
       if (tg) {
         tg.openTelegramLink(redirectUrl);
-        tg.close();
       } else {
         window.location.href = redirectUrl;
       }
