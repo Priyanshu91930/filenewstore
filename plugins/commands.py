@@ -2920,10 +2920,27 @@ async def approve_vplink_cmd_handler(client, message):
             logger.error(f"Could not notify owner {owner_id}: {e}")
 
 async def upload_image(client, photo) -> str:
-    """Download photo to memory and upload to Catbox (with Telegraph/Graph/Tmpfiles fallbacks)."""
+    """Download photo locally to static/uploads (primary) with online fallbacks (Catbox/Telegraph/Tmpfiles)."""
     import io
+    import os
+    import uuid
     import aiohttp
     
+    # 1. Try Local Save first (100% reliable, permanent, and never blocked by ISPs)
+    try:
+        static_uploads = os.path.join("static", "uploads")
+        os.makedirs(static_uploads, exist_ok=True)
+        
+        file_name = f"{uuid.uuid4().hex}.jpg"
+        file_path = os.path.join(static_uploads, file_name)
+        
+        downloaded_path = await client.download_media(photo, file_name=file_path)
+        if downloaded_path and os.path.exists(downloaded_path):
+            return f"/static/uploads/{file_name}"
+    except Exception as e:
+        logger.error(f"Local image save failed, falling back to online hosts: {e}")
+
+    # Fallback to online hosting if local save is not supported (e.g. read-only filesystem)
     try:
         photo_bytes = await client.download_media(photo, in_memory=True)
         if not photo_bytes:

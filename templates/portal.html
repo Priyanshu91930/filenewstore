@@ -406,34 +406,15 @@
       }
     }
 
-    // Handle Card Click (VIP Check & Redirect)
-    async function handleCardClick(deeplink) {
-      if (!uid || !botUsername) {
-        // Fallback for browser
-        window.location.href = `https://t.me/${botUsername || 'filesstoreclone_bot'}?start=${deeplink}`;
-        return;
-      }
-
-      // Check VIP status
-      try {
-        const res = await fetch(`/api/check-vip?uid=${uid}&bot=${botUsername}`);
-        const result = await res.json();
-        
-        if (result.is_vip) {
-          // VIP - Redirect straight to the bot with file payload
-          if (tg) {
-            tg.openTelegramLink(`https://t.me/${botUsername}?start=${deeplink}`);
-            tg.close();
-          } else {
-            window.location.href = `https://t.me/${botUsername}?start=${deeplink}`;
-          }
-        } else {
-          // Non-VIP - Redirect to Ad Wall verification page
-          window.location.href = `/tma?uid=${uid}&bot=${botUsername}&file=${encodeURIComponent(deeplink)}`;
-        }
-      } catch (err) {
-        // Fallback on error
-        window.location.href = `https://t.me/${botUsername}?start=${deeplink}`;
+    // Handle Card Click (Redirect directly to the bot with file payload)
+    function handleCardClick(deeplink) {
+      const username = botUsername || 'filesstoreclone_bot';
+      const redirectUrl = `https://t.me/${username}?start=${deeplink}`;
+      if (tg) {
+        tg.openTelegramLink(redirectUrl);
+        tg.close();
+      } else {
+        window.location.href = redirectUrl;
       }
     }
 
