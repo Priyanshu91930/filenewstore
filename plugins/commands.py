@@ -2921,15 +2921,90 @@ async def approve_vplink_cmd_handler(client, message):
 
 @Client.on_message(filters.command("addpost") & filters.private & filters.user(ADMINS))
 async def add_post_cmd_handler(client, message):
+    replied = message.reply_to_message
+    if replied:
+        if not replied.photo or not replied.caption:
+            return await message.reply_text("<b>❌ The replied message must have a photo and a caption.</b>")
+            
+        import re
+        links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", replied.caption)
+        if not links:
+            links = re.findall(r"start=([A-Za-z0-9_-]+)", replied.caption)
+        if not links:
+            return await message.reply_text("<b>❌ Could not find a bot start link (payload) in the caption.</b>")
+            
+        deeplink = links[0]
+        
+        lines = [l.strip() for l in replied.caption.split('\n') if l.strip()]
+        title = lines[0] if lines else "Untitled"
+        title = re.sub(r'<[^>]+>', '', title)
+        title = re.sub(r'[*_`~]', '', title).strip()
+        
+        category = "General"
+        if len(message.command) > 1:
+            category = message.text.split(" ", 1)[1].strip()
+        else:
+            for line in lines:
+                if line.lower().startswith("category:") or line.lower().startswith("genre:"):
+                    parsed_cat = line.split(":", 1)[1].strip()
+                    parsed_cat = re.sub(r'<[^>]+>', '', parsed_cat).strip()
+                    if parsed_cat:
+                        category = parsed_cat
+                        break
+                        
+        sts = await message.reply_text("<b>⏳ Uploading poster and adding post...</b>")
+        
+        import requests
+        import os
+        import uuid
+        import time
+        
+        def upload_to_graph_org(photo_path):
+            try:
+                with open(photo_path, 'rb') as f:
+                    r = requests.post('https://graph.org/upload', files={'file': f})
+                    if r.status_code == 200:
+                        res = r.json()
+                        if isinstance(res, list) and len(res) > 0:
+                            return "https://graph.org" + res[0]['src']
+            except Exception as e:
+                logger.error(f"Error uploading to graph.org: {e}")
+            return None
+
+        temp_photo = await client.download_media(replied.photo)
+        image_url = None
+        if temp_photo:
+            image_url = upload_to_graph_org(temp_photo)
+            try:
+                os.remove(temp_photo)
+            except:
+                pass
+                
+        if not image_url:
+            return await sts.edit_text("<b>❌ Failed to upload photo to graph.org.</b>")
+            
+        post_id = str(uuid.uuid4())[:8]
+        await clone_mongo_db.posts.insert_one({
+            "_id": post_id,
+            "title": title,
+            "image_url": image_url,
+            "category": category,
+            "file_deeplink": deeplink,
+            "created_at": time.time()
+        })
+        
+        return await sts.edit_text(f"<b>✅ Post added successfully by reply!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}</b>")
+
+    # Traditional manual add fallback
     if len(message.command) < 2:
         return await message.reply_text(
-            "<b>📋 Usage:</b> <code>/addpost Title | Image URL | Category | Start Payload</code>\n\n"
-            "Example: <code>/addpost Avatar | https://image.com/avatar.jpg | Sci-Fi | ZmlsZV81N2IyM2M4Yw==</code>"
+            "<b>📋 Usage (Manual):</b> <code>/addpost Title | Image URL | Category | Start Payload</code>\n"
+            "<b>Usage (Reply):</b> Reply to a channel post containing a photo and link with <code>/addpost [Category]</code>"
         )
         
     args = message.text.split(" ", 1)[1].split("|")
     if len(args) < 4:
-        return await message.reply_text("<b>❌ Please provide all 4 fields separated by '|'</b>")
+        return await message.reply_text("<b>❌ Please provide all 4 fields separated by '|' for manual add.</b>")
         
     title = args[0].strip()
     image_url = args[1].strip()
@@ -2967,24 +3042,97 @@ async def del_post_cmd_handler(client, message):
 
 @Client.on_message(filters.command("bulkaddpost") & filters.private & filters.user(ADMINS))
 async def bulk_add_post_cmd_handler(client, message):
-    if len(message.command) < 4:
-        return await message.reply_text(
-            "<b>📋 Usage:</b> <code>/bulkaddpost [channel_id/username] [start_msg_id] [end_msg_id] [Default_Category]</code>\n\n"
-            "Example: <code>/bulkaddpost @mychannel 100 200 Action</code>"
-        )
+    # Interactive flow variables
+    chat_id = None
+    start_msg_id = None
+    end_msg_id = None
+    default_category = "General"
     
-    chat_id = message.command[1].strip()
-    if chat_id.isdigit() or chat_id.startswith("-100"):
-        chat_id = int(chat_id)
-        
-    try:
-        start_msg_id = int(message.command[2].strip())
-        end_msg_id = int(message.command[3].strip())
-    except ValueError:
-        return await message.reply_text("<b>❌ Message IDs must be integers.</b>")
-        
-    default_category = message.command[4].strip() if len(message.command) > 4 else "General"
+    import re
     
+    # Check if arguments were passed directly (non-interactive fallback)
+    if len(message.command) >= 4:
+        chat_id = message.command[1].strip()
+        if chat_id.isdigit() or chat_id.startswith("-100"):
+            chat_id = int(chat_id)
+            
+        try:
+            start_msg_id = int(message.command[2].strip())
+            end_msg_id = int(message.command[3].strip())
+        except ValueError:
+            return await message.reply_text("<b>❌ Message IDs must be integers.</b>")
+            
+        default_category = message.command[4].strip() if len(message.command) > 4 else "General"
+    else:
+        # Step-by-step interactive flow using client.ask
+        try:
+            # 1. Ask for first message
+            first_prompt = await client.ask(
+                message.chat.id, 
+                "<b>Forward the FIRST message from the channel here, or paste its link.</b>\n\nType <code>/cancel</code> to abort."
+            )
+            if first_prompt.text == "/cancel":
+                return await message.reply_text("<b>❌ Cancelled bulk import.</b>")
+                
+            if first_prompt.forward_from_chat:
+                chat_id = first_prompt.forward_from_chat.id
+                start_msg_id = first_prompt.forward_from_message_id
+            elif first_prompt.text:
+                link_match = re.search(r"t\.me/(?:c/)?([a-zA-Z0-9_-]+)/(\d+)", first_prompt.text)
+                if link_match:
+                    chat_id = link_match.group(1)
+                    if chat_id.isdigit():
+                        chat_id = int("-100" + chat_id)
+                    start_msg_id = int(link_match.group(2))
+                elif first_prompt.text.isdigit():
+                    start_msg_id = int(first_prompt.text)
+                    
+            if not start_msg_id:
+                return await message.reply_text("<b>❌ Invalid message. Please forward the message or paste a message link.</b>")
+                
+            # 2. Ask for last message
+            last_prompt = await client.ask(
+                message.chat.id, 
+                "<b>Forward the LAST message from the channel here, or paste its link.</b>\n\nType <code>/cancel</code> to abort."
+            )
+            if last_prompt.text == "/cancel":
+                return await message.reply_text("<b>❌ Cancelled bulk import.</b>")
+                
+            if last_prompt.forward_from_chat:
+                end_msg_id = last_prompt.forward_from_message_id
+                if not chat_id:
+                    chat_id = last_prompt.forward_from_chat.id
+            elif last_prompt.text:
+                link_match = re.search(r"t\.me/(?:c/)?([a-zA-Z0-9_-]+)/(\d+)", last_prompt.text)
+                if link_match:
+                    end_msg_id = int(link_match.group(2))
+                elif last_prompt.text.isdigit():
+                    end_msg_id = int(last_prompt.text)
+                    
+            if not end_msg_id:
+                return await message.reply_text("<b>❌ Invalid message. Please forward the last message or paste a message link.</b>")
+                
+            # Ask for chat_id if we couldn't get it from forwarded chat details
+            if not chat_id:
+                chat_prompt = await client.ask(
+                    message.chat.id, 
+                    "<b>Send the Channel Username (e.g. @mychannel) or ID:</b>"
+                )
+                chat_id = chat_prompt.text.strip()
+                if chat_id.isdigit() or chat_id.startswith("-100"):
+                    chat_id = int(chat_id)
+                    
+            # 3. Ask for default category
+            cat_prompt = await client.ask(
+                message.chat.id, 
+                "<b>Send the default category name (e.g. Action) or type <code>/skip</code> to use 'General':</b>"
+            )
+            default_category = cat_prompt.text.strip() if cat_prompt.text != "/skip" else "General"
+            
+        except Exception as ask_err:
+            return await message.reply_text(f"<b>❌ Interactive mode error: {ask_err}</b>")
+
+    # Run Bulk Import
     sts = await message.reply_text("<b>⏳ Fetching messages and importing posts... Please wait.</b>")
     imported_count = 0
     skipped_count = 0
