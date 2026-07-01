@@ -2940,14 +2940,16 @@ async def upload_image(client, photo) -> tuple:
             # 1. ImgBB
             try:
                 import requests
-                imgbb_url = f"https://api.imgbb.com/1/upload?key=1e7383edb75ca41b8e32b515e9603a76"
                 
                 # Using requests files parameter (multipart/form-data) as recommended by ImgBB
                 # verify=False prevents SSL certificate validation issues on VPS
                 files = {
                     "image": ("image.jpg", io.BytesIO(file_bytes), "image/jpeg")
                 }
-                resp = requests.post(imgbb_url, files=files, timeout=15, verify=False)
+                data = {
+                    "key": "1e7383edb75ca41b8e32b515e9603a76"
+                }
+                resp = requests.post("https://api.imgbb.com/1/upload", data=data, files=files, timeout=15, verify=False)
                 if resp.status_code == 200:
                     res_json = resp.json()
                     if res_json.get("success") and "data" in res_json and "url" in res_json["data"]:
