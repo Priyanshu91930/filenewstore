@@ -454,3 +454,90 @@ async def media_streamer(request: web.Request, id: int, secure_hash: str):
             "X-Accel-Buffering": "no",
         },
     )
+
+@routes.get("/portal", allow_head=True)
+async def portal_route_handler(request: web.Request):
+    import jinja2
+    template_path = "templates/portal.html"
+    try:
+        with open(template_path, "r", encoding="utf-8") as f:
+            template = jinja2.Template(f.read())
+        rendered = template.render()
+        return web.Response(text=rendered, content_type='text/html')
+    except Exception as e:
+        return web.Response(text=f"Error rendering portal template: {e}", status=500)
+
+@routes.get("/portal-data")
+async def portal_data_route_handler(request: web.Request):
+    from plugins.clone import async_mongo_db
+    import math
+
+    page = int(request.rel_url.query.get('page', 1))
+    category = request.rel_url.query.get('category', 'All')
+    search = request.rel_url.query.get('search', '')
+    limit = 12
+
+    query = {}
+    if category != 'All':
+        query['category'] = category
+    if search:
+        query['title'] = {'$regex': search, '$options': 'i'}
+
+    total_posts = await async_mongo_db.posts.count_documents(query)
+    total_pages = math.ceil(total_posts / limit) or 1
+    page = max(1, min(page, total_pages))
+    skip = (page - 1) * limit
+
+    posts_cursor = async_mongo_db.posts.find(query).sort('created_at', -1).skip(skip).limit(limit)
+    posts = []
+    async for doc in posts_cursor:
+        posts.append({
+            'id': str(doc['_id']),
+            'title': doc.get('title', ''),
+            'image_url': doc.get('image_url', ''),
+            'category': doc.get('category', ''),
+            'file_deeplink': doc.get('file_deeplink', '')
+        })
+
+    # Get unique categories
+    categories = ['All']
+    unique_cats = await async_mongo_db.posts.distinct('category')
+    for cat in unique_cats:
+        if cat and cat not in categories:
+            categories.append(cat)
+
+    return web.json_response({
+        'posts': posts,
+        'categories': categories,
+        'page': page,
+        'total_pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages
+    })
+
+@routes.get("/api/check-vip")
+async def api_check_vip_route_handler(request: web.Request):
+    from plugins.clone import async_mongo_db
+    import time
+
+    uid = request.rel_url.query.get('uid', '')
+    bot_username = request.rel_url.query.get('bot', '')
+
+    if not uid or not bot_username:
+        return web.json_response({'is_vip': False})
+
+    bot_doc = await async_mongo_db.bots.find_one({"username": bot_username})
+    if not bot_doc:
+        return web.json_response({'is_vip': False})
+
+    bot_id = bot_doc["bot_id"]
+    vip_user = await async_mongo_db.vip_users.find_one({"bot_id": int(bot_id), "user_id": int(uid)})
+
+    is_user_vip = False
+    if vip_user:
+        expiry = vip_user.get("expiry")
+        if expiry is None or time.time() < expiry:
+            is_user_vip = True
+
+    return web.json_response({'is_vip': is_user_vip})
+
