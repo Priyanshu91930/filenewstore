@@ -2926,11 +2926,18 @@ async def upload_image(client, photo) -> tuple:
     
     errors = []
     try:
-        photo_bytes = await client.download_media(photo, in_memory=True)
-        if not photo_bytes:
+        import os
+        downloaded_file = await client.download_media(photo)
+        if not downloaded_file or not os.path.exists(downloaded_file):
             return None, "Failed to download photo from Telegram"
             
-        file_bytes = bytes(photo_bytes)
+        with open(downloaded_file, "rb") as f:
+            file_bytes = f.read()
+            
+        try:
+            os.remove(downloaded_file)
+        except:
+            pass
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
