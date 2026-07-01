@@ -2920,27 +2920,10 @@ async def approve_vplink_cmd_handler(client, message):
             logger.error(f"Could not notify owner {owner_id}: {e}")
 
 async def upload_image(client, photo) -> str:
-    """Download photo locally to static/uploads (primary) with online fallbacks (Catbox/Telegraph/Tmpfiles)."""
+    """Download photo to memory and upload to ImgBB (primary) with Catbox/Telegraph/Tmpfiles fallbacks."""
     import io
-    import os
-    import uuid
     import aiohttp
     
-    # 1. Try Local Save first (100% reliable, permanent, and never blocked by ISPs)
-    try:
-        static_uploads = os.path.join("static", "uploads")
-        os.makedirs(static_uploads, exist_ok=True)
-        
-        file_name = f"{uuid.uuid4().hex}.jpg"
-        file_path = os.path.join(static_uploads, file_name)
-        
-        downloaded_path = await client.download_media(photo, file_name=file_path)
-        if downloaded_path and os.path.exists(downloaded_path):
-            return f"/static/uploads/{file_name}"
-    except Exception as e:
-        logger.error(f"Local image save failed, falling back to online hosts: {e}")
-
-    # Fallback to online hosting if local save is not supported (e.g. read-only filesystem)
     try:
         photo_bytes = await client.download_media(photo, in_memory=True)
         if not photo_bytes:
@@ -2952,7 +2935,20 @@ async def upload_image(client, photo) -> str:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
         async with aiohttp.ClientSession(headers=headers) as session:
-            # 1. Catbox.moe
+            # 1. ImgBB (100% permanent, works on cloud servers, doesn't expire)
+            try:
+                form = aiohttp.FormData()
+                form.add_field("image", io.BytesIO(file_bytes), filename="image.jpg")
+                imgbb_url = f"https://api.imgbb.com/1/upload?key=1e7383edb75ca41b8e32b515e9603a76"
+                async with session.post(imgbb_url, data=form) as resp:
+                    if resp.status == 200:
+                        res_json = await resp.json()
+                        if res_json.get("success") and "data" in res_json and "url" in res_json["data"]:
+                            return res_json["data"]["url"]
+            except Exception as e:
+                logger.error(f"ImgBB upload failed: {e}")
+
+            # 2. Catbox.moe
             try:
                 form = aiohttp.FormData()
                 form.add_field("reqtype", "fileupload")
@@ -2964,7 +2960,7 @@ async def upload_image(client, photo) -> str:
             except Exception as e:
                 logger.error(f"Catbox upload failed: {e}")
                 
-            # 2. Telegra.ph
+            # 3. Telegra.ph
             try:
                 form_fallback = aiohttp.FormData()
                 form_fallback.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
@@ -2975,7 +2971,7 @@ async def upload_image(client, photo) -> str:
             except Exception as e:
                 logger.error(f"Telegra.ph upload failed: {e}")
                 
-            # 3. Graph.org
+            # 4. Graph.org
             try:
                 form_fallback = aiohttp.FormData()
                 form_fallback.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
@@ -2986,7 +2982,7 @@ async def upload_image(client, photo) -> str:
             except Exception as e:
                 logger.error(f"Graph.org upload failed: {e}")
                 
-            # 4. Tmpfiles.org
+            # 5. Tmpfiles.org
             try:
                 form_tmp = aiohttp.FormData()
                 form_tmp.add_field("file", io.BytesIO(file_bytes), filename="image.jpg")
