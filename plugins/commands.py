@@ -588,7 +588,13 @@ async def start(client, message):
             await sts.delete()
             
             try:
-                portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
+                base_url = URL.strip()
+                if not base_url.startswith("https://") and not base_url.startswith("http://"):
+                    base_url = "https://" + base_url
+                elif base_url.startswith("http://"):
+                    base_url = base_url.replace("http://", "https://")
+                portal_url = f"{base_url.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
+                
                 await client.send_message(
                     chat_id=message.from_user.id,
                     text="<b>🍿 naya taza maal dekhlo</b>",
@@ -701,7 +707,13 @@ async def start(client, message):
                 
             try:
                 me = client.me or await client.get_me()
-                portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
+                base_url = URL.strip()
+                if not base_url.startswith("https://") and not base_url.startswith("http://"):
+                    base_url = "https://" + base_url
+                elif base_url.startswith("http://"):
+                    base_url = base_url.replace("http://", "https://")
+                portal_url = f"{base_url.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
+                
                 await client.send_message(
                     chat_id=message.from_user.id,
                     text="<b>🍿 naya taza maal dekhlo</b>",
