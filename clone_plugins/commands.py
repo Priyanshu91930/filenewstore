@@ -604,6 +604,19 @@ async def start(client, message):
                         logger.error(f"Batch copy error: {e}")
                 
                 await sts.delete()
+                
+                try:
+                    portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
+                    await client.send_message(
+                        chat_id=message.from_user.id,
+                        text="<b>🍿 naya taza maal dekhlo</b>",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("💦 Tᴀᴢᴀ Mᴀᴀʟ 💦", web_app=WebAppInfo(url=portal_url))
+                        ]])
+                    )
+                except Exception as final_msg_err:
+                    logger.error(f"Error sending final portal link message: {final_msg_err}")
+
                 # ── VIP Upsell for TMA-verified non-VIP users ──
                 if tma_mode and not user_is_vip:
                     try:
