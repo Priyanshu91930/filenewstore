@@ -419,6 +419,9 @@
       const redirectUrl = `https://t.me/${username}?start=${deeplink}`;
       if (tg) {
         tg.openTelegramLink(redirectUrl);
+        setTimeout(() => {
+          tg.close();
+        }, 500);
       } else {
         window.location.href = redirectUrl;
       }
