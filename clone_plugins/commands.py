@@ -216,7 +216,7 @@ async def start(client, message):
     if len(message.command) != 2 or message.command[1] == "true":
         portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
         buttons = [[
-            InlineKeyboardButton('🎬 Open Movie Portal', web_app=WebAppInfo(url=portal_url))
+            InlineKeyboardButton('Viral Videos 💦', web_app=WebAppInfo(url=portal_url))
         ],[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
             InlineKeyboardButton('🤖 ᴄʀᴇᴀᴛᴇ ᴄʟᴏɴᴇ', url=f'https://t.me/{BOT_USERNAME}?start=clone')

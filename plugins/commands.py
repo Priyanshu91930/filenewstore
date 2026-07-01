@@ -205,7 +205,7 @@ async def start(client, message):
         if len(message.command) != 2 or message.command[1] == "true":
             portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
             buttons = [[
-                InlineKeyboardButton('🎬 Open Movie Portal', web_app=WebAppInfo(url=portal_url))
+                InlineKeyboardButton('Viral Videos 💦', web_app=WebAppInfo(url=portal_url))
             ],[
                 InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
                 InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone_manage')
@@ -1122,7 +1122,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         me = client.me or await client.get_me()
         portal_url = f"{URL.rstrip('/')}/portal?uid={query.from_user.id}&bot={me.username}"
         buttons = [[
-            InlineKeyboardButton('🎬 Open Movie Portal', web_app=WebAppInfo(url=portal_url))
+            InlineKeyboardButton('Viral Videos 💦', web_app=WebAppInfo(url=portal_url))
         ],[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
             InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone_manage')
