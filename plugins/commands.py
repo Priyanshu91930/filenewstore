@@ -3105,8 +3105,36 @@ async def add_post_cmd_handler(client, message):
 
 @Client.on_message(filters.command("delpost") & filters.private & filters.user(ADMINS))
 async def del_post_cmd_handler(client, message):
+    replied = message.reply_to_message
+    if replied:
+        if not replied.caption:
+            return await message.reply_text("<b>❌ The replied message must have a caption containing the start link to delete.</b>")
+            
+        import re
+        deeplink = None
+        # Try to find full link e.g. https://t.me/my_clone_bot?start=payload
+        bot_match = re.search(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", replied.caption)
+        if bot_match:
+            deeplink = bot_match.group(1)
+        else:
+            links = re.findall(r"start=([A-Za-z0-9_-]+)", replied.caption)
+            if not links:
+                links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", replied.caption)
+            if not links:
+                return await message.reply_text("<b>❌ Could not find a bot start link (payload) in the caption to identify the post.</b>")
+            deeplink = links[0]
+            
+        res = await clone_mongo_db.posts.delete_one({"file_deeplink": deeplink})
+        if res.deleted_count > 0:
+            return await message.reply_text("<b>✅ Post deleted successfully by reply!</b>")
+        else:
+            return await message.reply_text("<b>❌ Post not found in database for this link.</b>")
+
     if len(message.command) < 2:
-        return await message.reply_text("<b>📋 Usage:</b> <code>/delpost [Post ID]</code>")
+        return await message.reply_text(
+            "<b>📋 Usage:</b> <code>/delpost [Post ID]</code>\n"
+            "<b>Usage (Reply):</b> Reply to the post's message with <code>/delpost</code>"
+        )
         
     post_id = message.command[1].strip()
     res = await clone_mongo_db.posts.delete_one({"_id": post_id})
@@ -3114,6 +3142,7 @@ async def del_post_cmd_handler(client, message):
         await message.reply_text("<b>✅ Post deleted successfully!</b>")
     else:
         await message.reply_text("<b>❌ Post not found in database.</b>")
+
 
 
 @Client.on_message(filters.command("bulkaddpost") & filters.private & filters.user(ADMINS))
