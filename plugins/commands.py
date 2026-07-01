@@ -203,7 +203,10 @@ async def start(client, message):
             logger.error(f"Main Sub Error: {e}")
 
         if len(message.command) != 2 or message.command[1] == "true":
+            portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
             buttons = [[
+                InlineKeyboardButton('🎬 Open Movie Portal', web_app=WebAppInfo(url=portal_url))
+            ],[
                 InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
                 InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone_manage')
             ],[
@@ -1117,7 +1120,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
     
     elif query.data == "start":
         me = client.me or await client.get_me()
+        portal_url = f"{URL.rstrip('/')}/portal?uid={query.from_user.id}&bot={me.username}"
         buttons = [[
+            InlineKeyboardButton('🎬 Open Movie Portal', web_app=WebAppInfo(url=portal_url))
+        ],[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
             InlineKeyboardButton('🤖 ᴄʟᴏɴᴇ', callback_data='clone_manage')
         ],[
@@ -2912,3 +2918,165 @@ async def approve_vplink_cmd_handler(client, message):
             )
         except Exception as e:
             logger.error(f"Could not notify owner {owner_id}: {e}")
+
+@Client.on_message(filters.command("addpost") & filters.private & filters.user(ADMINS))
+async def add_post_cmd_handler(client, message):
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "<b>📋 Usage:</b> <code>/addpost Title | Image URL | Category | Start Payload</code>\n\n"
+            "Example: <code>/addpost Avatar | https://image.com/avatar.jpg | Sci-Fi | ZmlsZV81N2IyM2M4Yw==</code>"
+        )
+        
+    args = message.text.split(" ", 1)[1].split("|")
+    if len(args) < 4:
+        return await message.reply_text("<b>❌ Please provide all 4 fields separated by '|'</b>")
+        
+    title = args[0].strip()
+    image_url = args[1].strip()
+    category = args[2].strip()
+    deeplink = args[3].strip()
+    
+    import uuid
+    import time
+    post_id = str(uuid.uuid4())[:8]
+    
+    await clone_mongo_db.posts.insert_one({
+        "_id": post_id,
+        "title": title,
+        "image_url": image_url,
+        "category": category,
+        "file_deeplink": deeplink,
+        "created_at": time.time()
+    })
+    
+    await message.reply_text(f"<b>✅ Post added successfully!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}</b>")
+
+
+@Client.on_message(filters.command("delpost") & filters.private & filters.user(ADMINS))
+async def del_post_cmd_handler(client, message):
+    if len(message.command) < 2:
+        return await message.reply_text("<b>📋 Usage:</b> <code>/delpost [Post ID]</code>")
+        
+    post_id = message.command[1].strip()
+    res = await clone_mongo_db.posts.delete_one({"_id": post_id})
+    if res.deleted_count > 0:
+        await message.reply_text("<b>✅ Post deleted successfully!</b>")
+    else:
+        await message.reply_text("<b>❌ Post not found in database.</b>")
+
+
+@Client.on_message(filters.command("bulkaddpost") & filters.private & filters.user(ADMINS))
+async def bulk_add_post_cmd_handler(client, message):
+    if len(message.command) < 4:
+        return await message.reply_text(
+            "<b>📋 Usage:</b> <code>/bulkaddpost [channel_id/username] [start_msg_id] [end_msg_id] [Default_Category]</code>\n\n"
+            "Example: <code>/bulkaddpost @mychannel 100 200 Action</code>"
+        )
+    
+    chat_id = message.command[1].strip()
+    if chat_id.isdigit() or chat_id.startswith("-100"):
+        chat_id = int(chat_id)
+        
+    try:
+        start_msg_id = int(message.command[2].strip())
+        end_msg_id = int(message.command[3].strip())
+    except ValueError:
+        return await message.reply_text("<b>❌ Message IDs must be integers.</b>")
+        
+    default_category = message.command[4].strip() if len(message.command) > 4 else "General"
+    
+    sts = await message.reply_text("<b>⏳ Fetching messages and importing posts... Please wait.</b>")
+    imported_count = 0
+    skipped_count = 0
+    
+    import requests
+    import uuid
+    import time
+    
+    def upload_to_graph_org(photo_path):
+        try:
+            with open(photo_path, 'rb') as f:
+                r = requests.post('https://graph.org/upload', files={'file': f})
+                if r.status_code == 200:
+                    res = r.json()
+                    if isinstance(res, list) and len(res) > 0:
+                        return "https://graph.org" + res[0]['src']
+        except Exception as e:
+            logger.error(f"Error uploading to graph.org: {e}")
+        return None
+
+    for msg_id in range(start_msg_id, end_msg_id + 1):
+        try:
+            msg = await client.get_messages(chat_id, msg_id)
+            if not msg or msg.empty:
+                skipped_count += 1
+                continue
+                
+            if msg.video or msg.document or msg.audio or msg.voice:
+                skipped_count += 1
+                continue
+                
+            if not msg.photo or not msg.caption:
+                skipped_count += 1
+                continue
+                
+            # Parse start payload link
+            links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", msg.caption)
+            if not links:
+                links = re.findall(r"start=([A-Za-z0-9_-]+)", msg.caption)
+            if not links:
+                skipped_count += 1
+                continue
+                
+            deeplink = links[0]
+            
+            # Parse title & category
+            lines = [l.strip() for l in msg.caption.split('\n') if l.strip()]
+            title = lines[0] if lines else "Untitled"
+            title = re.sub(r'<[^>]+>', '', title)
+            title = re.sub(r'[*_`~]', '', title).strip()
+            
+            category = default_category
+            for line in lines:
+                if line.lower().startswith("category:") or line.lower().startswith("genre:"):
+                    parsed_cat = line.split(":", 1)[1].strip()
+                    parsed_cat = re.sub(r'<[^>]+>', '', parsed_cat).strip()
+                    if parsed_cat:
+                        category = parsed_cat
+                        break
+            
+            # Download and upload photo
+            temp_photo = await client.download_media(msg.photo)
+            image_url = None
+            if temp_photo:
+                image_url = upload_to_graph_org(temp_photo)
+                try:
+                    os.remove(temp_photo)
+                except:
+                    pass
+                    
+            if not image_url:
+                image_url = "/static/LOGO.jpg"
+                
+            post_id = str(uuid.uuid4())[:8]
+            await clone_mongo_db.posts.insert_one({
+                "_id": post_id,
+                "title": title,
+                "image_url": image_url,
+                "category": category,
+                "file_deeplink": deeplink,
+                "created_at": time.time()
+            })
+            imported_count += 1
+            # Prevent rate limits / flood waits
+            await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Error importing message {msg_id}: {e}")
+            skipped_count += 1
+            
+    await sts.edit_text(
+        f"<b>✅ Bulk Import Complete!</b>\n\n"
+        f"📥 Imported: <code>{imported_count}</code> posts\n"
+        f"🚫 Skipped: <code>{skipped_count}</code> messages"
+    )
+

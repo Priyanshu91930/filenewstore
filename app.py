@@ -131,5 +131,94 @@ def tma_verify():
 
     return jsonify({'ok': True, 'deeplink': deeplink})
 
+@app.route('/portal')
+def portal():
+    """Serve the Movie Portal TMA page."""
+    return render_template('portal.html')
+
+@app.route('/portal-data')
+def portal_data():
+    """API to fetch paginated posts, categories, and search results for the Portal."""
+    from pymongo import MongoClient
+    from config import DB_URI
+    import math
+
+    page = int(request.args.get('page', 1))
+    category = request.args.get('category', 'All')
+    search = request.args.get('search', '')
+    limit = 12
+
+    db_client = MongoClient(DB_URI)
+    db = db_client["cloned_vjbotz"]
+
+    query = {}
+    if category != 'All':
+        query['category'] = category
+    if search:
+        query['title'] = {'$regex': search, '$options': 'i'}
+
+    total_posts = db.posts.count_documents(query)
+    total_pages = math.ceil(total_posts / limit) or 1
+    page = max(1, min(page, total_pages))
+    skip = (page - 1) * limit
+
+    posts_cursor = db.posts.find(query).sort('created_at', -1).skip(skip).limit(limit)
+    posts = []
+    for doc in posts_cursor:
+        posts.append({
+            'id': str(doc['_id']),
+            'title': doc.get('title', ''),
+            'image_url': doc.get('image_url', ''),
+            'category': doc.get('category', ''),
+            'file_deeplink': doc.get('file_deeplink', '')
+        })
+
+    # Get unique categories
+    categories = ['All']
+    unique_cats = db.posts.distinct('category')
+    for cat in unique_cats:
+        if cat and cat not in categories:
+            categories.append(cat)
+
+    return jsonify({
+        'posts': posts,
+        'categories': categories,
+        'page': page,
+        'total_pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages
+    })
+
+@app.route('/api/check-vip')
+def api_check_vip():
+    """API endpoint to check if a user is VIP."""
+    from pymongo import MongoClient
+    from config import DB_URI
+    import time
+
+    uid = request.args.get('uid', '')
+    bot_username = request.args.get('bot', '')
+
+    if not uid or not bot_username:
+        return jsonify({'is_vip': False})
+
+    db_client = MongoClient(DB_URI)
+    db = db_client["cloned_vjbotz"]
+
+    bot_doc = db.bots.find_one({"username": bot_username})
+    if not bot_doc:
+        return jsonify({'is_vip': False})
+
+    bot_id = bot_doc["bot_id"]
+    vip_user = db.vip_users.find_one({"bot_id": int(bot_id), "user_id": int(uid)})
+
+    is_user_vip = False
+    if vip_user:
+        expiry = vip_user.get("expiry")
+        if expiry is None or time.time() < expiry:
+            is_user_vip = True
+
+    return jsonify({'is_vip': is_user_vip})
+
 if __name__ == "__main__":
     app.run()
