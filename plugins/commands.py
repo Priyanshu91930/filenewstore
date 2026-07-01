@@ -2941,10 +2941,8 @@ async def upload_image(client, photo) -> tuple:
             try:
                 import base64
                 b64_image = base64.b64encode(file_bytes).decode("utf-8")
-                form = aiohttp.FormData()
-                form.add_field("image", b64_image)
                 imgbb_url = f"https://api.imgbb.com/1/upload?key=1e7383edb75ca41b8e32b515e9603a76"
-                async with session.post(imgbb_url, data=form, timeout=15) as resp:
+                async with session.post(imgbb_url, data={"image": b64_image}, timeout=15) as resp:
                     if resp.status == 200:
                         res_json = await resp.json()
                         if res_json.get("success") and "data" in res_json and "url" in res_json["data"]:
