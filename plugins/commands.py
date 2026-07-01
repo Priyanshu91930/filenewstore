@@ -2934,7 +2934,8 @@ async def upload_image(client, photo) -> str:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        async with aiohttp.ClientSession(headers=headers) as session:
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
             # 1. ImgBB (100% permanent, works on cloud servers, doesn't expire)
             try:
                 form = aiohttp.FormData()
