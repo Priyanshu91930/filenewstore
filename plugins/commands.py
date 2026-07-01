@@ -700,6 +700,7 @@ async def start(client, message):
                 del_msg = await msg.copy(chat_id=message.from_user.id, protect_content=False)
                 
             try:
+                me = client.me or await client.get_me()
                 portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
                 await client.send_message(
                     chat_id=message.from_user.id,

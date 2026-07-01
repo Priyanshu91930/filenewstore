@@ -825,6 +825,7 @@ async def start(client, message):
             asyncio.create_task(auto_delete_task(msg, k, del_time))
             
         try:
+            me = client.me or await client.get_me()
             portal_url = f"{URL.rstrip('/')}/portal?uid={message.from_user.id}&bot={me.username}"
             await client.send_message(
                 chat_id=message.from_user.id,
