@@ -3171,41 +3171,253 @@ async def add_post_cmd_handler(client, message):
 async def del_post_cmd_handler(client, message):
     replied = message.reply_to_message
     if replied:
-        if not replied.caption:
-            return await message.reply_text("<b>❌ The replied message must have a caption containing the start link to delete.</b>")
+        text_to_search = replied.caption or replied.text or ""
+        if not text_to_search:
+            return await message.reply_text("<b>❌ The replied message must have text or a caption containing the start link to delete.</b>")
             
         import re
         deeplink = None
         # Try to find full link e.g. https://t.me/my_clone_bot?start=payload
-        bot_match = re.search(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", replied.caption)
+        bot_match = re.search(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", text_to_search)
         if bot_match:
             deeplink = bot_match.group(1)
         else:
-            links = re.findall(r"start=([A-Za-z0-9_-]+)", replied.caption)
+            links = re.findall(r"start=([A-Za-z0-9_-]+)", text_to_search)
             if not links:
-                links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", replied.caption)
+                links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", text_to_search)
             if not links:
-                return await message.reply_text("<b>❌ Could not find a bot start link (payload) in the caption to identify the post.</b>")
-            deeplink = links[0]
+                # If the whole text has no spaces, treat it as a possible start payload/deeplink
+                if text_to_search.strip() and " " not in text_to_search.strip():
+                    deeplink = text_to_search.strip()
+                else:
+                    return await message.reply_text("<b>❌ Could not find a bot start link (payload) in the message/caption to identify the post.</b>")
+            else:
+                deeplink = links[0]
             
         res = await clone_mongo_db.posts.delete_one({"file_deeplink": deeplink})
         if res.deleted_count > 0:
             return await message.reply_text("<b>✅ Post deleted successfully by reply!</b>")
         else:
-            return await message.reply_text("<b>❌ Post not found in database for this link.</b>")
+            # Try to delete by ID if the deeplink matches a post ID
+            res_id = await clone_mongo_db.posts.delete_one({"_id": deeplink})
+            if res_id.deleted_count > 0:
+                return await message.reply_text("<b>✅ Post deleted successfully by ID!</b>")
+            return await message.reply_text("<b>❌ Post not found in database for this link or ID.</b>")
 
     if len(message.command) < 2:
         return await message.reply_text(
-            "<b>📋 Usage:</b> <code>/delpost [Post ID]</code>\n"
+            "<b>📋 Usage:</b> <code>/delpost [Post ID / Start Payload / Start Link]</code>\n"
             "<b>Usage (Reply):</b> Reply to the post's message with <code>/delpost</code>"
         )
         
-    post_id = message.command[1].strip()
-    res = await clone_mongo_db.posts.delete_one({"_id": post_id})
-    if res.deleted_count > 0:
-        await message.reply_text("<b>✅ Post deleted successfully!</b>")
+    input_val = message.command[1].strip()
+    
+    # Try parsing link
+    import re
+    deeplink = None
+    bot_match = re.search(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", input_val)
+    if bot_match:
+        deeplink = bot_match.group(1)
     else:
-        await message.reply_text("<b>❌ Post not found in database.</b>")
+        links = re.findall(r"start=([A-Za-z0-9_-]+)", input_val)
+        if links:
+            deeplink = links[0]
+        else:
+            deeplink = input_val
+            
+    # Try deleting by _id first, then by file_deeplink
+    res = await clone_mongo_db.posts.delete_one({"_id": input_val})
+    if res.deleted_count > 0:
+        return await message.reply_text("<b>✅ Post deleted successfully by ID!</b>")
+        
+    res = await clone_mongo_db.posts.delete_one({"file_deeplink": deeplink})
+    if res.deleted_count > 0:
+        return await message.reply_text("<b>✅ Post deleted successfully by Start Payload!</b>")
+        
+    await message.reply_text("<b>❌ Post not found in database.</b>")
+
+
+@Client.on_message(filters.command("bulkdelpost") & filters.private & filters.user(ADMINS))
+async def bulk_delete_post_cmd_handler(client, message):
+    import re
+    
+    # Check if arguments were passed directly (non-interactive fallback)
+    if len(message.command) >= 4:
+        chat_id = message.command[1].strip()
+        if chat_id.isdigit() or chat_id.startswith("-100"):
+            chat_id = int(chat_id)
+            
+        try:
+            start_msg_id = int(message.command[2].strip())
+            end_msg_id = int(message.command[3].strip())
+        except ValueError:
+            return await message.reply_text("<b>❌ Message IDs must be integers.</b>")
+            
+        return await execute_range_deletion(client, message, chat_id, start_msg_id, end_msg_id)
+        
+    # Interactive selection of deletion type
+    try:
+        mode_prompt = await client.ask(
+            message.chat.id,
+            "<b>Choose Bulk Deletion Mode:</b>\n\n"
+            "1. Send <code>1</code> to delete using a <b>List of IDs, Payloads, or Links</b>.\n"
+            "2. Send <code>2</code> to delete using a <b>Channel Message Range</b> (Interactive like bulkaddpost).\n\n"
+            "Type <code>/cancel</code> to abort."
+        )
+        if mode_prompt.text == "/cancel":
+            return await message.reply_text("<b>❌ Cancelled bulk deletion.</b>")
+            
+        mode = mode_prompt.text.strip()
+        if mode == "1":
+            list_prompt = await client.ask(
+                message.chat.id,
+                "<b>Send the list of Post IDs, Start Payloads, or Start Links to delete.</b>\n"
+                "Separate them with spaces or new lines.\n\n"
+                "Type <code>/cancel</code> to abort."
+            )
+            if list_prompt.text == "/cancel":
+                return await message.reply_text("<b>❌ Cancelled bulk deletion.</b>")
+                
+            raw_input = list_prompt.text.strip()
+            items = [item.strip() for item in re.split(r'\s+', raw_input) if item.strip()]
+            if not items:
+                return await message.reply_text("<b>❌ No valid items provided.</b>")
+                
+            sts = await message.reply_text("<b>⏳ Processing bulk deletion...</b>")
+            deleted_count = 0
+            
+            for item in items:
+                deeplink = None
+                bot_match = re.search(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", item)
+                if bot_match:
+                    deeplink = bot_match.group(1)
+                else:
+                    links = re.findall(r"start=([A-Za-z0-9_-]+)", item)
+                    if links:
+                        deeplink = links[0]
+                    else:
+                        deeplink = item
+                
+                res = await clone_mongo_db.posts.delete_many({
+                    "$or": [
+                        {"_id": item},
+                        {"file_deeplink": deeplink}
+                    ]
+                })
+                deleted_count += res.deleted_count
+                
+            await sts.edit_text(f"<b>✅ Bulk Deletion Complete!</b>\n\n🗑 Total deleted posts: <code>{deleted_count}</code>")
+            
+        elif mode == "2":
+            first_prompt = await client.ask(
+                message.chat.id, 
+                "<b>Forward the FIRST message from the channel here, or paste its link.</b>\n\nType <code>/cancel</code> to abort."
+            )
+            if first_prompt.text == "/cancel":
+                return await message.reply_text("<b>❌ Cancelled bulk deletion.</b>")
+                
+            chat_id = None
+            start_msg_id = None
+            if first_prompt.forward_from_chat:
+                chat_id = first_prompt.forward_from_chat.id
+                start_msg_id = first_prompt.forward_from_message_id
+            elif first_prompt.text:
+                link_match = re.search(r"t\.me/(?:c/)?([a-zA-Z0-9_-]+)/(\d+)", first_prompt.text)
+                if link_match:
+                    chat_id = link_match.group(1)
+                    if chat_id.isdigit():
+                        chat_id = int("-100" + chat_id)
+                    start_msg_id = int(link_match.group(2))
+                elif first_prompt.text.isdigit():
+                    start_msg_id = int(first_prompt.text)
+                    
+            if not start_msg_id:
+                return await message.reply_text("<b>❌ Invalid message. Please forward the message or paste a message link.</b>")
+                
+            last_prompt = await client.ask(
+                message.chat.id, 
+                "<b>Forward the LAST message from the channel here, or paste its link.</b>\n\nType <code>/cancel</code> to abort."
+            )
+            if last_prompt.text == "/cancel":
+                return await message.reply_text("<b>❌ Cancelled bulk deletion.</b>")
+                
+            end_msg_id = None
+            if last_prompt.forward_from_chat:
+                end_msg_id = last_prompt.forward_from_message_id
+                if not chat_id:
+                    chat_id = last_prompt.forward_from_chat.id
+            elif last_prompt.text:
+                link_match = re.search(r"t\.me/(?:c/)?([a-zA-Z0-9_-]+)/(\d+)", last_prompt.text)
+                if link_match:
+                    end_msg_id = int(link_match.group(2))
+                elif last_prompt.text.isdigit():
+                    end_msg_id = int(last_prompt.text)
+                    
+            if not end_msg_id:
+                return await message.reply_text("<b>❌ Invalid message. Please forward the last message or paste a message link.</b>")
+                
+            if not chat_id:
+                chat_prompt = await client.ask(
+                    message.chat.id, 
+                    "<b>Send the Channel Username (e.g. @mychannel) or ID:</b>"
+                )
+                chat_id = chat_prompt.text.strip()
+                if chat_id.isdigit() or chat_id.startswith("-100"):
+                    chat_id = int(chat_id)
+                    
+            await execute_range_deletion(client, message, chat_id, start_msg_id, end_msg_id)
+        else:
+            await message.reply_text("<b>❌ Invalid choice. Process cancelled.</b>")
+    except Exception as err:
+        logger.error(f"Error in bulk deletion command: {err}")
+        await message.reply_text(f"<b>❌ Error: {err}</b>")
+
+
+async def execute_range_deletion(client, message, chat_id, start_msg_id, end_msg_id):
+    import re
+    sts = await message.reply_text("<b>⏳ Fetching messages and matching posts to delete... Please wait.</b>")
+    deleted_count = 0
+    skipped_count = 0
+    
+    for msg_id in range(start_msg_id, end_msg_id + 1):
+        try:
+            msg = await client.get_messages(chat_id, msg_id)
+            if not msg or msg.empty:
+                skipped_count += 1
+                continue
+                
+            caption_text = msg.caption or msg.text or ""
+            if not caption_text:
+                skipped_count += 1
+                continue
+                
+            deeplink = None
+            bot_match = re.search(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", caption_text)
+            if bot_match:
+                deeplink = bot_match.group(1)
+            else:
+                links = re.findall(r"start=([A-Za-z0-9_-]+)", caption_text)
+                if not links:
+                    links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", caption_text)
+                if not links:
+                    skipped_count += 1
+                    continue
+                deeplink = links[0]
+            
+            res = await clone_mongo_db.posts.delete_many({"file_deeplink": deeplink})
+            deleted_count += res.deleted_count
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            logger.error(f"Error matching message {msg_id} for deletion: {e}")
+            skipped_count += 1
+            
+    await sts.edit_text(
+        f"<b>✅ Bulk Range Deletion Complete!</b>\n\n"
+        f"🗑 Deleted: <code>{deleted_count}</code> posts\n"
+        f"🚫 Skipped/Not found: <code>{skipped_count}</code> messages"
+    )
+
+
 
 
 
