@@ -497,7 +497,9 @@ async def portal_data_route_handler(request: web.Request):
             'image_url': doc.get('image_url', ''),
             'category': doc.get('category', ''),
             'file_deeplink': doc.get('file_deeplink', ''),
-            'bot_username': doc.get('bot_username', '')
+            'bot_username': doc.get('bot_username', ''),
+            'views': doc.get('views', 0),
+            'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0})
         })
 
     # Get unique categories
@@ -515,6 +517,24 @@ async def portal_data_route_handler(request: web.Request):
         'has_prev': page > 1,
         'has_next': page < total_pages
     })
+
+@routes.post("/api/view-post")
+async def api_view_post_handler(request: web.Request):
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        post_id = data.get('post_id')
+        if not post_id:
+            return web.json_response({"success": False, "error": "Missing post_id"}, status=400)
+            
+        await async_mongo_db.posts.update_one(
+            {"_id": post_id},
+            {"$inc": {"views": 10}}
+        )
+        return web.json_response({"success": True})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
 
 @routes.get("/api/check-vip")
 async def api_check_vip_route_handler(request: web.Request):

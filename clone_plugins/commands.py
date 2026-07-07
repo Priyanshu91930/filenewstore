@@ -1706,14 +1706,51 @@ async def cb_handler(client: Client, query: CallbackQuery):
             upsert=True
         )
         
+        buttons = []
+        if plan_cfg.get("alt_payment_qr"):
+            buttons.append([InlineKeyboardButton("⚠️ Receiver bank not working?", callback_data="alt_buy_upi")])
+        buttons.append([InlineKeyboardButton("« Back", callback_data="buy_plan")])
+        
         await client.send_photo(
             chat_id=query.message.chat.id,
             photo=qr_file_id,
             caption=caption,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="buy_plan")]])
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
         await query.message.delete()
         await query.answer()
+
+    elif query.data == "alt_buy_upi":
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        if not plan_cfg or not plan_cfg.get("alt_payment_qr"):
+            return await query.answer("Alternate QR not configured!", show_alert=True)
+            
+        alt_qr_file_id = plan_cfg["alt_payment_qr"]
+        plans_text = plan_cfg["plans_text"]
+        
+        caption = (
+            f"<b>🛒 <u>VIP Plans & Pricing</u></b>\n\n"
+            f"{plans_text}\n\n"
+            f"<b><u>How to buy:</u></b>\n"
+            f"1️⃣ Scan the QR code below to make payment.\n"
+            f"2️⃣ Send the screenshot of the payment receipt here in the chat.\n\n"
+            f"<i>Our admin will review and verify your screenshot to activate VIP access.</i>"
+        )
+        
+        buttons = [
+            [InlineKeyboardButton("🔄 Show Primary QR", callback_data="buy_upi")],
+            [InlineKeyboardButton("« Back", callback_data="buy_plan")]
+        ]
+        
+        try:
+            await query.edit_message_media(
+                media=InputMediaPhoto(media=alt_qr_file_id, caption=caption),
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error editing QR media: {e}")
+            await query.answer("Could not change QR image.", show_alert=True)
 
     elif query.data == "buy_stars":
         await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})

@@ -390,9 +390,15 @@
               </div>
               <div class="movie-info">
                 <div class="movie-title">${post.title}</div>
+                <div class="movie-stats" style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
+                  <span class="views">👁 ${formatNumber(post.views || 0)}</span>
+                  <div class="reactions" style="display: flex; gap: 6px;">
+                    ${Object.entries(post.reactions || {}).map(([emoji, count]) => count > 0 ? `<span>${emoji} ${count}</span>` : '').join('')}
+                  </div>
+                </div>
               </div>
             `;
-            card.addEventListener('click', () => handleCardClick(post.file_deeplink, post.bot_username));
+            card.addEventListener('click', () => handleCardClick(post.file_deeplink, post.bot_username, post.id));
             moviesGrid.appendChild(card);
           });
           moviesGrid.style.display = 'grid';
@@ -413,8 +419,24 @@
       }
     }
 
+    function formatNumber(num) {
+      if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'k';
+      }
+      return num;
+    }
+
     // Handle Card Click (Redirect directly to the bot with file payload)
-    function handleCardClick(deeplink, cardBotUsername) {
+    async function handleCardClick(deeplink, cardBotUsername, postId) {
+      if (postId) {
+        try {
+          fetch('/api/view-post', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ post_id: postId })
+          });
+        } catch (e) { console.error('View increment failed', e); }
+      }
       const username = cardBotUsername || botUsername || 'filesstoreclone_bot';
       const redirectUrl = `https://t.me/${username}?start=${deeplink}`;
       if (tg) {

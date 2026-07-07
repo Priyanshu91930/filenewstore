@@ -171,7 +171,9 @@ def portal_data():
             'image_url': doc.get('image_url', ''),
             'category': doc.get('category', ''),
             'file_deeplink': doc.get('file_deeplink', ''),
-            'bot_username': doc.get('bot_username', '')
+            'bot_username': doc.get('bot_username', ''),
+            'views': doc.get('views', 0),
+            'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0})
         })
 
     # Get unique categories
@@ -189,6 +191,28 @@ def portal_data():
         'has_prev': page > 1,
         'has_next': page < total_pages
     })
+
+@app.route('/api/view-post', methods=['POST'])
+def api_view_post():
+    from pymongo import MongoClient
+    from config import DB_URI
+    try:
+        data = request.get_json()
+        post_id = data.get('post_id')
+        if not post_id:
+            return jsonify({"success": False, "error": "Missing post_id"}), 400
+            
+        db_client = MongoClient(DB_URI)
+        db = db_client["cloned_vjbotz"]
+        
+        db.posts.update_one(
+            {"_id": post_id},
+            {"$inc": {"views": 10}}
+        )
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route('/api/check-vip')
 def api_check_vip():

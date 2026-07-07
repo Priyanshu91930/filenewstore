@@ -2250,6 +2250,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         qr_file_id = msg.photo.file_id
         
+        msg_alt = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>📸 Now send an alternative QR code photo for 'Server Down' (or send /skip to skip this).</b>"
+        )
+        if msg_alt.text and msg_alt.text.strip() == "/cancel":
+            return await msg_alt.reply("<b>Cancelled plan configuration.</b>")
+            
+        alt_qr_file_id = msg_alt.photo.file_id if msg_alt.photo else None
+        
         msg_text = await client.ask(
             chat_id=query.message.chat.id,
             text="<b>✍️ Now please send the UPI plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - 199\n3 Months - 399\nLifetime - 799</code></b>"
@@ -2270,6 +2279,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             {"_id": me.id},
             {"$set": {
                 "payment_qr": qr_file_id,
+                "alt_payment_qr": alt_qr_file_id,
                 "plans_text": plans_text,
                 "stars_1m": s_1m,
                 "stars_3m": s_3m,
@@ -2338,14 +2348,52 @@ async def cb_handler(client: Client, query: CallbackQuery):
             upsert=True
         )
         
+        buttons = []
+        if plan_cfg.get("alt_payment_qr"):
+            buttons.append([InlineKeyboardButton("⚠️ Receiver bank not working?", callback_data="alt_buy_upi")])
+        buttons.append([InlineKeyboardButton("« Back", callback_data="buy_plan")])
+        
         await client.send_photo(
             chat_id=query.message.chat.id,
             photo=qr_file_id,
             caption=caption,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="buy_plan")]])
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
         await query.message.delete()
         await query.answer()
+
+    elif query.data == "alt_buy_upi":
+        me = client.me or await client.get_me()
+        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+        if not plan_cfg or not plan_cfg.get("alt_payment_qr"):
+            return await query.answer("Alternate QR not configured!", show_alert=True)
+            
+        alt_qr_file_id = plan_cfg["alt_payment_qr"]
+        plans_text = plan_cfg["plans_text"]
+        
+        caption = (
+            f"<b>🛒 <u>VIP Plans & Pricing</u></b>\n\n"
+            f"{plans_text}\n\n"
+            f"<b><u>How to buy:</u></b>\n"
+            f"1️⃣ Scan the QR code below to make payment.\n"
+            f"2️⃣ Send the screenshot of the payment receipt here in the chat.\n\n"
+            f"<i>Our admin will review and verify your screenshot to activate VIP access.</i>"
+        )
+        
+        buttons = [
+            [InlineKeyboardButton("🔄 Show Primary QR", callback_data="buy_upi")],
+            [InlineKeyboardButton("« Back", callback_data="buy_plan")]
+        ]
+        
+        try:
+            await query.edit_message_media(
+                media=InputMediaPhoto(media=alt_qr_file_id, caption=caption),
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            await query.answer()
+        except Exception as e:
+            logger.error(f"Error editing QR media: {e}")
+            await query.answer("Could not change QR image.", show_alert=True)
 
     elif query.data == "buy_stars":
         me = client.me or await client.get_me()
@@ -3121,7 +3169,9 @@ async def add_post_cmd_handler(client, message):
             "category": category,
             "file_deeplink": deeplink,
             "bot_username": bot_username,
-            "created_at": time.time()
+            "created_at": time.time(),
+            "views": 10,
+            "reactions": {"❤️": 5, "👍": 4, "🔥": 3, "💦": 5}
         })
         
         return await sts.edit_text(f"<b>✅ Post added successfully by reply!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}\nBot Username: {bot_username or 'Default'}\nUploader: {debug_info}</b>")
@@ -3161,7 +3211,9 @@ async def add_post_cmd_handler(client, message):
         "category": category,
         "file_deeplink": deeplink,
         "bot_username": bot_username,
-        "created_at": time.time()
+        "created_at": time.time(),
+        "views": 10,
+        "reactions": {"❤️": 5, "👍": 4, "🔥": 3, "💦": 5}
     })
     
     await message.reply_text(f"<b>✅ Post added successfully!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}\nBot Username: {bot_username or 'Default'}</b>")
@@ -3579,7 +3631,9 @@ async def bulk_add_post_cmd_handler(client, message):
                 "category": category,
                 "file_deeplink": deeplink,
                 "bot_username": bot_username,
-                "created_at": time.time()
+                "created_at": time.time(),
+                "views": 10,
+                "reactions": {"❤️": 5, "👍": 4, "🔥": 3, "💦": 5}
             })
             imported_count += 1
             # Prevent rate limits / flood waits
