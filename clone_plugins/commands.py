@@ -1630,6 +1630,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
         
+        msg_alt = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>📸 Now send an alternative QR code photo for 'Server Down' (or send /skip to skip this).</b>"
+        )
+        if msg_alt.text and msg_alt.text.strip() == "/cancel":
+            return await msg_alt.reply("<b>Cancelled plan configuration.</b>")
+            
+        alt_qr_file_id = msg_alt.photo.file_id if msg_alt.photo else None
+        
         # Parse prices to verify format and display confirmation
         stars_1m, stars_3m, stars_lifetime = parse_stars_prices(plans_text)
         s_1m = stars_1m if stars_1m is not None else 50
@@ -1640,6 +1649,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             {"_id": me.id},
             {"$set": {
                 "payment_qr": qr_file_id,
+                "alt_payment_qr": alt_qr_file_id,
                 "plans_text": plans_text,
                 "stars_1m": s_1m,
                 "stars_3m": s_3m,
