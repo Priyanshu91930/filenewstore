@@ -535,6 +535,30 @@ async def api_view_post_handler(request: web.Request):
     except Exception as e:
         return web.json_response({"success": False, "error": str(e)}, status=500)
 
+@routes.post("/api/react-post")
+async def api_react_post_handler(request: web.Request):
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        post_id = data.get('post_id')
+        emoji = data.get('emoji')
+        
+        if not post_id or not emoji:
+            return web.json_response({"success": False, "error": "Missing post_id or emoji"}, status=400)
+            
+        # Ensure emoji is valid
+        if emoji not in ["❤️", "👍", "🔥", "💦"]:
+            return web.json_response({"success": False, "error": "Invalid emoji"}, status=400)
+            
+        await async_mongo_db.posts.update_one(
+            {"_id": post_id},
+            {"$inc": {f"reactions.{emoji}": 1}}
+        )
+        return web.json_response({"success": True})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+
 
 @routes.get("/api/check-vip")
 async def api_check_vip_route_handler(request: web.Request):

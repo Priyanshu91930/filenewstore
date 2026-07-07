@@ -213,6 +213,33 @@ def api_view_post():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/react-post', methods=['POST'])
+def api_react_post():
+    from pymongo import MongoClient
+    from config import DB_URI
+    try:
+        data = request.get_json()
+        post_id = data.get('post_id')
+        emoji = data.get('emoji')
+        
+        if not post_id or not emoji:
+            return jsonify({"success": False, "error": "Missing post_id or emoji"}), 400
+            
+        if emoji not in ["❤️", "👍", "🔥", "💦"]:
+            return jsonify({"success": False, "error": "Invalid emoji"}), 400
+            
+        db_client = MongoClient(DB_URI)
+        db = db_client["cloned_vjbotz"]
+        
+        db.posts.update_one(
+            {"_id": post_id},
+            {"$inc": {f"reactions.{emoji}": 1}}
+        )
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 
 @app.route('/api/check-vip')
 def api_check_vip():
