@@ -2956,7 +2956,7 @@ async def upload_image(client, message) -> tuple:
             base_url = base_url.replace("http://", "https://")
             
         file_name = get_name(log_msg) or "image.jpg"
-        stream_url = f"{base_url.rstrip('/')}/watch/{str(log_msg.id)}/{quote_plus(file_name)}?hash={get_hash(log_msg)}"
+        stream_url = f"{base_url.rstrip('/')}/{str(log_msg.id)}/{quote_plus(file_name)}?hash={get_hash(log_msg)}"
         
         return stream_url, "Telegram Log Channel Success"
     except Exception as e:
