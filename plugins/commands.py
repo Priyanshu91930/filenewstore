@@ -2250,15 +2250,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         qr_file_id = msg.photo.file_id
         
-        msg_alt = await client.ask(
-            chat_id=query.message.chat.id,
-            text="<b>📸 Now send an alternative QR code photo for 'Server Down' (or send /skip to skip this).</b>"
-        )
-        if msg_alt.text and msg_alt.text.strip() == "/cancel":
-            return await msg_alt.reply("<b>Cancelled plan configuration.</b>")
-            
-        alt_qr_file_id = msg_alt.photo.file_id if msg_alt.photo else None
-        
         msg_text = await client.ask(
             chat_id=query.message.chat.id,
             text="<b>✍️ Now please send the UPI plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - 199\n3 Months - 399\nLifetime - 799</code></b>"
@@ -2267,6 +2258,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             return await msg_text.reply("<b>Cancelled plan configuration.</b>")
             
         plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
+        
+        msg_alt = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>📸 Now send an alternative QR code photo for 'Server Down' (or send /skip to skip this).</b>"
+        )
+        if msg_alt.text and msg_alt.text.strip() == "/cancel":
+            return await msg_alt.reply("<b>Cancelled plan configuration.</b>")
+            
+        alt_qr_file_id = msg_alt.photo.file_id if msg_alt.photo else None
         
         # Parse prices to verify format and display confirmation
         stars_1m, stars_3m, stars_lifetime = parse_stars_prices(plans_text)
