@@ -3041,7 +3041,7 @@ async def upload_image(client, photo) -> tuple:
                     "image": ("image.jpg", io.BytesIO(file_bytes), "image/jpeg")
                 }
                 data = {
-                    "key": "1e7383edb75ca41b8e32b515e9603a76"
+                    "key": "7e31e91537dbad341cdf68ae5a4a3ec9"
                 }
                 resp = requests.post("https://api.imgbb.com/1/upload", data=data, files=files, timeout=15, verify=False)
                 if resp.status_code == 200:
