@@ -2199,19 +2199,55 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if query.from_user.id not in ADMINS:
             return await query.answer("❌ Only admins can configure plans!", show_alert=True)
             
+        me = client.me or await client.get_me()
+        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id}) or {}
+        upi_enabled = plan_cfg.get("upi_enabled", True)
+        stars_enabled = plan_cfg.get("stars_enabled", True)
+        paypal_enabled = plan_cfg.get("paypal_enabled", True)
+            
         buttons = [
-            [InlineKeyboardButton("💳 Set UPI Payment", callback_data="setplan_upi")],
-            [InlineKeyboardButton("⭐ Set Stars Pricing", callback_data="setplan_stars")],
-            [InlineKeyboardButton("🅿️ Set PayPal Payment", callback_data="setplan_paypal")],
+            [
+                InlineKeyboardButton("💳 Set UPI", callback_data="setplan_upi"),
+                InlineKeyboardButton(f"{'✅ Enabled' if upi_enabled else '❌ Disabled'}", callback_data="toggle_upi")
+            ],
+            [
+                InlineKeyboardButton("⭐ Set Stars", callback_data="setplan_stars"),
+                InlineKeyboardButton(f"{'✅ Enabled' if stars_enabled else '❌ Disabled'}", callback_data="toggle_stars")
+            ],
+            [
+                InlineKeyboardButton("🅿️ Set PayPal", callback_data="setplan_paypal"),
+                InlineKeyboardButton(f"{'✅ Enabled' if paypal_enabled else '❌ Disabled'}", callback_data="toggle_paypal")
+            ],
             [InlineKeyboardButton("📸 Set Alt Server QR", callback_data="setplan_altqr")],
             [InlineKeyboardButton("« Back to Settings", callback_data="settings")]
         ]
         
         await query.message.edit_text(
-            text="<b>⚙️ <u>Payment Plan Configuration</u>\n\nSelect the payment method you want to configure:</b>",
+            text="<b>⚙️ <u>Payment Plan Configuration</u>\n\nSelect the payment method you want to configure or toggle to disable/enable it:</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
         return await query.answer()
+
+    elif query.data.startswith("toggle_"):
+        from config import ADMINS
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ Only admins can configure plans!", show_alert=True)
+            
+        method = query.data.split("_")[1]
+        me = client.me or await client.get_me()
+        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id}) or {}
+        
+        key = f"{method}_enabled"
+        current_val = plan_cfg.get(key, True)
+        
+        await clone_mongo_db.plans_config.update_one(
+            {"_id": me.id},
+            {"$set": {key: not current_val}},
+            upsert=True
+        )
+        
+        query.data = "setplan"
+        return await cb_handler(client, query)
 
     elif query.data == "setplan_upi":
         from config import ADMINS
@@ -2346,12 +2382,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         await clone_mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
         
-        btn = [
-            [InlineKeyboardButton("💳 UPI Payment", callback_data="buy_upi")],
-            [InlineKeyboardButton("⭐ Telegram Stars", callback_data="buy_stars")],
-            [InlineKeyboardButton("🅿️ PayPal Payment", callback_data="buy_paypal")],
-            [InlineKeyboardButton("« Back", callback_data="plan_status_back")]
-        ]
+        btn = []
+        if plan_cfg.get("upi_enabled", True):
+            btn.append([InlineKeyboardButton("💳 UPI Payment", callback_data="buy_upi")])
+        if plan_cfg.get("stars_enabled", True):
+            btn.append([InlineKeyboardButton("⭐ Telegram Stars", callback_data="buy_stars")])
+        if plan_cfg.get("paypal_enabled", True):
+            btn.append([InlineKeyboardButton("🅿️ PayPal Payment", callback_data="buy_paypal")])
+            
+        btn.append([InlineKeyboardButton("« Back", callback_data="plan_status_back")])
         
         try:
             await query.message.delete()
