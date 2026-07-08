@@ -82,19 +82,19 @@ def parse_stars_prices(plans_text):
             continue
             
         # Check matching keywords
-        if any(kw in line for kw in ["1 month", "1month", "30 days", "30days", "monthly"]):
+        if any(kw in line for kw in ["1 month", "1month", "30 days", "30days", "monthly", "1 ᴍᴏɴᴛʜ"]):
             price_candidates = [int(n) for n in numbers if n not in ["1", "30"]]
             if price_candidates:
                 stars_1m = price_candidates[0]
             elif len(numbers) == 1:
                 stars_1m = int(numbers[0])
-        elif any(kw in line for kw in ["3 month", "3month", "90 days", "90days"]):
+        elif any(kw in line for kw in ["3 month", "3month", "90 days", "90days", "3 ᴍᴏɴᴛʜs"]):
             price_candidates = [int(n) for n in numbers if n not in ["3", "90"]]
             if price_candidates:
                 stars_3m = price_candidates[0]
             elif len(numbers) == 1:
                 stars_3m = int(numbers[0])
-        elif any(kw in line for kw in ["lifetime", "life time", "life-time", "forever"]):
+        elif any(kw in line for kw in ["lifetime", "life time", "life-time", "forever", "ʟɪғᴇᴛɪᴍᴇ"]):
             price_candidates = [int(n) for n in numbers]
             if price_candidates:
                 stars_lifetime = price_candidates[0]
