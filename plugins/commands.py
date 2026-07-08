@@ -77,47 +77,54 @@ def parse_stars_prices(plans_text):
     # Remove HTML tags to process clean text
     text = re.sub(r'<[^>]+>', '', plans_text).lower()
     
+    # Also handle the small caps unicode characters some users use
+    text_raw = re.sub(r'<[^>]+>', '', plans_text)
+    
     # Split by lines
     lines = text.split('\n')
-    for line in lines:
+    raw_lines = text_raw.split('\n')
+    
+    for i, line in enumerate(lines):
         line = line.strip()
+        raw_line = raw_lines[i].strip()
+        
         # Find all integers
         numbers = re.findall(r'\b\d+\b', line)
         if not numbers:
             continue
             
-        # Check matching keywords
-        if any(kw in line for kw in ["1 day", "1day", "daily"]):
+        # Check matching keywords in both lowercased and raw lines
+        if any(kw in line for kw in ["1 day", "1day", "daily"]) or any(kw in raw_line for kw in ["1 ᴅᴀʏ"]):
             price_candidates = [int(n) for n in numbers if n not in ["1"]]
             if price_candidates:
                 prices["1d"] = price_candidates[0]
             elif len(numbers) == 1:
                 prices["1d"] = int(numbers[0])
-        elif any(kw in line for kw in ["1 week", "1week", "7 days", "7days"]):
+        elif any(kw in line for kw in ["1 week", "1week", "7 days", "7days"]) or any(kw in raw_line for kw in ["1 ᴡᴇᴇᴋ"]):
             price_candidates = [int(n) for n in numbers if n not in ["1", "7"]]
             if price_candidates:
                 prices["1w"] = price_candidates[0]
             elif len(numbers) == 1:
                 prices["1w"] = int(numbers[0])
-        elif any(kw in line for kw in ["1 month", "1month", "30 days", "30days", "monthly"]):
+        elif any(kw in line for kw in ["1 month", "1month", "30 days", "30days", "monthly"]) or any(kw in raw_line for kw in ["1 ᴍᴏɴᴛʜ"]):
             price_candidates = [int(n) for n in numbers if n not in ["1", "30"]]
             if price_candidates:
                 prices["1m"] = price_candidates[0]
             elif len(numbers) == 1:
                 prices["1m"] = int(numbers[0])
-        elif any(kw in line for kw in ["3 month", "3month", "90 days", "90days"]):
+        elif any(kw in line for kw in ["3 month", "3month", "90 days", "90days"]) or any(kw in raw_line for kw in ["3 ᴍᴏɴᴛʜ"]):
             price_candidates = [int(n) for n in numbers if n not in ["3", "90"]]
             if price_candidates:
                 prices["3m"] = price_candidates[0]
             elif len(numbers) == 1:
                 prices["3m"] = int(numbers[0])
-        elif any(kw in line for kw in ["6 month", "6month", "180 days", "180days", "half year"]):
+        elif any(kw in line for kw in ["6 month", "6month", "180 days", "180days", "half year"]) or any(kw in raw_line for kw in ["6 ᴍᴏɴᴛʜ"]):
             price_candidates = [int(n) for n in numbers if n not in ["6", "180"]]
             if price_candidates:
                 prices["6m"] = price_candidates[0]
             elif len(numbers) == 1:
                 prices["6m"] = int(numbers[0])
-        elif any(kw in line for kw in ["lifetime", "life time", "life-time", "forever"]):
+        elif any(kw in line for kw in ["lifetime", "life time", "life-time", "forever"]) or any(kw in raw_line for kw in ["ʟɪғᴇᴛɪᴍᴇ"]):
             price_candidates = [int(n) for n in numbers]
             if price_candidates:
                 prices["lifetime"] = price_candidates[0]
