@@ -1611,7 +1611,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         msg = await client.ask(
             chat_id=query.message.chat.id,
-            text="<b>📸 Please send/upload your payment QR code photo (or send /cancel to exit).</b>"
+            text="<b>📸 Please send/upload your UPI QR code photo (or send /cancel to exit).</b>"
         )
         if msg.text and msg.text.strip() == "/cancel":
             return await msg.reply("<b>Cancelled plan configuration.</b>")
@@ -1630,6 +1630,33 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
         
+        msg_stars = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>⭐ Now please send the Telegram Stars plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - 50 Stars\n3 Months - 120 Stars\nLifetime - 300 Stars</code></b>"
+        )
+        if msg_stars.text and msg_stars.text.strip() == "/cancel":
+            return await msg_stars.reply("<b>Cancelled plan configuration.</b>")
+            
+        stars_plans_text = msg_stars.text.html if msg_stars.text else "Stars Plans not configured"
+
+        msg_paypal_qr = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>📸 Now please send/upload your PayPal QR code photo (or send /skip to skip this).</b>"
+        )
+        if msg_paypal_qr.text and msg_paypal_qr.text.strip() in ["/cancel", "/skip"]:
+            paypal_qr_file_id = None
+        else:
+            paypal_qr_file_id = msg_paypal_qr.photo.file_id if msg_paypal_qr.photo else None
+        
+        msg_paypal_text = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>✍️ Now please send the PayPal plans text with prices (or send /skip to skip).\n\nExample:\n<code>1 Month - 2$\n3 Months - 5$\nLifetime - 10$</code></b>"
+        )
+        if msg_paypal_text.text and msg_paypal_text.text.strip() == "/cancel":
+            return await msg_paypal_text.reply("<b>Cancelled plan configuration.</b>")
+            
+        paypal_plans_text = msg_paypal_text.text.html if msg_paypal_text.text and msg_paypal_text.text.strip() != "/skip" else "PayPal Plans not configured"
+        
         msg_alt = await client.ask(
             chat_id=query.message.chat.id,
             text="<b>📸 Now send an alternative QR code photo for 'Server Down' (or send /skip to skip this).</b>"
@@ -1640,7 +1667,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         alt_qr_file_id = msg_alt.photo.file_id if msg_alt.photo else None
         
         # Parse prices to verify format and display confirmation
-        stars_1m, stars_3m, stars_lifetime = parse_stars_prices(plans_text)
+        stars_1m, stars_3m, stars_lifetime = parse_stars_prices(stars_plans_text)
         s_1m = stars_1m if stars_1m is not None else 50
         s_3m = stars_3m if stars_3m is not None else 120
         s_lifetime = stars_lifetime if stars_lifetime is not None else 300
@@ -1651,6 +1678,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "payment_qr": qr_file_id,
                 "alt_payment_qr": alt_qr_file_id,
                 "plans_text": plans_text,
+                "stars_plans_text": stars_plans_text,
+                "paypal_qr": paypal_qr_file_id,
+                "paypal_plans_text": paypal_plans_text,
                 "stars_1m": s_1m,
                 "stars_3m": s_3m,
                 "stars_lifetime": s_lifetime
@@ -1660,7 +1690,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         await msg_text.reply(
             f"<b>✅ Payment Plan configured successfully!\n\n"
-            f"⭐ Telegram Stars Prices (auto-extracted from plan text):\n"
+            f"⭐ Telegram Stars Prices:\n"
             f"• 1 Month — {s_1m} Stars\n"
             f"• 3 Months — {s_3m} Stars\n"
             f"• Lifetime — {s_lifetime} Stars</b>"
@@ -1678,6 +1708,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         btn = [
             [InlineKeyboardButton("💳 UPI Payment", callback_data="buy_upi")],
             [InlineKeyboardButton("⭐ Telegram Stars", callback_data="buy_stars")],
+            [InlineKeyboardButton("🅿️ PayPal Payment", callback_data="buy_paypal")],
             [InlineKeyboardButton("« Back", callback_data="plan_status_back")]
         ]
         
@@ -1762,11 +1793,46 @@ async def cb_handler(client: Client, query: CallbackQuery):
             logging.error(f"Error editing QR media: {e}")
             await query.answer("Could not change QR image.", show_alert=True)
 
+    elif query.data == "buy_paypal":
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        if not plan_cfg or not plan_cfg.get("paypal_qr"):
+            return await query.answer("PayPal is not configured by the admin!", show_alert=True)
+            
+        qr_file_id = plan_cfg["paypal_qr"]
+        plans_text = plan_cfg.get("paypal_plans_text", "Plans not configured")
+        
+        caption = (
+            f"<b>🛒 <u>VIP Plans & Pricing (PayPal)</u></b>\n\n"
+            f"{plans_text}\n\n"
+            f"<b><u>How to buy:</u></b>\n"
+            f"1️⃣ Scan the QR code below to make payment.\n"
+            f"2️⃣ Send the screenshot of the payment receipt here in the chat.\n\n"
+            f"<i>Our admin will review and verify your screenshot to activate VIP access.</i>"
+        )
+        
+        await mongo_db.user_states.update_one(
+            {"bot_id": me.id, "user_id": query.from_user.id},
+            {"$set": {"state": "waiting_screenshot"}},
+            upsert=True
+        )
+        
+        buttons = []
+        buttons.append([InlineKeyboardButton("« Back", callback_data="buy_plan")])
+        
+        await client.send_photo(
+            chat_id=query.message.chat.id,
+            photo=qr_file_id,
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        await query.message.delete()
+        await query.answer()
+
     elif query.data == "buy_stars":
         await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
         
         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-        parsed_1m, parsed_3m, parsed_lifetime = parse_stars_prices(plan_cfg.get("plans_text", "") if plan_cfg else "")
+        parsed_1m, parsed_3m, parsed_lifetime = parse_stars_prices(plan_cfg.get("stars_plans_text", "") if plan_cfg else "")
         
         stars_1m = parsed_1m if parsed_1m is not None else (plan_cfg.get("stars_1m", 50) if plan_cfg else 50)
         stars_3m = parsed_3m if parsed_3m is not None else (plan_cfg.get("stars_3m", 120) if plan_cfg else 120)
@@ -1908,9 +1974,17 @@ async def plan_command_handler(client, message):
             reply_markup=InlineKeyboardMarkup(btn)
         )
 
-@Client.on_pre_checkout_query()
-async def pre_checkout_handler(client, pre_checkout_query):
-    await pre_checkout_query.answer(ok=True)
+import pyrogram
+
+@Client.on_raw_update(group=1)
+async def pre_checkout_handler(client, update, users, chats):
+    if type(update).__name__ == "UpdateBotPrecheckoutQuery":
+        await client.invoke(
+            pyrogram.raw.functions.messages.SetBotPrecheckoutResults(
+                query_id=update.query_id,
+                success=True
+            )
+        )
 
 @Client.on_message(filters.successful_payment)
 async def successful_payment_handler(client, message):
@@ -1937,18 +2011,10 @@ async def successful_payment_handler(client, message):
             
         user_id = message.from_user.id
         
-        await mongo_db.vip_users.update_one(
-            {"bot_id": me.id, "user_id": user_id},
-            {"$set": {"expiry": expiry}},
-            upsert=True
-        )
-        
         await message.reply_text(
-            f"🎉 <b>VIP Activation Successful!</b>\n\n"
+            f"<b>✅ Payment Successful!</b>\n\n"
             f"Thank you for your payment of <b>{payment.total_amount} Telegram Stars</b>.\n\n"
-            f"➜ Plan: <b>{days_label} VIP Access</b>\n"
-            f"➜ Expiry: <code>{expiry_str}</code>\n\n"
-            f"You bypass all shortlinks and TMA verifications! Enjoy instant downloads."
+            f"⏳ <b>Please wait, an admin is verifying your payment. Your VIP access will be activated shortly.</b>"
         )
         
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
@@ -1964,7 +2030,9 @@ async def successful_payment_handler(client, message):
                         text=f"<b>⭐ New VIP Purchase via Telegram Stars!</b>\n\n"
                              f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{user_id}</code>)\n"
                              f"💵 <b>Amount:</b> <code>{payment.total_amount} Stars</code>\n"
-                             f"📅 <b>Plan:</b> {days_label}"
+                             f"📅 <b>Plan:</b> {days_label}\n\n"
+                             f"<b>To activate, click and send this command:</b>\n"
+                             f"<code>/addvip {user_id} {days}</code>"
                     )
                 except Exception as e:
                     logger.error(f"Failed to notify recipient {rcpt} of successful payment: {e}")
