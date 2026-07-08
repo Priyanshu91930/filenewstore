@@ -46,12 +46,17 @@ def get_size(size):
     return "%.2f %s" % (size, units[i])
 
 def parse_stars_prices(plans_text):
-    stars_1m = None
-    stars_3m = None
-    stars_lifetime = None
+    prices = {
+        "1d": None,
+        "1w": None,
+        "1m": None,
+        "3m": None,
+        "6m": None,
+        "lifetime": None
+    }
     
     if not plans_text:
-        return stars_1m, stars_3m, stars_lifetime
+        return prices
         
     # Remove HTML tags to process clean text
     text = re.sub(r'<[^>]+>', '', plans_text).lower()
@@ -66,24 +71,42 @@ def parse_stars_prices(plans_text):
             continue
             
         # Check matching keywords
-        if any(kw in line for kw in ["1 month", "1month", "30 days", "30days", "monthly", "1 ᴍᴏɴᴛʜ"]):
+        if any(kw in line for kw in ["1 day", "1day", "daily"]):
+            price_candidates = [int(n) for n in numbers if n not in ["1"]]
+            if price_candidates:
+                prices["1d"] = price_candidates[0]
+            elif len(numbers) == 1:
+                prices["1d"] = int(numbers[0])
+        elif any(kw in line for kw in ["1 week", "1week", "7 days", "7days"]):
+            price_candidates = [int(n) for n in numbers if n not in ["1", "7"]]
+            if price_candidates:
+                prices["1w"] = price_candidates[0]
+            elif len(numbers) == 1:
+                prices["1w"] = int(numbers[0])
+        elif any(kw in line for kw in ["1 month", "1month", "30 days", "30days", "monthly"]):
             price_candidates = [int(n) for n in numbers if n not in ["1", "30"]]
             if price_candidates:
-                stars_1m = price_candidates[0]
+                prices["1m"] = price_candidates[0]
             elif len(numbers) == 1:
-                stars_1m = int(numbers[0])
-        elif any(kw in line for kw in ["3 month", "3month", "90 days", "90days", "3 ᴍᴏɴᴛʜs"]):
+                prices["1m"] = int(numbers[0])
+        elif any(kw in line for kw in ["3 month", "3month", "90 days", "90days"]):
             price_candidates = [int(n) for n in numbers if n not in ["3", "90"]]
             if price_candidates:
-                stars_3m = price_candidates[0]
+                prices["3m"] = price_candidates[0]
             elif len(numbers) == 1:
-                stars_3m = int(numbers[0])
-        elif any(kw in line for kw in ["lifetime", "life time", "life-time", "forever", "ʟɪғᴇᴛɪᴍᴇ"]):
+                prices["3m"] = int(numbers[0])
+        elif any(kw in line for kw in ["6 month", "6month", "180 days", "180days", "half year"]):
+            price_candidates = [int(n) for n in numbers if n not in ["6", "180"]]
+            if price_candidates:
+                prices["6m"] = price_candidates[0]
+            elif len(numbers) == 1:
+                prices["6m"] = int(numbers[0])
+        elif any(kw in line for kw in ["lifetime", "life time", "life-time", "forever"]):
             price_candidates = [int(n) for n in numbers]
             if price_candidates:
-                stars_lifetime = price_candidates[0]
+                prices["lifetime"] = price_candidates[0]
                 
-    return stars_1m, stars_3m, stars_lifetime
+    return prices
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -1609,12 +1632,33 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if query.from_user.id != owner_id and query.from_user.id not in mods:
             return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
             
+        buttons = [
+            [InlineKeyboardButton("💳 Set UPI Payment", callback_data="setplan_upi")],
+            [InlineKeyboardButton("⭐ Set Stars Pricing", callback_data="setplan_stars")],
+            [InlineKeyboardButton("🅿️ Set PayPal Payment", callback_data="setplan_paypal")],
+            [InlineKeyboardButton("📸 Set Alt Server QR", callback_data="setplan_altqr")],
+            [InlineKeyboardButton("« Back to Settings", callback_data="settings")]
+        ]
+        
+        await query.message.edit_text(
+            text="<b>⚙️ <u>Payment Plan Configuration</u>\n\nSelect the payment method you want to configure:</b>",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        return await query.answer()
+
+    elif query.data == "setplan_upi":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
+            
         msg = await client.ask(
             chat_id=query.message.chat.id,
             text="<b>📸 Please send/upload your UPI QR code photo (or send /cancel to exit).</b>"
         )
         if msg.text and msg.text.strip() == "/cancel":
-            return await msg.reply("<b>Cancelled plan configuration.</b>")
+            return await msg.reply("<b>Cancelled UPI configuration.</b>")
             
         if not msg.photo:
             return await msg.reply("<b>❌ Please send a photo of the QR code. Try again from Settings.</b>")
@@ -1626,77 +1670,110 @@ async def cb_handler(client: Client, query: CallbackQuery):
             text="<b>✍️ Now please send the UPI plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - 199\n3 Months - 399\nLifetime - 799</code></b>"
         )
         if msg_text.text and msg_text.text.strip() == "/cancel":
-            return await msg_text.reply("<b>Cancelled plan configuration.</b>")
+            return await msg_text.reply("<b>Cancelled UPI configuration.</b>")
             
         plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
-        
-        msg_stars = await client.ask(
-            chat_id=query.message.chat.id,
-            text="<b>⭐ Now please send the Telegram Stars plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - 50 Stars\n3 Months - 120 Stars\nLifetime - 300 Stars</code></b>"
-        )
-        if msg_stars.text and msg_stars.text.strip() == "/cancel":
-            return await msg_stars.reply("<b>Cancelled plan configuration.</b>")
-            
-        stars_plans_text = msg_stars.text.html if msg_stars.text else "Stars Plans not configured"
-
-        msg_paypal_qr = await client.ask(
-            chat_id=query.message.chat.id,
-            text="<b>📸 Now please send/upload your PayPal QR code photo (or send /skip to skip this).</b>"
-        )
-        if msg_paypal_qr.text and msg_paypal_qr.text.strip() in ["/cancel", "/skip"]:
-            paypal_qr_file_id = None
-        else:
-            paypal_qr_file_id = msg_paypal_qr.photo.file_id if msg_paypal_qr.photo else None
-        
-        msg_paypal_text = await client.ask(
-            chat_id=query.message.chat.id,
-            text="<b>✍️ Now please send the PayPal plans text with prices (or send /skip to skip).\n\nExample:\n<code>1 Month - 2$\n3 Months - 5$\nLifetime - 10$</code></b>"
-        )
-        if msg_paypal_text.text and msg_paypal_text.text.strip() == "/cancel":
-            return await msg_paypal_text.reply("<b>Cancelled plan configuration.</b>")
-            
-        paypal_plans_text = msg_paypal_text.text.html if msg_paypal_text.text and msg_paypal_text.text.strip() != "/skip" else "PayPal Plans not configured"
-        
-        msg_alt = await client.ask(
-            chat_id=query.message.chat.id,
-            text="<b>📸 Now send an alternative QR code photo for 'Server Down' (or send /skip to skip this).</b>"
-        )
-        if msg_alt.text and msg_alt.text.strip() == "/cancel":
-            return await msg_alt.reply("<b>Cancelled plan configuration.</b>")
-            
-        alt_qr_file_id = msg_alt.photo.file_id if msg_alt.photo else None
-        
-        # Parse prices to verify format and display confirmation
-        stars_1m, stars_3m, stars_lifetime = parse_stars_prices(stars_plans_text)
-        s_1m = stars_1m if stars_1m is not None else 50
-        s_3m = stars_3m if stars_3m is not None else 120
-        s_lifetime = stars_lifetime if stars_lifetime is not None else 300
         
         await mongo_db.plans_config.update_one(
             {"_id": me.id},
             {"$set": {
                 "payment_qr": qr_file_id,
-                "alt_payment_qr": alt_qr_file_id,
-                "plans_text": plans_text,
-                "stars_plans_text": stars_plans_text,
-                "paypal_qr": paypal_qr_file_id,
-                "paypal_plans_text": paypal_plans_text,
-                "stars_1m": s_1m,
-                "stars_3m": s_3m,
-                "stars_lifetime": s_lifetime
+                "plans_text": plans_text
             }},
             upsert=True
         )
+        await msg_text.reply("<b>✅ UPI Payment configured successfully!</b>")
         
-        await msg_text.reply(
-            f"<b>✅ Payment Plan configured successfully!\n\n"
-            f"⭐ Telegram Stars Prices:\n"
-            f"• 1 Month — {s_1m} Stars\n"
-            f"• 3 Months — {s_3m} Stars\n"
-            f"• Lifetime — {s_lifetime} Stars</b>"
+    elif query.data == "setplan_stars":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
+            
+        msg_stars = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>⭐ Please send the Telegram Stars plans text with prices (or send /cancel to exit).\n\nExample:\n<code>1 Month - 50 Stars\n3 Months - 120 Stars\nLifetime - 300 Stars</code></b>"
         )
-        query.data = "settings"
-        return await cb_handler(client, query)
+        if msg_stars.text and msg_stars.text.strip() == "/cancel":
+            return await msg_stars.reply("<b>Cancelled Stars configuration.</b>")
+            
+        stars_plans_text = msg_stars.text.html if msg_stars.text else "Stars Plans not configured"
+        
+        await mongo_db.plans_config.update_one(
+            {"_id": me.id},
+            {"$set": {
+                "stars_plans_text": stars_plans_text
+            }},
+            upsert=True
+        )
+        await msg_stars.reply("<b>✅ Telegram Stars Payment configured successfully!</b>")
+        
+    elif query.data == "setplan_paypal":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
+            
+        msg_paypal_qr = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>📸 Please send/upload your PayPal QR code photo (or send /cancel to exit).</b>"
+        )
+        if msg_paypal_qr.text and msg_paypal_qr.text.strip() == "/cancel":
+            return await msg_paypal_qr.reply("<b>Cancelled PayPal configuration.</b>")
+        
+        if not msg_paypal_qr.photo:
+            return await msg_paypal_qr.reply("<b>❌ Please send a photo of the QR code. Try again from Settings.</b>")
+            
+        paypal_qr_file_id = msg_paypal_qr.photo.file_id
+        
+        msg_paypal_text = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>✍️ Now please send the PayPal plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - 2$\n3 Months - 5$\nLifetime - 10$</code></b>"
+        )
+        if msg_paypal_text.text and msg_paypal_text.text.strip() == "/cancel":
+            return await msg_paypal_text.reply("<b>Cancelled PayPal configuration.</b>")
+            
+        paypal_plans_text = msg_paypal_text.text.html if msg_paypal_text.text else "PayPal Plans not configured"
+        
+        await mongo_db.plans_config.update_one(
+            {"_id": me.id},
+            {"$set": {
+                "paypal_qr": paypal_qr_file_id,
+                "paypal_plans_text": paypal_plans_text
+            }},
+            upsert=True
+        )
+        await msg_paypal_text.reply("<b>✅ PayPal Payment configured successfully!</b>")
+        
+    elif query.data == "setplan_altqr":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
+            
+        msg_alt = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>📸 Please send an alternative QR code photo for 'Server Down' (or send /cancel to exit).</b>"
+        )
+        if msg_alt.text and msg_alt.text.strip() == "/cancel":
+            return await msg_alt.reply("<b>Cancelled Alt QR configuration.</b>")
+            
+        if not msg_alt.photo:
+            return await msg_alt.reply("<b>❌ Please send a photo of the QR code. Try again from Settings.</b>")
+            
+        alt_qr_file_id = msg_alt.photo.file_id
+        
+        await mongo_db.plans_config.update_one(
+            {"_id": me.id},
+            {"$set": {
+                "alt_payment_qr": alt_qr_file_id
+            }},
+            upsert=True
+        )
+        await msg_alt.reply("<b>✅ Alternative QR configured successfully!</b>")
 
     elif query.data == "buy_plan":
         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
@@ -1832,25 +1909,30 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
         
         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-        parsed_1m, parsed_3m, parsed_lifetime = parse_stars_prices(plan_cfg.get("stars_plans_text", "") if plan_cfg else "")
-        
-        stars_1m = parsed_1m if parsed_1m is not None else (plan_cfg.get("stars_1m", 50) if plan_cfg else 50)
-        stars_3m = parsed_3m if parsed_3m is not None else (plan_cfg.get("stars_3m", 120) if plan_cfg else 120)
-        stars_lifetime = parsed_lifetime if parsed_lifetime is not None else (plan_cfg.get("stars_lifetime", 300) if plan_cfg else 300)
+        stars_plans_text = plan_cfg.get("stars_plans_text", "Plans not configured") if plan_cfg else "Plans not configured"
+        prices = parse_stars_prices(stars_plans_text)
         
         text = (
             "<b>⭐ <u>Telegram Stars Payment</u>\n\n"
             "Select the VIP plan you want to purchase using Telegram Stars:</b>\n\n"
-            f"• <b>1 Month</b> — <code>{stars_1m} Stars</code>\n"
-            f"• <b>3 Months</b> — <code>{stars_3m} Stars</code>\n"
-            f"• <b>Lifetime</b> — <code>{stars_lifetime} Stars</code>"
+            f"{stars_plans_text}"
         )
-        btn = [
-            [InlineKeyboardButton(f"⭐ 1 Month ({stars_1m} Stars)", callback_data="pay_stars_30")],
-            [InlineKeyboardButton(f"⭐ 3 Months ({stars_3m} Stars)", callback_data="pay_stars_90")],
-            [InlineKeyboardButton(f"⭐ Lifetime ({stars_lifetime} Stars)", callback_data="pay_stars_0")],
-            [InlineKeyboardButton("« Back", callback_data="buy_plan")]
-        ]
+        
+        btn = []
+        if prices.get("1d"):
+            btn.append([InlineKeyboardButton(f"⭐ 1 Day ({prices['1d']} Stars)", callback_data="pay_stars_1")])
+        if prices.get("1w"):
+            btn.append([InlineKeyboardButton(f"⭐ 1 Week ({prices['1w']} Stars)", callback_data="pay_stars_7")])
+        if prices.get("1m"):
+            btn.append([InlineKeyboardButton(f"⭐ 1 Month ({prices['1m']} Stars)", callback_data="pay_stars_30")])
+        if prices.get("3m"):
+            btn.append([InlineKeyboardButton(f"⭐ 3 Months ({prices['3m']} Stars)", callback_data="pay_stars_90")])
+        if prices.get("6m"):
+            btn.append([InlineKeyboardButton(f"⭐ 6 Months ({prices['6m']} Stars)", callback_data="pay_stars_180")])
+        if prices.get("lifetime"):
+            btn.append([InlineKeyboardButton(f"⭐ Lifetime ({prices['lifetime']} Stars)", callback_data="pay_stars_0")])
+            
+        btn.append([InlineKeyboardButton("« Back", callback_data="buy_plan")])
         
         try:
             await query.message.delete()
@@ -1867,21 +1949,30 @@ async def cb_handler(client: Client, query: CallbackQuery):
     elif query.data.startswith("pay_stars_"):
         days = int(query.data.split("_")[-1])
         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-        parsed_1m, parsed_3m, parsed_lifetime = parse_stars_prices(plan_cfg.get("plans_text", "") if plan_cfg else "")
+        stars_plans_text = plan_cfg.get("stars_plans_text", "Plans not configured") if plan_cfg else "Plans not configured"
+        prices = parse_stars_prices(stars_plans_text)
         
-        stars_1m = parsed_1m if parsed_1m is not None else (plan_cfg.get("stars_1m", 50) if plan_cfg else 50)
-        stars_3m = parsed_3m if parsed_3m is not None else (plan_cfg.get("stars_3m", 120) if plan_cfg else 120)
-        stars_lifetime = parsed_lifetime if parsed_lifetime is not None else (plan_cfg.get("stars_lifetime", 300) if plan_cfg else 300)
-        
-        if days == 30:
+        if days == 1:
+            title = "1 Day VIP Access"
+            amount = prices.get("1d")
+        elif days == 7:
+            title = "1 Week VIP Access"
+            amount = prices.get("1w")
+        elif days == 30:
             title = "1 Month VIP Access"
-            amount = stars_1m
+            amount = prices.get("1m")
         elif days == 90:
             title = "3 Months VIP Access"
-            amount = stars_3m
+            amount = prices.get("3m")
+        elif days == 180:
+            title = "6 Months VIP Access"
+            amount = prices.get("6m")
         else:
             title = "Lifetime VIP Access"
-            amount = stars_lifetime
+            amount = prices.get("lifetime")
+            
+        if not amount:
+            return await query.answer("Price not configured for this plan!", show_alert=True)
             
         from pyrogram.types import LabeledPrice
         try:
