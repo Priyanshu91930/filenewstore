@@ -238,31 +238,63 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "", bot
     return url
 
 async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: int = None) -> bool:
-    """Validate the token and mark the user as TMA-verified.
-    timeout: validity in seconds (0 = use global TMA_TIMEOUT).
-    """
+    """Validate the token and mark the user as TMA-verified with 5 free links."""
     if not validate_tma_token(user_id, token, max_age_sec=timeout or TMA_TIMEOUT):
         return False
     key = f"{bot_id}_{user_id}" if bot_id else user_id
-    TMA_VERIFIED[key] = time.time()
+    TMA_VERIFIED[key] = 5
     return True
 
 async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = None) -> bool:
-    """Return True if the user already completed TMA verification within the configured window.
-    timeout: override validity in seconds (0 = use global TMA_TIMEOUT).
-    """
-    tmo = timeout or TMA_TIMEOUT
+    """Return True if the user already completed TMA verification and has links remaining."""
     if bot_id:
         key = f"{bot_id}_{user_id}"
         if key in TMA_VERIFIED:
-            verified_time = TMA_VERIFIED[key]
-            if time.time() - verified_time < tmo:
-                return True
+            try:
+                val = int(TMA_VERIFIED[key])
+                if val > 1000000000:  # If it's a unix timestamp
+                    TMA_VERIFIED[key] = 5
+                    val = 5
+                if val > 0:
+                    return True
+            except:
+                pass
     if user_id in TMA_VERIFIED:
-        verified_time = TMA_VERIFIED[user_id]
-        if time.time() - verified_time < tmo:
-            return True
+        try:
+            val = int(TMA_VERIFIED[user_id])
+            if val > 1000000000:  # If it's a unix timestamp
+                TMA_VERIFIED[user_id] = 5
+                val = 5
+            if val > 0:
+                return True
+        except:
+            pass
     return False
+
+async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
+    """Decrement the user's remaining TMA links by 1. Returns the new remaining links count."""
+    key = f"{bot_id}_{user_id}" if bot_id else user_id
+    if key in TMA_VERIFIED:
+        try:
+            val = int(TMA_VERIFIED[key])
+            if val > 1000000000:
+                val = 5
+        except:
+            val = 0
+        new_val = max(0, val - 1)
+        TMA_VERIFIED[key] = new_val
+        return new_val
+    elif user_id in TMA_VERIFIED:
+        try:
+            val = int(TMA_VERIFIED[user_id])
+            if val > 1000000000:
+                val = 5
+        except:
+            val = 0
+        new_val = max(0, val - 1)
+        TMA_VERIFIED[user_id] = new_val
+        return new_val
+    return 0
 
 # ─── One-time Token Consumption Helper ────────────────────────────────────
 async def is_token_consumed(token: str) -> bool:

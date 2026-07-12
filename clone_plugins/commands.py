@@ -15,7 +15,7 @@ from pyrogram import Client, filters, enums
 from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait, UserNotParticipant
 from config import BOT_USERNAME, ADMINS, LOG_CHANNEL, PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL
-from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT, MongoDict
+from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT, MongoDict, consume_tma_link
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto, WebAppInfo
 import re
 import json
@@ -296,6 +296,42 @@ async def start(client, message):
     data = message.command[1]
     logger.info(f"Processing payload data: {data}")
 
+    # Check Paid Link
+    if data not in ["joinref", "clone"] and not data.startswith("ref_") and not data.startswith("verifyclone_"):
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        paid_links_enabled = bot_doc.get("paid_links", False) if bot_doc else False
+        user_is_vip = await is_vip(me.id, message.from_user.id)
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        is_owner_or_mod = (message.from_user.id == owner_id or message.from_user.id in mods)
+        
+        if paid_links_enabled and not user_is_vip and not is_owner_or_mod:
+            check_payload = data
+            if data.startswith("unlock-"):
+                parts = data.split("-", 4)
+                if len(parts) >= 5:
+                    check_payload = parts[4]
+            
+            # Check if this user has already paid for/unlocked this specific link
+            user_unlocked = await mongo_db.paid_unlocks.find_one({
+                "bot_id": me.id,
+                "user_id": message.from_user.id,
+                "payload": check_payload
+            })
+            
+            paid_doc = await mongo_db.paid_links.find_one({"bot_id": me.id, "payload": check_payload})
+            if paid_doc and not user_unlocked:
+                title = paid_doc.get("title", "Paid File")
+                price = paid_doc.get("price", "N/A")
+                qr_file_id = paid_doc.get("qr_file_id")
+                
+                caption = f"💰 **Paid File: {title}**\n💵 **Price:** {price}\n\nPlease scan the QR code to pay, and tap the button below to submit your payment screenshot."
+                btn = [[InlineKeyboardButton("📤 Submit Screenshot", callback_data=f"sub_pay_{check_payload}")]]
+                if qr_file_id:
+                    return await message.reply_photo(photo=qr_file_id, caption=caption, reply_markup=InlineKeyboardMarkup(btn))
+                else:
+                    return await message.reply_text(text=caption, reply_markup=InlineKeyboardMarkup(btn))
+
     # ── Referral Campaign Start Handler ──
     if data == "joinref":
         from clone_plugins.db_referral import is_campaign_active
@@ -563,6 +599,8 @@ async def start(client, message):
             # Deliver files if: TMA is off (no ad wall), OR user passed TMA, OR user already unlocked, OR user is VIP
             # Also deliver if plan is disabled (plan_enabled=False) regardless of TMA state
             if not tma_mode or is_verified or is_unlocked or user_is_vip or not plan_enabled:
+                if tma_mode and not user_is_vip:
+                    await consume_tma_link(message.from_user.id, bot_id=me.id)
                 sts = await message.reply("<b>🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ... ɢᴇᴛᴛɪɴɢ ʙᴀᴛᴄʜ ғɪʟᴇs</b>")
                 batch_file_id = data.split("-", 1)[1]
                 msgs = BATCH_FILES.get(batch_file_id)
@@ -755,6 +793,8 @@ async def start(client, message):
                 protect_content=True,
                 reply_markup=InlineKeyboardMarkup(btn)
             )
+    if tma_mode and not user_is_vip:
+        await consume_tma_link(message.from_user.id, bot_id=me.id)
 
     logger.info("Proceeding to send_cached_media...")
     try:
@@ -934,6 +974,9 @@ async def settings_command(client, message):
     plan_status = "Enabled 🟢" if plan_enabled else "Disabled 🔴"
     stream_mode = bot_doc.get("stream_mode", False) if bot_doc else False
     stream_status = "Enabled 🟢" if stream_mode else "Disabled 🔴"
+    paid_links = bot_doc.get("paid_links", False) if bot_doc else False
+    paid_status = "Enabled 🟢" if paid_links else "Disabled 🔴"
+    
     buttons = [[
         InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
         InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if tma_mode else 'OFF 🔴'}", callback_data="toggle_tma")
@@ -941,7 +984,8 @@ async def settings_command(client, message):
         InlineKeyboardButton('💳 Configure Plan', callback_data='setplan'),
         InlineKeyboardButton(f"VIP Plan: {'ON 🟢' if plan_enabled else 'OFF 🔴'}", callback_data="toggle_plan")
     ],[
-        InlineKeyboardButton(f"Stream: {'ON 🟢' if stream_mode else 'OFF 🔴'}", callback_data="toggle_stream")
+        InlineKeyboardButton(f"Stream: {'ON 🟢' if stream_mode else 'OFF 🔴'}", callback_data="toggle_stream"),
+        InlineKeyboardButton(f"Paid Links: {'ON 🟢' if paid_links else 'OFF 🔴'}", callback_data="toggle_paid")
     ],[
         InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
         InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -967,7 +1011,7 @@ async def settings_command(client, message):
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴘᴀɪᴅ ʟɪɴᴋs: <code>{paid_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
@@ -1221,6 +1265,17 @@ async def join_reqs_handler(client, join_request):
 async def cb_handler(client: Client, query: CallbackQuery):
     me = client.me or await client.get_me()
     
+    if query.data.startswith("sub_pay_"):
+        payload = query.data.split("sub_pay_", 1)[1]
+        await mongo_db.user_states.update_one(
+            {"bot_id": me.id, "user_id": query.from_user.id},
+            {"$set": {"state": "waiting_paid_screenshot", "payload": payload}},
+            upsert=True
+        )
+        await query.message.reply("<b>📤 Please send the payment screenshot photo now:</b>")
+        await query.answer()
+        return
+
     if query.data == "ref_campaign_menu":
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
@@ -1465,6 +1520,19 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await query.answer(f"Stream Mode {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
         query.data = "settings"
         return await cb_handler(client, query)
+    elif query.data == "toggle_paid":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure Paid Links settings!", show_alert=True)
+        
+        paid_links = bot_doc.get("paid_links", False) if bot_doc else False
+        new_mode = not paid_links
+        await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"paid_links": new_mode}})
+        await query.answer(f"Paid Links {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
+        query.data = "settings"
+        return await cb_handler(client, query)
     elif query.data == "start":
         buttons = [[
             InlineKeyboardButton('⚙️ sᴇᴛᴛɪɴɢs', callback_data='settings'),
@@ -1563,6 +1631,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         plan_status = "Enabled 🟢" if plan_enabled else "Disabled 🔴"
         stream_mode = bot_doc.get("stream_mode", False) if bot_doc else False
         stream_status = "Enabled 🟢" if stream_mode else "Disabled 🔴"
+        paid_links = bot_doc.get("paid_links", False) if bot_doc else False
+        paid_status = "Enabled 🟢" if paid_links else "Disabled 🔴"
         
         buttons = [[
             InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
@@ -1571,7 +1641,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton('💳 Configure Plan', callback_data='setplan'),
             InlineKeyboardButton(f"VIP Plan: {'ON 🟢' if plan_enabled else 'OFF 🔴'}", callback_data="toggle_plan")
         ],[
-            InlineKeyboardButton(f"Stream: {'ON 🟢' if stream_mode else 'OFF 🔴'}", callback_data="toggle_stream")
+            InlineKeyboardButton(f"Stream: {'ON 🟢' if stream_mode else 'OFF 🔴'}", callback_data="toggle_stream"),
+            InlineKeyboardButton(f"Paid Links: {'ON 🟢' if paid_links else 'OFF 🔴'}", callback_data="toggle_paid")
         ],[
             InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -1609,7 +1680,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴘᴀɪᴅ ʟɪɴᴋs: <code>{paid_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
@@ -2204,6 +2275,37 @@ async def photo_message_handler(client, message):
         await message.reply_text(
             "<b>Receipt sent successfully! Please wait for confirmation.</b>"
         )
+    elif state_doc and state_doc.get("state") == "waiting_paid_screenshot":
+        payload = state_doc.get("payload")
+        await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
+        
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        
+        paid_doc = await mongo_db.paid_links.find_one({"bot_id": me.id, "payload": payload})
+        title = paid_doc.get("title", "Paid File") if paid_doc else "Paid File"
+        
+        recipients = [owner_id] + list(mods)
+        for rcpt in recipients:
+            if rcpt:
+                try:
+                    await message.forward(rcpt)
+                    await client.send_message(
+                        chat_id=rcpt,
+                        text=f"<b>📩 New Paid Link Payment Screenshot!</b>\n\n"
+                             f"👤 <b>From User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                             f"💰 <b>File/Link Title:</b> {title}\n"
+                             f"🔗 <b>Payload:</b> <code>{payload}</code>\n\n"
+                             f"<b>To approve, click and send this command:</b>\n"
+                             f"<code>/approvepaid {message.from_user.id} {payload}</code>"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to forward paid link screenshot to {rcpt}: {e}")
+                
+        await message.reply_text(
+            "<b>Payment screenshot sent successfully! Please wait for the admin to verify and approve.</b>"
+        )
 
 @Client.on_message(filters.command("addvip") & filters.private)
 async def add_vip_handler(client, message):
@@ -2383,5 +2485,107 @@ async def list_vip_handler(client, message):
                 await message.reply_text(chunk)
         else:
             await message.reply_text(text)
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+@Client.on_message(filters.command("makepaid") & filters.private)
+async def makepaid_handler(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+
+    paid_links_enabled = bot_doc.get("paid_links", False) if bot_doc else False
+    if not paid_links_enabled:
+        return await message.reply("<b>❌ Paid Links feature is currently turned OFF. Please toggle it ON in /setting first.</b>")
+
+    if len(message.command) < 2:
+        return await message.reply("<b>Usage:</b> `/makepaid [payload_or_link]`\nExample: `/makepaid BATCH-1234` or `/makepaid https://t.me/BotName?start=BATCH-1234`")
+
+    raw_payload = message.command[1].strip()
+    payload = raw_payload
+    if "start=" in raw_payload:
+        payload = raw_payload.split("start=")[-1]
+
+    try:
+        title_msg = await _ask(client, message.chat.id, "<b>📝 Please send the TITLE of this paid file:</b>", timeout=120)
+        title = title_msg.text.strip() if title_msg.text else "Paid File"
+    except asyncio.TimeoutError:
+        return await message.reply("<b>❌ Timeout: Setup cancelled.</b>")
+
+    try:
+        price_msg = await _ask(client, message.chat.id, "<b>💵 Please send the PRICE of this file (e.g. 5$, 500 INR):</b>", timeout=120)
+        price = price_msg.text.strip() if price_msg.text else "N/A"
+    except asyncio.TimeoutError:
+        return await message.reply("<b>❌ Timeout: Setup cancelled.</b>")
+
+    try:
+        qr_msg = await _ask(client, message.chat.id, "<b>🖼️ Please send the QR Code image for payment:</b>", timeout=120)
+        if not qr_msg.photo:
+            return await message.reply("<b>❌ Error: You must send an image/photo of the QR code. Setup cancelled.</b>")
+        qr_file_id = qr_msg.photo.file_id
+    except asyncio.TimeoutError:
+        return await message.reply("<b>❌ Timeout: Setup cancelled.</b>")
+
+    await mongo_db.paid_links.update_one(
+        {"bot_id": me.id, "payload": payload},
+        {"$set": {
+            "title": title,
+            "price": price,
+            "qr_file_id": qr_file_id,
+            "updated_at": time.time()
+        }},
+        upsert=True
+    )
+
+    await message.reply(f"<b>✅ Paid link successfully created!</b>\n\n<b>Payload:</b> <code>{payload}</code>\n<b>Title:</b> {title}\n<b>Price:</b> {price}")
+
+@Client.on_message(filters.command("approvepaid") & filters.private)
+async def approvepaid_handler(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+
+    if len(message.command) < 3:
+        return await message.reply_text("<b>Usage:</b> `/approvepaid [user_id] [payload]`")
+
+    try:
+        user_id = int(message.command[1])
+        payload = message.command[2].strip()
+
+        paid_doc = await mongo_db.paid_links.find_one({"bot_id": me.id, "payload": payload})
+        title = paid_doc.get("title", "Paid File") if paid_doc else "Paid File"
+
+        await mongo_db.paid_unlocks.update_one(
+            {"bot_id": me.id, "user_id": user_id, "payload": payload},
+            {"$set": {"unlocked_at": time.time()}},
+            upsert=True
+        )
+
+        await message.reply_text(f"<b>✅ Payment approved! User <code>{user_id}</code> has been granted access to payload: <code>{payload}</code></b>")
+
+        try:
+            bot_username = me.username
+            deeplink = f"https://t.me/{bot_username}?start={payload}"
+            await client.send_message(
+                chat_id=user_id,
+                text=f"<b>🎉 Payment Approved!</b>\n\nYour payment for file \"<b>{title}</b>\" has been verified.\n\n👉 <b>Click the link below to get your file:</b>\n{deeplink}"
+            )
+        except Exception as e:
+            logger.error(f"Could not notify paid link user {user_id}: {e}")
+
+    except ValueError:
+        await message.reply_text("<b>❌ Invalid User ID. Must be integer.</b>")
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
