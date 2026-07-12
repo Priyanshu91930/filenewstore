@@ -319,11 +319,22 @@ async def start(client, message):
                 "payload": check_payload
             })
             
-            paid_doc = await mongo_db.paid_links.find_one({"bot_id": me.id, "payload": check_payload})
-            if paid_doc and not user_unlocked:
-                title = paid_doc.get("title", "Paid File")
-                price = paid_doc.get("price", "N/A")
-                qr_file_id = paid_doc.get("qr_file_id")
+            if not user_unlocked:
+                paid_doc = await mongo_db.paid_links.find_one({"bot_id": me.id, "payload": check_payload})
+                
+                title = "Paid File"
+                price = "Paid Link"
+                qr_file_id = None
+                
+                if paid_doc:
+                    title = paid_doc.get("title", "Paid File")
+                    price = paid_doc.get("price", "N/A")
+                    qr_file_id = paid_doc.get("qr_file_id")
+                else:
+                    # Look up fallback details from plans_config
+                    plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+                    if plan_cfg:
+                        qr_file_id = plan_cfg.get("alt_payment_qr") or plan_cfg.get("upi_qr") or plan_cfg.get("paypal_qr")
                 
                 caption = f"💰 **Paid File: {title}**\n💵 **Price:** {price}\n\nPlease scan the QR code to pay, and tap the button below to submit your payment screenshot."
                 btn = [[InlineKeyboardButton("📤 Submit Screenshot", callback_data=f"sub_pay_{check_payload}")]]
