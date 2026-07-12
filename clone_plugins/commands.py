@@ -30,6 +30,14 @@ CLONE_TOKENS = {}
 CLONE_VERIFIED = MongoDict("clone_verifications")
 BATCH_FILES = {}
 
+def from_small_caps(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    small_caps = "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
+    normal_chars = "abcdefghijklmnopqrstuvwxyz"
+    trans = str.maketrans(small_caps, normal_chars)
+    return text.translate(trans)
+
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
@@ -312,15 +320,21 @@ async def start(client, message):
                 if len(parts) >= 5:
                     check_payload = parts[4]
             
-            # Check if this user has already paid for/unlocked this specific link
+            # Convert small caps to normal lowercase to handle manual inputs
+            check_payload = from_small_caps(check_payload)
+            
+            # Check if this user has already paid for/unlocked this specific link (case-insensitive)
             user_unlocked = await mongo_db.paid_unlocks.find_one({
                 "bot_id": me.id,
                 "user_id": message.from_user.id,
-                "payload": check_payload
+                "payload": re.compile(f"^{re.escape(check_payload)}$", re.IGNORECASE)
             })
             
             if not user_unlocked:
-                paid_doc = await mongo_db.paid_links.find_one({"bot_id": me.id, "payload": check_payload})
+                paid_doc = await mongo_db.paid_links.find_one({
+                    "bot_id": me.id, 
+                    "payload": re.compile(f"^{re.escape(check_payload)}$", re.IGNORECASE)
+                })
                 
                 title = "Paid File"
                 price = "Paid Link"
@@ -2522,6 +2536,7 @@ async def makepaid_handler(client, message):
     payload = raw_payload
     if "start=" in raw_payload:
         payload = raw_payload.split("start=")[-1]
+    payload = from_small_caps(payload)
 
     try:
         title_msg = await _ask(client, message.chat.id, "<b>📝 Please send the TITLE of this paid file:</b>", timeout=120)
@@ -2573,9 +2588,13 @@ async def approvepaid_handler(client, message):
 
     try:
         user_id = int(message.command[1])
-        payload = message.command[2].strip()
+        raw_payload = message.command[2].strip()
+        payload = from_small_caps(raw_payload)
 
-        paid_doc = await mongo_db.paid_links.find_one({"bot_id": me.id, "payload": payload})
+        paid_doc = await mongo_db.paid_links.find_one({
+            "bot_id": me.id, 
+            "payload": re.compile(f"^{re.escape(payload)}$", re.IGNORECASE)
+        })
         title = paid_doc.get("title", "Paid File") if paid_doc else "Paid File"
 
         await mongo_db.paid_unlocks.update_one(

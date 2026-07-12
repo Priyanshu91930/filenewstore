@@ -13,13 +13,19 @@ def to_small_caps(text: str) -> str:
     small_caps   = "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
     trans = str.maketrans(normal_chars, small_caps)
     
-    # Preserve HTML tags, HTTP/HTTPS URLs, and Telegram Usernames/Mentions
-    pattern = re.compile(r'(<[^>]+>|https?://[^\s]+|@[a-zA-Z0-9_]+)')
+    # Preserve <code>...</code>, <pre>...</pre>, HTML tags, HTTP/HTTPS URLs, and Telegram handles
+    pattern = re.compile(r'(<code>.*?</code>|<pre>.*?</pre>|<[^>]+>|https?://[^\s]+|@[a-zA-Z0-9_]+)', re.DOTALL)
     parts = pattern.split(text)
     
     for i in range(len(parts)):
-        # Translate only if it's not HTML tag, URL, or Telegram handle
-        if not (parts[i].startswith("<") and parts[i].endswith(">")) and not parts[i].startswith("http") and not parts[i].startswith("@"):
+        # Translate only if it's not a preserved block
+        if not (
+            parts[i].startswith("<code>") or 
+            parts[i].startswith("<pre>") or 
+            (parts[i].startswith("<") and parts[i].endswith(">")) or 
+            parts[i].startswith("http") or 
+            parts[i].startswith("@")
+        ):
             parts[i] = parts[i].translate(trans)
             
     return "".join(parts)
