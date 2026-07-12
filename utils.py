@@ -243,6 +243,23 @@ async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: in
         return False
     key = f"{bot_id}_{user_id}" if bot_id else user_id
     TMA_VERIFIED[key] = 5
+
+    # Record stats in MongoDB
+    try:
+        from plugins.clone import async_mongo_db
+        import pytz
+        from datetime import datetime
+        tz = pytz.timezone('Asia/Kolkata')
+        today_str = datetime.now(tz).strftime('%Y-%m-%d')
+        
+        await async_mongo_db.tma_stats.update_one(
+            {"bot_id": bot_id, "user_id": user_id, "date": today_str},
+            {"$inc": {"ads_watched": 1}},
+            upsert=True
+        )
+    except Exception as e:
+        logger.error(f"Error updating tma_stats: {e}")
+
     return True
 
 async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = None) -> bool:

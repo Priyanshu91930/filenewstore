@@ -1218,24 +1218,47 @@ async def validity_command(client, message):
     
     text = "<b>📅 <u>Active Verifications</u></b>\n\n"
     
-    # 1. TMA Verifications (dynamic validity from bot config or global TMA_TIMEOUT)
+    # 1. TMA Verifications & Stats
+    import pytz
+    from datetime import datetime
+    tz = pytz.timezone('Asia/Kolkata')
+    today_str = datetime.now(tz).strftime('%Y-%m-%d')
+    
+    # Query stats for today from database
+    total_users_today = 0
+    total_ads_today = 0
+    try:
+        cursor = mongo_db.tma_stats.find({"bot_id": me.id, "date": today_str})
+        async for doc in cursor:
+            total_users_today += 1
+            total_ads_today += doc.get("ads_watched", 0)
+    except Exception as e:
+        logger.error(f"Error querying tma_stats for validity: {e}")
+        
+    text = (
+        f"<b>📅 <u>Verification Stats (Today - {today_str})</u></b>\n"
+        f"👥 <b>Total Users Today:</b> <code>{total_users_today}</code>\n"
+        f"🎯 <b>Total Ads Watched Today:</b> <code>{total_ads_today}</code>\n\n"
+    )
+    
     tma_count = 0
-    bot_tma_timeout = bot_doc.get("token_timeout", TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT
-    tma_hours = bot_tma_timeout // 3600
-    tma_text = f"<b>⚡ TMA Verifications ({tma_hours}-Hour Validity):</b>\n"
-    current_time = time.time()
-    for key, verified_time in list(TMA_VERIFIED.items()):
+    tma_text = "<b>⚡ Active TMA Verifications (Remaining Links):</b>\n"
+    for key, val in list(TMA_VERIFIED.items()):
         key_str = str(key)
         if key_str.startswith(f"{me.id}_"):
             uid = key_str.split("_")[-1]
-            elapsed = current_time - verified_time
-            if elapsed < bot_tma_timeout:
-                tma_count += 1
-                remaining = int(bot_tma_timeout - elapsed)
-                hours = remaining // 3600
-                mins = (remaining % 3600) // 60
-                tma_text += f"• <code>{uid}</code> (Remaining: {hours}h {mins}m)\n"
-            else:
+            try:
+                links_left = int(val)
+                # Filter out old unix timestamps
+                if links_left > 1000000000:
+                    TMA_VERIFIED.pop(key, None)
+                    continue
+                if links_left > 0:
+                    tma_count += 1
+                    tma_text += f"• <code>{uid}</code> ({links_left} free links left)\n"
+                else:
+                    TMA_VERIFIED.pop(key, None)
+            except:
                 TMA_VERIFIED.pop(key, None)
             
     if tma_count == 0:
