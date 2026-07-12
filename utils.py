@@ -238,11 +238,25 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "", bot
     return url
 
 async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: int = None) -> bool:
-    """Validate the token and mark the user as TMA-verified with 5 free links."""
+    """Validate the token and mark the user as TMA-verified with 5 free links or time validity."""
     if not validate_tma_token(user_id, token, max_age_sec=timeout or TMA_TIMEOUT):
         return False
+    
     key = f"{bot_id}_{user_id}" if bot_id else user_id
-    TMA_VERIFIED[key] = 5
+    
+    tma_type = "links"
+    if bot_id:
+        try:
+            from plugins.clone import async_mongo_db
+            bot_doc = await async_mongo_db.bots.find_one({"bot_id": bot_id})
+            tma_type = bot_doc.get("tma_type", "links") if bot_doc else "links"
+        except:
+            pass
+            
+    if tma_type == "links":
+        TMA_VERIFIED[key] = 5
+    else:
+        TMA_VERIFIED[key] = int(time.time())
 
     # Record stats in MongoDB
     try:
@@ -263,33 +277,53 @@ async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: in
     return True
 
 async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = None) -> bool:
-    """Return True if the user already completed TMA verification and has links remaining."""
+    """Return True if the user already completed TMA verification and has validity left."""
+    tma_type = "links"
+    bot_tma_timeout = timeout or TMA_TIMEOUT
     if bot_id:
-        key = f"{bot_id}_{user_id}"
-        if key in TMA_VERIFIED:
-            try:
-                val = int(TMA_VERIFIED[key])
-                if val > 1000000000:  # If it's a unix timestamp
+        try:
+            from plugins.clone import async_mongo_db
+            bot_doc = await async_mongo_db.bots.find_one({"bot_id": bot_id})
+            tma_type = bot_doc.get("tma_type", "links") if bot_doc else "links"
+            bot_tma_timeout = bot_doc.get("token_timeout", TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT
+        except:
+            pass
+
+    key = f"{bot_id}_{user_id}" if bot_id else user_id
+    if key in TMA_VERIFIED:
+        try:
+            val = int(TMA_VERIFIED[key])
+            if tma_type == "links":
+                if val > 1000000000:
                     TMA_VERIFIED[key] = 5
                     val = 5
                 if val > 0:
                     return True
-            except:
-                pass
-    if user_id in TMA_VERIFIED:
-        try:
-            val = int(TMA_VERIFIED[user_id])
-            if val > 1000000000:  # If it's a unix timestamp
-                TMA_VERIFIED[user_id] = 5
-                val = 5
-            if val > 0:
-                return True
+            else:
+                if val <= 10000:
+                    TMA_VERIFIED[key] = int(time.time())
+                    val = int(time.time())
+                elapsed = time.time() - val
+                if elapsed < bot_tma_timeout:
+                    return True
         except:
             pass
     return False
 
 async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
-    """Decrement the user's remaining TMA links by 1. Returns the new remaining links count."""
+    """Decrement the user's remaining TMA links by 1 if bot is in link mode. Returns remaining links count."""
+    tma_type = "links"
+    if bot_id:
+        try:
+            from plugins.clone import async_mongo_db
+            bot_doc = await async_mongo_db.bots.find_one({"bot_id": bot_id})
+            tma_type = bot_doc.get("tma_type", "links") if bot_doc else "links"
+        except:
+            pass
+
+    if tma_type != "links":
+        return 5
+
     key = f"{bot_id}_{user_id}" if bot_id else user_id
     if key in TMA_VERIFIED:
         try:
@@ -300,16 +334,6 @@ async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
             val = 0
         new_val = max(0, val - 1)
         TMA_VERIFIED[key] = new_val
-        return new_val
-    elif user_id in TMA_VERIFIED:
-        try:
-            val = int(TMA_VERIFIED[user_id])
-            if val > 1000000000:
-                val = 5
-        except:
-            val = 0
-        new_val = max(0, val - 1)
-        TMA_VERIFIED[user_id] = new_val
         return new_val
     return 0
 
