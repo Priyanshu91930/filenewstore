@@ -1227,18 +1227,27 @@ async def validity_command(client, message):
     # Query stats for today from database
     total_users_today = 0
     total_ads_today = 0
+    detailed_stats_text = ""
     try:
         cursor = mongo_db.tma_stats.find({"bot_id": me.id, "date": today_str})
         async for doc in cursor:
             total_users_today += 1
-            total_ads_today += doc.get("ads_watched", 0)
+            ads_watched = doc.get("ads_watched", 0)
+            total_ads_today += ads_watched
+            uid = doc.get("user_id")
+            detailed_stats_text += f"• <code>{uid}</code> (Watched: {ads_watched} ads)\n"
     except Exception as e:
         logger.error(f"Error querying tma_stats for validity: {e}")
+        
+    if not detailed_stats_text:
+        detailed_stats_text = "<i>No ads watched today yet.</i>\n"
         
     text = (
         f"<b>📅 <u>Verification Stats (Today - {today_str})</u></b>\n"
         f"👥 <b>Total Users Today:</b> <code>{total_users_today}</code>\n"
         f"🎯 <b>Total Ads Watched Today:</b> <code>{total_ads_today}</code>\n\n"
+        f"<b>📊 Today's Detailed Ads Watched:</b>\n"
+        f"{detailed_stats_text}\n"
     )
     
     tma_count = 0
