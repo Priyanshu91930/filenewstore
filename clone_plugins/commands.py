@@ -1118,6 +1118,7 @@ async def shortener_api_handler(client, m: Message):
     else:
         await m.reply("<b>❌ Invalid usage. Use: <code>/api your_api_key</code></b>")
 
+
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190

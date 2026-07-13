@@ -258,7 +258,7 @@ async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: in
     else:
         TMA_VERIFIED[key] = int(time.time())
 
-    # Record stats in MongoDB
+    # Record stats in MongoDB + increment total_verifications counter
     try:
         from plugins.clone import async_mongo_db
         import pytz
@@ -269,6 +269,12 @@ async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: in
         await async_mongo_db.tma_stats.update_one(
             {"bot_id": bot_id, "user_id": user_id, "date": today_str},
             {"$inc": {"ads_watched": 1}},
+            upsert=True
+        )
+        # Track lifetime verification count per user per bot (used for API alternation)
+        await async_mongo_db.tma_verify_count.update_one(
+            {"bot_id": bot_id, "user_id": user_id},
+            {"$inc": {"count": 1}},
             upsert=True
         )
     except Exception as e:
@@ -362,32 +368,62 @@ async def consume_token(token: str):
         logger.error(f"Error consuming token: {e}")
 
 async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_username: str) -> str:
-    """Build the target unlock link and shorten it."""
+    """Build the target unlock link and shorten it.
+    
+    Alternates between primary API and secondary API on every verification
+    to avoid bot traffic detection on shortlink sites (same-IP issue).
+    Odd verifications → primary API, Even verifications → secondary API.
+    """
     link = f"https://t.me/{bot_username}?start=unlock-{user_id}-{token}-{file_data}"
     
     # Query database for the bot's configured API Key and shortener URL
     import motor.motor_asyncio
     from config import DB_URI
     
-    client = motor.motor_asyncio.AsyncIOMotorClient(DB_URI)
-    db = client["cloned_vjbotz"]
+    db_client = motor.motor_asyncio.AsyncIOMotorClient(DB_URI)
+    db = db_client["cloned_vjbotz"]
     
-    api_key = None
-    shortener_url = "vplink.in"
+    primary_api_key = None
+    primary_shortener_url = "vplink.in"
+    secondary_api_key = None
+    secondary_shortener_url = "vplink.in"
     
     bot = await db.bots.find_one({"username": bot_username})
     if bot:
-        api_key = bot.get("shortener_api")
-        shortener_url = bot.get("shortener_site") or "vplink.in"
+        primary_api_key = bot.get("shortener_api")
+        primary_shortener_url = bot.get("shortener_site") or "vplink.in"
+        secondary_api_key = bot.get("secondary_shortener_api")
+        secondary_shortener_url = bot.get("secondary_shortener_site") or primary_shortener_url
+        bot_id = bot.get("bot_id")
     else:
         # Check if it's the main bot
         from config import BOT_USERNAME
         if bot_username.lower() == BOT_USERNAME.lower():
             from config import SHORTLINK_API, SHORTLINK_URL
-            api_key = SHORTLINK_API
-            shortener_url = SHORTLINK_URL
-            
-    shortened_verify_url = await get_verify_shorted_link(link, api_key=api_key, shortener_url=shortener_url)
+            primary_api_key = SHORTLINK_API
+            primary_shortener_url = SHORTLINK_URL
+        bot_id = None
+
+    # Determine which API to use based on user's verification count
+    # Odd count → primary API, Even count → secondary API (alternating to avoid bot detection)
+    use_secondary = False
+    if secondary_api_key and bot_id:
+        try:
+            count_doc = await db.tma_verify_count.find_one({"bot_id": bot_id, "user_id": user_id})
+            verify_count = count_doc.get("count", 0) if count_doc else 0
+            # Next verification will be count+1; if even → use secondary API
+            next_count = verify_count + 1
+            use_secondary = (next_count % 2 == 0)
+        except Exception as e:
+            logger.error(f"Error fetching verify count for API alternation: {e}")
+
+    if use_secondary and secondary_api_key:
+        logger.info(f"[get_tma_shortlink] Using SECONDARY API for user {user_id} (even verification)")
+        shortened_verify_url = await get_verify_shorted_link(link, api_key=secondary_api_key, shortener_url=secondary_shortener_url)
+    else:
+        logger.info(f"[get_tma_shortlink] Using PRIMARY API for user {user_id} (odd verification)")
+        shortened_verify_url = await get_verify_shorted_link(link, api_key=primary_api_key, shortener_url=primary_shortener_url)
+        
     return str(shortened_verify_url)
 
 async def is_vip(bot_id: int, user_id: int) -> bool:
