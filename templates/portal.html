@@ -153,6 +153,142 @@
       box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
     }
 
+    /* ── 👑 PREMIUM PAID TAB ── */
+    .category-tab.premium-tab {
+      position: relative;
+      background: linear-gradient(135deg, #1a0a00, #2a1200);
+      border: 1.5px solid #f5a623;
+      color: #ffd166;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      overflow: visible;
+      padding-top: 16px; /* make room for crown */
+      isolation: isolate;
+    }
+
+    /* Crown emoji floating above */
+    .category-tab.premium-tab::before {
+      content: '\1F451';
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1rem;
+      filter: drop-shadow(0 0 6px rgba(255, 200, 50, 0.9));
+      animation: crown-bounce 1.8s ease-in-out infinite;
+      z-index: 2;
+    }
+
+    @keyframes crown-bounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50%       { transform: translateX(-50%) translateY(-4px); }
+    }
+
+    /* Rotating circular glow ring */
+    .category-tab.premium-tab::after {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: 999px;
+      background: conic-gradient(
+        from 0deg,
+        transparent 0%,
+        rgba(255, 200, 50, 0.9) 25%,
+        rgba(255, 140, 0, 0.6) 50%,
+        transparent 60%
+      );
+      animation: ring-spin 2s linear infinite;
+      z-index: -1;
+      mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 2px));
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 2px));
+    }
+
+    @keyframes ring-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    .category-tab.premium-tab:hover,
+    .category-tab.premium-tab.active {
+      background: linear-gradient(135deg, #2a1400, #4a2000);
+      border-color: #ffd166;
+      color: #fff;
+      box-shadow: 0 0 20px rgba(255, 180, 30, 0.55), 0 4px 16px rgba(255, 120, 0, 0.4);
+      transform: scale(1.04);
+    }
+
+    /* ── Premium Movie Card ── */
+    .movie-card.premium-card {
+      border: 1.5px solid rgba(255, 180, 30, 0.5);
+      box-shadow: 0 0 0 0 rgba(255, 180, 30, 0.4);
+      animation: premium-pulse 2.5s ease-in-out infinite;
+      background: linear-gradient(160deg, #0e0e15, #1a1200);
+    }
+
+    @keyframes premium-pulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(255, 180, 30, 0.3), 0 4px 20px rgba(255, 120, 0, 0.15); }
+      50%       { box-shadow: 0 0 20px rgba(255, 200, 50, 0.6), 0 8px 30px rgba(255, 140, 0, 0.3); }
+    }
+
+    .movie-card.premium-card:hover {
+      border-color: #ffd166;
+      transform: translateY(-6px) scale(1.01);
+      box-shadow: 0 0 28px rgba(255, 200, 50, 0.7), 0 12px 36px rgba(255, 140, 0, 0.35);
+    }
+
+    /* Premium badge overlay on card poster */
+    .premium-badge {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: linear-gradient(135deg, rgba(180, 100, 0, 0.92), rgba(120, 50, 0, 0.85));
+      border-bottom: 1px solid rgba(255, 200, 50, 0.4);
+      color: #ffd166;
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      padding: 5px 8px;
+      z-index: 5;
+      text-shadow: 0 0 8px rgba(255, 220, 80, 0.7);
+      animation: shimmer-text 2s ease-in-out infinite;
+    }
+
+    @keyframes shimmer-text {
+      0%, 100% { opacity: 1; text-shadow: 0 0 8px rgba(255, 220, 80, 0.7); }
+      50%       { opacity: 0.85; text-shadow: 0 0 16px rgba(255, 220, 80, 1); }
+    }
+
+    /* Shine sweep effect on premium cards */
+    .movie-card.premium-card .movie-poster-wrapper::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        115deg,
+        transparent 0%,
+        rgba(255, 220, 100, 0.12) 45%,
+        rgba(255, 220, 100, 0.22) 50%,
+        rgba(255, 220, 100, 0.12) 55%,
+        transparent 100%
+      );
+      background-size: 200% 100%;
+      animation: shine-sweep 3s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    @keyframes shine-sweep {
+      0%   { background-position: -100% 0; }
+      60%  { background-position: 200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
     /* Movies Grid */
     .movies-grid {
       display: grid;
@@ -368,7 +504,9 @@
           data.categories.forEach(cat => {
             if (cat !== 'All') {
               const tab = document.createElement('div');
-              tab.className = 'category-tab';
+              // Detect if this is a paid/premium category tab
+              const isPaidCat = cat.toLowerCase().includes('paid') || cat.toLowerCase().includes('premium');
+              tab.className = 'category-tab' + (isPaidCat ? ' premium-tab' : '');
               tab.setAttribute('data-category', cat);
               tab.innerText = cat;
               categoriesContainer.appendChild(tab);
@@ -377,19 +515,21 @@
           setupCategoryListeners();
         }
 
-        // Render Movie Grid
+        // Render Movie Grid — premium posts already sorted first by backend
         moviesGrid.innerHTML = '';
         if (data.posts && data.posts.length > 0) {
           data.posts.forEach(post => {
             const card = document.createElement('div');
-            card.className = 'movie-card';
+            const isPaid = post.is_paid === true;
+            card.className = 'movie-card' + (isPaid ? ' premium-card' : '');
             card.innerHTML = `
               <div class="movie-poster-wrapper">
-                <img class="movie-poster" src="${post.image_url || '/static/LOGO.jpg'}" alt="${post.title}" onerror="this.src='/static/LOGO.jpg'">
-                <span class="movie-category-badge">${post.category || 'General'}</span>
+                ${isPaid ? `<div class="premium-badge">&#x1F451; PREMIUM</div>` : ''}
+                <img class="movie-poster" src="${post.image_url || '/static/LOGO.jpg'}" alt="${post.title}" onerror="this.src='/static/LOGO.jpg'" style="${isPaid ? 'margin-top:28px; height:calc(100% - 28px);' : ''}">
+                ${!isPaid ? `<span class="movie-category-badge">${post.category || 'General'}</span>` : ''}
               </div>
               <div class="movie-info">
-                <div class="movie-title">${post.title}</div>
+                <div class="movie-title">${isPaid ? '&#x1F451; ' : ''}${post.title}</div>
                 <div class="movie-stats" style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
                   <span class="views">👁 ${formatNumber(post.views || 0)}</span>
                   <div class="reactions" style="display: flex; gap: 6px;">

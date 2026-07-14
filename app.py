@@ -162,7 +162,10 @@ def portal_data():
     page = max(1, min(page, total_pages))
     skip = (page - 1) * limit
 
-    posts_cursor = db.posts.find(query).sort('created_at', -1).skip(skip).limit(limit)
+    # Sort: paid/premium posts ALWAYS first, then newest
+    posts_cursor = db.posts.find(query).sort(
+        [('is_paid', -1), ('created_at', -1)]
+    ).skip(skip).limit(limit)
     posts = []
     for doc in posts_cursor:
         posts.append({
@@ -173,7 +176,8 @@ def portal_data():
             'file_deeplink': doc.get('file_deeplink', ''),
             'bot_username': doc.get('bot_username', ''),
             'views': doc.get('views', 0),
-            'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0})
+            'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
+            'is_paid': bool(doc.get('is_paid', False))
         })
 
     # Get unique categories
