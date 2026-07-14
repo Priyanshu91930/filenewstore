@@ -116,16 +116,25 @@
     }
 
     /* Categories Tabs */
-    .categories {
-      display: flex;
-      gap: 8px;
+    .categories-scroll-wrapper {
+      width: 100%;
       overflow-x: auto;
+      overflow-y: visible;
       padding-bottom: 8px;
       scrollbar-width: none;
     }
 
-    .categories::-webkit-scrollbar {
+    .categories-scroll-wrapper::-webkit-scrollbar {
       display: none;
+    }
+
+    .categories {
+      display: flex;
+      gap: 8px;
+      padding-top: 22px;  /* space for 👑 crown above tabs */
+      padding-bottom: 4px;
+      width: max-content;
+      min-width: 100%;
     }
 
     .category-tab {
@@ -156,65 +165,63 @@
     /* ── 👑 PREMIUM PAID TAB ── */
     .category-tab.premium-tab {
       position: relative;
-      background: linear-gradient(135deg, #1a0a00, #2a1200);
-      border: 1.5px solid #f5a623;
+      background: linear-gradient(135deg, #1c0e00, #2e1500);
+      border: 2px solid #f5a623;
       color: #ffd166;
       font-weight: 800;
-      letter-spacing: 0.3px;
-      overflow: visible;
-      padding-top: 16px; /* make room for crown */
-      isolation: isolate;
+      letter-spacing: 0.4px;
+      /* Pulsing neon glow — follows pill shape perfectly, no oval issue */
+      animation: neon-glow-pulse 2s ease-in-out infinite;
     }
 
-    /* Crown emoji floating above */
+    @keyframes neon-glow-pulse {
+      0%, 100% {
+        box-shadow:
+          0 0 4px  rgba(255, 200, 50, 0.6),
+          0 0 10px rgba(255, 160, 0,  0.4),
+          0 0 18px rgba(255, 100, 0,  0.2);
+        border-color: #f5a623;
+      }
+      50% {
+        box-shadow:
+          0 0 8px  rgba(255, 230, 80,  1.0),
+          0 0 20px rgba(255, 180, 20,  0.85),
+          0 0 38px rgba(255, 130, 0,   0.55);
+        border-color: #ffe066;
+      }
+    }
+
+    /* 👑 Crown — fully visible above the tab */
     .category-tab.premium-tab::before {
       content: '\1F451';
       position: absolute;
-      top: -14px;
+      top: -20px;         /* fully above the button */
       left: 50%;
       transform: translateX(-50%);
-      font-size: 1rem;
-      filter: drop-shadow(0 0 6px rgba(255, 200, 50, 0.9));
+      font-size: 1.05rem;
+      line-height: 1;
+      filter: drop-shadow(0 0 7px rgba(255, 210, 50, 1)) drop-shadow(0 0 14px rgba(255, 150, 0, 0.7));
       animation: crown-bounce 1.8s ease-in-out infinite;
-      z-index: 2;
+      z-index: 10;
+      pointer-events: none;
+      user-select: none;
     }
 
     @keyframes crown-bounce {
-      0%, 100% { transform: translateX(-50%) translateY(0); }
-      50%       { transform: translateX(-50%) translateY(-4px); }
-    }
-
-    /* Rotating circular glow ring */
-    .category-tab.premium-tab::after {
-      content: '';
-      position: absolute;
-      inset: -3px;
-      border-radius: 999px;
-      background: conic-gradient(
-        from 0deg,
-        transparent 0%,
-        rgba(255, 200, 50, 0.9) 25%,
-        rgba(255, 140, 0, 0.6) 50%,
-        transparent 60%
-      );
-      animation: ring-spin 2s linear infinite;
-      z-index: -1;
-      mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 2px));
-      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #fff calc(100% - 2px));
-    }
-
-    @keyframes ring-spin {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
+      0%, 100% { transform: translateX(-50%) translateY(0px);  }
+      50%       { transform: translateX(-50%) translateY(-5px); }
     }
 
     .category-tab.premium-tab:hover,
     .category-tab.premium-tab.active {
-      background: linear-gradient(135deg, #2a1400, #4a2000);
-      border-color: #ffd166;
+      background: linear-gradient(135deg, #2e1600, #4a2200);
+      border-color: #ffe066;
       color: #fff;
-      box-shadow: 0 0 20px rgba(255, 180, 30, 0.55), 0 4px 16px rgba(255, 120, 0, 0.4);
-      transform: scale(1.04);
+      transform: scale(1.05);
+      box-shadow:
+        0 0 10px rgba(255, 230, 80,  1.0),
+        0 0 26px rgba(255, 180, 30,  0.9),
+        0 0 48px rgba(255, 120, 0,   0.6);
     }
 
     /* ── Premium Movie Card ── */
@@ -436,8 +443,10 @@
     </div>
 
     <!-- Category Tabs -->
-    <div class="categories" id="categoriesContainer">
-      <div class="category-tab active" data-category="All">All Tags</div>
+    <div class="categories-scroll-wrapper">
+      <div class="categories" id="categoriesContainer">
+        <div class="category-tab active" data-category="All">All Tags</div>
+      </div>
     </div>
 
     <!-- Loader -->
@@ -501,16 +510,19 @@
 
         // Render Categories if they've changed / initialized
         if (data.categories && data.categories.length > 0 && categoriesContainer.children.length === 1) {
-          data.categories.forEach(cat => {
-            if (cat !== 'All') {
-              const tab = document.createElement('div');
-              // Detect if this is a paid/premium category tab
-              const isPaidCat = cat.toLowerCase().includes('paid') || cat.toLowerCase().includes('premium');
-              tab.className = 'category-tab' + (isPaidCat ? ' premium-tab' : '');
-              tab.setAttribute('data-category', cat);
-              tab.innerText = cat;
-              categoriesContainer.appendChild(tab);
-            }
+          // Sort: Paid/Premium tabs come IMMEDIATELY after "All Tags"
+          const nonAll = data.categories.filter(c => c !== 'All');
+          const paidCats  = nonAll.filter(c => c.toLowerCase().includes('paid') || c.toLowerCase().includes('premium'));
+          const otherCats = nonAll.filter(c => !c.toLowerCase().includes('paid') && !c.toLowerCase().includes('premium'));
+          const orderedCats = [...paidCats, ...otherCats]; // Paid first → then rest
+
+          orderedCats.forEach(cat => {
+            const tab = document.createElement('div');
+            const isPaidCat = paidCats.includes(cat);
+            tab.className = 'category-tab' + (isPaidCat ? ' premium-tab' : '');
+            tab.setAttribute('data-category', cat);
+            tab.innerText = cat;
+            categoriesContainer.appendChild(tab);
           });
           setupCategoryListeners();
         }
