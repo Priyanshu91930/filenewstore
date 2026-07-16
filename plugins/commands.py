@@ -518,9 +518,14 @@ async def start(client, message):
                         cooldown = get_tma_cooldown_remaining(message.from_user.id)
                         if cooldown > 0:
                             mins, secs = divmod(cooldown, 60)
+                            btn = []
+                            plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                            if plan_cfg:
+                                btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                             await message.reply_text(
                                 text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
-                                protect_content=True
+                                protect_content=True,
+                                reply_markup=InlineKeyboardMarkup(btn) if btn else None
                             )
                             return
                         if not await check_tma_verification(message.from_user.id):
@@ -700,9 +705,14 @@ async def start(client, message):
                 cooldown = get_tma_cooldown_remaining(message.from_user.id)
                 if cooldown > 0:
                     mins, secs = divmod(cooldown, 60)
+                    btn = []
+                    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                    if plan_cfg:
+                        btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                     return await message.reply_text(
                         text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
-                        protect_content=True
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn) if btn else None
                     )
                 if not await check_tma_verification(message.from_user.id):
                     tma_app_url = f"{URL.rstrip('/')}/tma"

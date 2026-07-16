@@ -592,9 +592,11 @@ async def start(client, message):
                     cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
                     if cooldown > 0:
                         mins, secs = divmod(cooldown, 60)
+                        btn = [[InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]]
                         return await message.reply_text(
                             text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
-                            protect_content=True
+                            protect_content=True,
+                            reply_markup=InlineKeyboardMarkup(btn)
                         )
                     is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
                     if not is_verified and not is_unlocked:
@@ -622,9 +624,13 @@ async def start(client, message):
                 cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
                 if cooldown > 0:
                     mins, secs = divmod(cooldown, 60)
+                    btn = []
+                    if plan_cfg and plan_enabled:
+                        btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                     return await message.reply_text(
                         text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
-                        protect_content=True
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn) if btn else None
                     )
                 is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
                 if not is_verified and not is_unlocked:
@@ -806,9 +812,11 @@ async def start(client, message):
             cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
             if cooldown > 0:
                 mins, secs = divmod(cooldown, 60)
+                btn = [[InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]]
                 return await message.reply_text(
                     text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
-                    protect_content=True
+                    protect_content=True,
+                    reply_markup=InlineKeyboardMarkup(btn)
                 )
             bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
             is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
@@ -835,9 +843,13 @@ async def start(client, message):
         cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
         if cooldown > 0:
             mins, secs = divmod(cooldown, 60)
+            btn = []
+            if plan_cfg and plan_enabled:
+                btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
             return await message.reply_text(
                 text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
-                protect_content=True
+                protect_content=True,
+                reply_markup=InlineKeyboardMarkup(btn) if btn else None
             )
         bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
         is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
