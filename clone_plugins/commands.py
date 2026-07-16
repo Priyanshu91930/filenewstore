@@ -459,7 +459,6 @@ async def start(client, message):
                     data = file_data
                     await verify_tma_user(message.from_user.id, token, bot_id=me.id)
                     # Schedule reminder after 1 hour (3600 seconds)
-                    import asyncio
                     asyncio.create_task(schedule_tma_renewal_msg(client, message.from_user.id, bot_id=me.id, delay=3600))
                     await message.reply_text(
                         text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
@@ -521,7 +520,6 @@ async def start(client, message):
             if ok:
                 await consume_token(tma_token)
                 # Schedule reminder after 1 hour (3600 seconds)
-                import asyncio
                 asyncio.create_task(schedule_tma_renewal_msg(client, tma_uid, bot_id=me.id, delay=3600))
                 await message.reply_text(
                     text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
