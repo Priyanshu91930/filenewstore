@@ -133,8 +133,8 @@ async def start():
             asyncio.create_task(ping_server())
 
         tz = pytz.timezone('Asia/Kolkata')
-        today = date.today()
         now = datetime.now(tz)
+        today = now.date()
         time_str = now.strftime("%H:%M:%S %p")
 
         logger.info(f"Setting up web server on port {PORT}...")

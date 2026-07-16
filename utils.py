@@ -130,13 +130,13 @@ async def verify_user(bot, userid, token):
     user = await bot.get_users(userid)
     TOKENS[user.id] = {token: True}
     tz = pytz.timezone('Asia/Kolkata')
-    today = date.today()
+    today = datetime.now(tz).date()
     VERIFIED[user.id] = str(today)
 
 async def check_verification(bot, userid):
     user = await bot.get_users(userid)
     tz = pytz.timezone('Asia/Kolkata')
-    today = date.today()
+    today = datetime.now(tz).date()
     if user.id in VERIFIED.keys():
         EXP = VERIFIED[user.id]
         years, month, day = EXP.split('-')
@@ -187,7 +187,7 @@ async def is_subscribed_universal(bot, message):
 
 # ─── Telegram Mini App (Monetag) Verification Helpers ───────────────────────
 
-TMA_VERIFIED = MongoDict("tma_verifications")  # {user_id: unix_timestamp of verification}
+TMA_VERIFIED = MongoDict("tma_verifications")  # {user_id: unix_timestamp or dict}
 
 # Global TMA timeout in seconds. Can be overridden per-bot via token_timeout in DB.
 # Default: 10800 = 3 hours. Change this to adjust the global default.
@@ -238,7 +238,7 @@ async def get_tma_link(bot, user_id: int, app_url: str, file_data: str = "", bot
     return url
 
 async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: int = None) -> bool:
-    """Validate the token and mark the user as TMA-verified with 5 free links or time validity."""
+    """Validate the token and mark the user as TMA-verified with 3 free links or time validity."""
     if not validate_tma_token(user_id, token, max_age_sec=timeout or TMA_TIMEOUT):
         return False
     
@@ -254,7 +254,11 @@ async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: in
             pass
             
     if tma_type == "links":
-        TMA_VERIFIED[key] = 5
+        # 3 free links valid for exactly 1 hour
+        TMA_VERIFIED[key] = {
+            "links": 3,
+            "verified_at": int(time.time())
+        }
     else:
         TMA_VERIFIED[key] = int(time.time())
 
@@ -298,22 +302,46 @@ async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = N
     key = f"{bot_id}_{user_id}" if bot_id else user_id
     if key in TMA_VERIFIED:
         try:
-            val = int(TMA_VERIFIED[key])
+            val = TMA_VERIFIED[key]
+            
+            # Normalize old formats to new dictionary schema
+            if not isinstance(val, dict):
+                if isinstance(val, (int, float)) and val > 1000000000:
+                    if tma_type == "links":
+                        val = {"links": 3, "verified_at": int(val)}
+                    else:
+                        pass
+                else:
+                    val = {"links": int(val), "verified_at": int(time.time())}
+                TMA_VERIFIED[key] = val
+
             if tma_type == "links":
-                if val > 1000000000:
-                    TMA_VERIFIED[key] = 5
-                    val = 5
-                if val > 0:
+                verified_at = val.get("verified_at", 0)
+                elapsed = time.time() - verified_at
+                # 1 hour expiration limit
+                if elapsed > 3600:
+                    TMA_VERIFIED.pop(key, None)
+                    return False
+                links = val.get("links", 0)
+                if links > 0:
                     return True
             else:
-                if val <= 10000:
-                    TMA_VERIFIED[key] = int(time.time())
-                    val = int(time.time())
-                elapsed = time.time() - val
+                if isinstance(val, dict):
+                    ts = val.get("verified_at", 0)
+                else:
+                    ts = int(val)
+                if ts <= 10000:
+                    ts = int(time.time())
+                    if isinstance(val, dict):
+                        val["verified_at"] = ts
+                        TMA_VERIFIED[key] = val
+                    else:
+                        TMA_VERIFIED[key] = ts
+                elapsed = time.time() - ts
                 if elapsed < bot_tma_timeout:
                     return True
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error checking TMA verification: {e}")
     return False
 
 async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
@@ -328,20 +356,77 @@ async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
             pass
 
     if tma_type != "links":
-        return 5
+        return 3
 
     key = f"{bot_id}_{user_id}" if bot_id else user_id
     if key in TMA_VERIFIED:
         try:
-            val = int(TMA_VERIFIED[key])
-            if val > 1000000000:
-                val = 5
-        except:
-            val = 0
-        new_val = max(0, val - 1)
-        TMA_VERIFIED[key] = new_val
-        return new_val
+            val = TMA_VERIFIED[key]
+            if not isinstance(val, dict):
+                if isinstance(val, (int, float)) and val > 1000000000:
+                    val = {"links": 3, "verified_at": int(val)}
+                else:
+                    val = {"links": int(val), "verified_at": int(time.time())}
+            
+            links = val.get("links", 0)
+            new_val = max(0, links - 1)
+            val["links"] = new_val
+            TMA_VERIFIED[key] = val
+            return new_val
+        except Exception as e:
+            logger.error(f"Error in consume_tma_link: {e}")
     return 0
+
+def get_tma_cooldown_remaining(user_id: int, bot_id: int = None) -> int:
+    """Returns remaining cooldown seconds if user has 0 links left but 1 hour has not passed. Returns 0 otherwise."""
+    key = f"{bot_id}_{user_id}" if bot_id else user_id
+    if key in TMA_VERIFIED:
+        try:
+            val = TMA_VERIFIED[key]
+            if isinstance(val, dict):
+                links = val.get("links", 0)
+                verified_at = val.get("verified_at", 0)
+                elapsed = time.time() - verified_at
+                if links <= 0 and elapsed <= 3600:
+                    return max(0, int(3600 - elapsed))
+        except:
+            pass
+    return 0
+
+async def schedule_tma_renewal_msg(client, chat_id: int, bot_id: int = None, delay: int = 3600):
+    """Wait for the 1-hour validity window to finish, then proactively prompt the user to renew."""
+    await asyncio.sleep(delay)
+    try:
+        from utils import check_tma_verification, is_vip, get_tma_link
+        from config import URL
+        import script
+        
+        me = client.me or await client.get_me()
+        user_is_vip = await is_vip(me.id, chat_id)
+        if user_is_vip:
+            return
+            
+        # If they haven't verified again (i.e. check_tma_verification returns False)
+        if not await check_tma_verification(chat_id, bot_id=me.id):
+            tma_app_url = f"{URL.rstrip('/')}/tma"
+            tma_link = await get_tma_link(client, chat_id, tma_app_url, bot_username=me.username)
+            btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=types.WebAppInfo(url=tma_link))]]
+            try:
+                from plugins.clone import clone_mongo_db
+                plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                if plan_cfg:
+                    btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+            except:
+                pass
+                
+            await client.send_message(
+                chat_id=chat_id,
+                text="<b>⏰ Your 1-hour validity has completed!</b>\n\nPlease watch a short ad again to unlock 3 more links.",
+                reply_markup=InlineKeyboardMarkup(btn),
+                protect_content=True
+            )
+    except Exception as e:
+        logger.error(f"Error in scheduled TMA renewal message: {e}")
 
 # ─── One-time Token Consumption Helper ────────────────────────────────────
 async def is_token_consumed(token: str) -> bool:
@@ -402,7 +487,19 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
             from config import SHORTLINK_API, SHORTLINK_URL
             primary_api_key = SHORTLINK_API
             primary_shortener_url = SHORTLINK_URL
-        bot_id = None
+            # Try to load secondary shortener settings for main bot
+            try:
+                from config import SECONDARY_SHORTLINK_API, SECONDARY_SHORTLINK_URL
+                secondary_api_key = SECONDARY_SHORTLINK_API
+                secondary_shortener_url = SECONDARY_SHORTLINK_URL or primary_shortener_url
+            except ImportError:
+                secondary_api_key = None
+                secondary_shortener_url = primary_shortener_url
+            
+            # Use pseudo bot_id for tracking main bot verifications count
+            bot_id = 999999999
+        else:
+            bot_id = None
 
     # Determine which API to use based on user's verification count
     # Odd count → primary API, Even count → secondary API (alternating to avoid bot detection)

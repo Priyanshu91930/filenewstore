@@ -14,7 +14,7 @@ from pyrogram import Client, filters, enums
 from plugins.users_api import get_user, update_user_info
 from pyrogram.errors import ChatAdminRequired, FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, CallbackQuery, Message, WebAppInfo
-from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification, is_vip, TMA_TIMEOUT, is_token_consumed, consume_token, validate_tma_token, consume_tma_link
+from utils import verify_user, check_token, check_verification, get_token, is_subscribed, is_subscribed_universal, get_tma_link, verify_tma_user, check_tma_verification, is_vip, TMA_TIMEOUT, is_token_consumed, consume_token, validate_tma_token, consume_tma_link, get_tma_cooldown_remaining, schedule_tma_renewal_msg
 from config import *
 from config import TMA_MODE, MONETAG_ZONE_ID, URL
 import config
@@ -295,11 +295,13 @@ async def start(client, message):
                         await consume_token(token)
                         is_unlocked = True
                         data = file_data
-                        # Mark verified for 3 hours in database/memory
+                        # Mark verified in database/memory
                         await verify_tma_user(message.from_user.id, token)
+                        # Schedule reminder after 1 hour (3600 seconds)
+                        asyncio.create_task(schedule_tma_renewal_msg(client, message.from_user.id, delay=3600))
                         # Notify user of successful verification
                         await message.reply_text(
-                            text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
+                            text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
                             protect_content=True
                         )
                     else:
@@ -493,8 +495,10 @@ async def start(client, message):
                 ok = await verify_tma_user(tma_uid, tma_token)
                 if ok:
                     await consume_token(tma_token)
+                    # Schedule reminder after 1 hour (3600 seconds)
+                    asyncio.create_task(schedule_tma_renewal_msg(client, tma_uid, delay=3600))
                     await message.reply_text(
-                        text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
+                        text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
                         protect_content=True
                     )
                 else:
@@ -510,20 +514,29 @@ async def start(client, message):
                 user_is_vip = await is_vip(me.id, message.from_user.id)
                 if not user_is_vip:
                     # TMA Mode: use Monetag Mini App for verification
-                    if config.TMA_MODE and not is_unlocked and not await check_tma_verification(message.from_user.id):
-                        tma_app_url = f"{URL.rstrip('/')}/tma"
-                        # Pass the raw /start data so the Mini App knows which file to deliver
-                        tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
-                        btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-                        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
-                        if plan_cfg:
-                            btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-                        await message.reply_text(
-                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
-                            protect_content=True,
-                            reply_markup=InlineKeyboardMarkup(btn)
-                        )
-                        return
+                    if config.TMA_MODE and not is_unlocked:
+                        cooldown = get_tma_cooldown_remaining(message.from_user.id)
+                        if cooldown > 0:
+                            mins, secs = divmod(cooldown, 60)
+                            await message.reply_text(
+                                text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                                protect_content=True
+                            )
+                            return
+                        if not await check_tma_verification(message.from_user.id):
+                            tma_app_url = f"{URL.rstrip('/')}/tma"
+                            # Pass the raw /start data so the Mini App knows which file to deliver
+                            tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
+                            btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                            plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                            if plan_cfg:
+                                btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+                            await message.reply_text(
+                                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                                protect_content=True,
+                                reply_markup=InlineKeyboardMarkup(btn)
+                            )
+                            return
                     elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
                         btn = [[
                             InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
@@ -683,20 +696,28 @@ async def start(client, message):
         user_is_vip = await is_vip(me.id, message.from_user.id)
         if not user_is_vip:
             # TMA Mode: use Monetag Mini App for verification
-            if config.TMA_MODE and not is_unlocked and not await check_tma_verification(message.from_user.id):
-                tma_app_url = f"{URL.rstrip('/')}/tma"
-                # Pass the raw /start data so the Mini App knows which file to deliver
-                tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
-                btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-                plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
-                if plan_cfg:
-                    btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-                await message.reply_text(
-                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=TMA_TIMEOUT // 3600),
-                    protect_content=True,
-                    reply_markup=InlineKeyboardMarkup(btn)
-                )
-                return
+            if config.TMA_MODE and not is_unlocked:
+                cooldown = get_tma_cooldown_remaining(message.from_user.id)
+                if cooldown > 0:
+                    mins, secs = divmod(cooldown, 60)
+                    return await message.reply_text(
+                        text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                        protect_content=True
+                    )
+                if not await check_tma_verification(message.from_user.id):
+                    tma_app_url = f"{URL.rstrip('/')}/tma"
+                    # Pass the raw /start data so the Mini App knows which file to deliver
+                    tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
+                    btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                    if plan_cfg:
+                        btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+                    await message.reply_text(
+                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn)
+                    )
+                    return
             elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
                 btn = [[
                     InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))

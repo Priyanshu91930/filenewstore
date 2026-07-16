@@ -72,8 +72,14 @@ def mini_app():
                 from utils import TMA_VERIFIED
                 key = int(uid)
                 if key in TMA_VERIFIED:
-                    elapsed = _time.time() - TMA_VERIFIED[key]
-                    remaining_time = max(0, int(TMA_TIMEOUT - elapsed))
+                    val = TMA_VERIFIED[key]
+                    if isinstance(val, dict):
+                        verified_at = val.get("verified_at", 0)
+                        elapsed = _time.time() - verified_at
+                        remaining_time = max(0, int(3600 - elapsed))
+                    else:
+                        elapsed = _time.time() - val
+                        remaining_time = max(0, int(TMA_TIMEOUT - elapsed))
         except Exception as e:
             print(f"Error checking TMA verification: {e}")
 

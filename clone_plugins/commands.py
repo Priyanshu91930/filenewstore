@@ -15,7 +15,7 @@ from pyrogram import Client, filters, enums
 from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait, UserNotParticipant
 from config import BOT_USERNAME, ADMINS, LOG_CHANNEL, PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL
-from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT, MongoDict, consume_tma_link
+from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT, MongoDict, consume_tma_link, get_tma_cooldown_remaining, schedule_tma_renewal_msg
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto, WebAppInfo
 import re
 import json
@@ -458,8 +458,11 @@ async def start(client, message):
                     is_unlocked = True
                     data = file_data
                     await verify_tma_user(message.from_user.id, token, bot_id=me.id)
+                    # Schedule reminder after 1 hour (3600 seconds)
+                    import asyncio
+                    asyncio.create_task(schedule_tma_renewal_msg(client, message.from_user.id, bot_id=me.id, delay=3600))
                     await message.reply_text(
-                        text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=(bot_doc.get('token_timeout', TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT) // 3600),
+                        text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
                         protect_content=True
                     )
                 else:
@@ -517,8 +520,11 @@ async def start(client, message):
             ok = await verify_tma_user(tma_uid, tma_token, bot_id=me.id)
             if ok:
                 await consume_token(tma_token)
+                # Schedule reminder after 1 hour (3600 seconds)
+                import asyncio
+                asyncio.create_task(schedule_tma_renewal_msg(client, tma_uid, bot_id=me.id, delay=3600))
                 await message.reply_text(
-                    text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention, hours=(bot_doc.get('token_timeout', TMA_TIMEOUT) if bot_doc else TMA_TIMEOUT) // 3600),
+                    text=script.TMA_VERIFIED_TEXT.format(message.from_user.mention),
                     protect_content=True
                 )
             else:
@@ -585,6 +591,13 @@ async def start(client, message):
             
             if plan_cfg and plan_enabled and not user_is_vip:
                 if tma_mode:
+                    cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
+                    if cooldown > 0:
+                        mins, secs = divmod(cooldown, 60)
+                        return await message.reply_text(
+                            text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                            protect_content=True
+                        )
                     is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
                     if not is_verified and not is_unlocked:
                         tma_app_url = f"{URL.rstrip('/')}/tma"
@@ -594,7 +607,7 @@ async def start(client, message):
                             [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
                         ]
                         return await message.reply_text(
-                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_doc.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_doc else TMA_TIMEOUT // 3600),
+                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
                             protect_content=True,
                             reply_markup=InlineKeyboardMarkup(btn)
                         )
@@ -608,13 +621,20 @@ async def start(client, message):
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
             elif tma_mode and not user_is_vip:
+                cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
+                if cooldown > 0:
+                    mins, secs = divmod(cooldown, 60)
+                    return await message.reply_text(
+                        text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                        protect_content=True
+                    )
                 is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
                 if not is_verified and not is_unlocked:
                     tma_app_url = f"{URL.rstrip('/')}/tma"
                     tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
                     btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
                     return await message.reply_text(
-                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_doc.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_doc else TMA_TIMEOUT // 3600),
+                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
                         protect_content=True,
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
@@ -785,6 +805,13 @@ async def start(client, message):
     
     if plan_cfg and plan_enabled and not user_is_vip:
         if tma_mode:
+            cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
+            if cooldown > 0:
+                mins, secs = divmod(cooldown, 60)
+                return await message.reply_text(
+                    text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                    protect_content=True
+                )
             bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
             is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
             if not is_verified and not is_unlocked:
@@ -795,7 +822,7 @@ async def start(client, message):
                     [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
                 ]
                 return await message.reply_text(
-                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_owner.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_owner else TMA_TIMEOUT // 3600),
+                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
                     protect_content=True,
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
@@ -807,6 +834,13 @@ async def start(client, message):
                 reply_markup=InlineKeyboardMarkup(btn)
             )
     elif tma_mode and not user_is_vip:
+        cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
+        if cooldown > 0:
+            mins, secs = divmod(cooldown, 60)
+            return await message.reply_text(
+                text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                protect_content=True
+            )
         bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
         is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
         if not is_verified and not is_unlocked:
@@ -814,7 +848,7 @@ async def start(client, message):
             tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
             btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
             return await message.reply_text(
-                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention, hours=bot_owner.get('token_timeout', TMA_TIMEOUT) // 3600 if bot_owner else TMA_TIMEOUT // 3600),
+                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
                 protect_content=True,
                 reply_markup=InlineKeyboardMarkup(btn)
             )
