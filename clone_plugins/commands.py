@@ -1302,11 +1302,18 @@ async def validity_command(client, message):
         if key_str.startswith(f"{me.id}_"):
             uid = key_str.split("_")[-1]
             try:
-                links_left = int(val)
-                # Filter out old unix timestamps
-                if links_left > 1000000000:
-                    TMA_VERIFIED.pop(key, None)
-                    continue
+                if isinstance(val, dict):
+                    verified_at = val.get("verified_at", 0)
+                    elapsed = time.time() - verified_at
+                    if elapsed > 3600:
+                        TMA_VERIFIED.pop(key, None)
+                        continue
+                    links_left = int(val.get("links", 0))
+                else:
+                    links_left = int(val)
+                    if links_left > 1000000000:
+                        TMA_VERIFIED.pop(key, None)
+                        continue
                 if links_left > 0:
                     tma_count += 1
                     tma_text += f"• <code>{uid}</code> ({links_left} free links left)\n"

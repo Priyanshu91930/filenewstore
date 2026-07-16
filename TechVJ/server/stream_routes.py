@@ -101,8 +101,14 @@ async def tma_route_handler(request: web.Request):
             is_verified = await check_tma_verification(int(uid), bot_id=bot_id)
             key = f"{bot_id}_{uid}" if (bot_id and f"{bot_id}_{uid}" in TMA_VERIFIED) else int(uid)
             if is_verified and key in TMA_VERIFIED:
-                elapsed = time.time() - TMA_VERIFIED[key]
-                remaining_time = max(0, int(TMA_TIMEOUT - elapsed))
+                val = TMA_VERIFIED[key]
+                if isinstance(val, dict):
+                    verified_at = val.get("verified_at", 0)
+                    elapsed = time.time() - verified_at
+                    remaining_time = max(0, int(3600 - elapsed))
+                else:
+                    elapsed = time.time() - val
+                    remaining_time = max(0, int(TMA_TIMEOUT - elapsed))
         except Exception as e:
             logging.error(f"Error checking verification: {e}")
     
