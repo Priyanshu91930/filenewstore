@@ -918,10 +918,8 @@ async def tma_validity_command(client, message):
             else:
                 label = "(In Cooldown, Remaining: "
         else:
-            verified_at = val
-            elapsed = current_time - verified_at
-            timeout = TMA_TIMEOUT
-            label = "(Remaining: "
+            TMA_VERIFIED.pop(uid, None)
+            continue
 
         if elapsed < timeout:
             tma_count += 1

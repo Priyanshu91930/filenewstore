@@ -1321,15 +1321,8 @@ async def validity_command(client, message):
                         mins = remaining // 60
                         tma_text += f"• <code>{uid}</code> (In Cooldown: {mins}m remaining)\n"
                 else:
-                    links_left = int(val)
-                    if links_left > 1000000000:
-                        TMA_VERIFIED.pop(key, None)
-                        continue
-                    if links_left > 0:
-                        tma_count += 1
-                        tma_text += f"• <code>{uid}</code> ({links_left} free links left)\n"
-                    else:
-                        TMA_VERIFIED.pop(key, None)
+                    # Pop legacy formats immediately
+                    TMA_VERIFIED.pop(key, None)
             except Exception as e:
                 logger.error(f"Error parsing validity key {key}: {e}")
                 TMA_VERIFIED.pop(key, None)

@@ -304,16 +304,10 @@ async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = N
         try:
             val = TMA_VERIFIED[key]
             
-            # Normalize old formats to new dictionary schema
+            # Discard legacy non-dictionary formats
             if not isinstance(val, dict):
-                if isinstance(val, (int, float)) and val > 1000000000:
-                    if tma_type == "links":
-                        val = {"links": 3, "verified_at": int(val)}
-                    else:
-                        pass
-                else:
-                    val = {"links": int(val), "verified_at": int(time.time())}
-                TMA_VERIFIED[key] = val
+                TMA_VERIFIED.pop(key, None)
+                return False
 
             if tma_type == "links":
                 verified_at = val.get("verified_at", 0)
@@ -326,17 +320,11 @@ async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = N
                 if links > 0:
                     return True
             else:
-                if isinstance(val, dict):
-                    ts = val.get("verified_at", 0)
-                else:
-                    ts = int(val)
+                ts = val.get("verified_at", 0)
                 if ts <= 10000:
                     ts = int(time.time())
-                    if isinstance(val, dict):
-                        val["verified_at"] = ts
-                        TMA_VERIFIED[key] = val
-                    else:
-                        TMA_VERIFIED[key] = ts
+                    val["verified_at"] = ts
+                    TMA_VERIFIED[key] = val
                 elapsed = time.time() - ts
                 if elapsed < bot_tma_timeout:
                     return True
@@ -363,10 +351,8 @@ async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
         try:
             val = TMA_VERIFIED[key]
             if not isinstance(val, dict):
-                if isinstance(val, (int, float)) and val > 1000000000:
-                    val = {"links": 3, "verified_at": int(val)}
-                else:
-                    val = {"links": int(val), "verified_at": int(time.time())}
+                TMA_VERIFIED.pop(key, None)
+                return 0
             
             links = val.get("links", 0)
             new_val = max(0, links - 1)
