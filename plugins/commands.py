@@ -903,12 +903,20 @@ async def tma_validity_command(client, message):
     tma_text = f"<b>⚡ TMA Verifications ({tma_hours}-Hour Validity):</b>\n"
     current_time = time.time()
     for uid, val in list(TMA_VERIFIED.items()):
+        uid_str = str(uid)
+        # Skip clone bot records (keys starting with bot_id_ or containing "_")
+        if "_" in uid_str:
+            continue
+            
         if isinstance(val, dict):
             verified_at = val.get("verified_at", 0)
             elapsed = current_time - verified_at
             timeout = 3600
             links = val.get("links", 0)
-            label = f"({links} links, Remaining: "
+            if links > 0:
+                label = f"({links} links left, Remaining: "
+            else:
+                label = "(In Cooldown, Remaining: "
         else:
             verified_at = val
             elapsed = current_time - verified_at
