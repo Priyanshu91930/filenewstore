@@ -520,15 +520,25 @@ async def start(client, message):
                 if not user_is_vip:
                     # TMA Mode: use Monetag Mini App for verification
                     if config.TMA_MODE and not is_unlocked:
-                        cooldown = get_tma_cooldown_remaining(message.from_user.id)
-                        if cooldown > 0:
-                            mins, secs = divmod(cooldown, 60)
+                        ads_today = 0
+                        try:
+                            import pytz
+                            from datetime import datetime
+                            tz = pytz.timezone('Asia/Kolkata')
+                            today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                            doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                            if doc:
+                                ads_today = doc.get("ads_watched", 0)
+                        except Exception as e:
+                            logger.error(f"Error checking daily ads: {e}")
+
+                        if ads_today >= 3:
                             btn = []
                             plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
                             if plan_cfg:
                                 btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                             await message.reply_text(
-                                text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                                text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
                                 protect_content=True,
                                 reply_markup=InlineKeyboardMarkup(btn) if btn else None
                             )
@@ -707,15 +717,25 @@ async def start(client, message):
         if not user_is_vip:
             # TMA Mode: use Monetag Mini App for verification
             if config.TMA_MODE and not is_unlocked:
-                cooldown = get_tma_cooldown_remaining(message.from_user.id)
-                if cooldown > 0:
-                    mins, secs = divmod(cooldown, 60)
+                ads_today = 0
+                try:
+                    import pytz
+                    from datetime import datetime
+                    tz = pytz.timezone('Asia/Kolkata')
+                    today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                    doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                    if doc:
+                        ads_today = doc.get("ads_watched", 0)
+                except Exception as e:
+                    logger.error(f"Error checking daily ads: {e}")
+
+                if ads_today >= 3:
                     btn = []
                     plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
                     if plan_cfg:
                         btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                     return await message.reply_text(
-                        text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                        text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
                         protect_content=True,
                         reply_markup=InlineKeyboardMarkup(btn) if btn else None
                     )

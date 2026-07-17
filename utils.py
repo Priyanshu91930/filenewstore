@@ -254,9 +254,9 @@ async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: in
             pass
             
     if tma_type == "links":
-        # 3 free links valid for exactly 1 hour
+        # 1 free link per ad view (valid until consumed, no 1-hour rolling expiration)
         TMA_VERIFIED[key] = {
-            "links": 3,
+            "links": 1,
             "verified_at": int(time.time())
         }
     else:
@@ -310,12 +310,7 @@ async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = N
                 return False
 
             if tma_type == "links":
-                verified_at = val.get("verified_at", 0)
-                elapsed = time.time() - verified_at
-                # 1 hour expiration limit
-                if elapsed > 3600:
-                    TMA_VERIFIED.pop(key, None)
-                    return False
+                # Removed 1-hour rolling expiration check (limit is daily instead)
                 links = val.get("links", 0)
                 if links > 0:
                     return True
@@ -364,19 +359,7 @@ async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
     return 0
 
 def get_tma_cooldown_remaining(user_id: int, bot_id: int = None) -> int:
-    """Returns remaining cooldown seconds if user has 0 links left but 1 hour has not passed. Returns 0 otherwise."""
-    key = f"{bot_id}_{user_id}" if bot_id else user_id
-    if key in TMA_VERIFIED:
-        try:
-            val = TMA_VERIFIED[key]
-            if isinstance(val, dict):
-                links = val.get("links", 0)
-                verified_at = val.get("verified_at", 0)
-                elapsed = time.time() - verified_at
-                if links <= 0 and elapsed <= 3600:
-                    return max(0, int(3600 - elapsed))
-        except:
-            pass
+    """Disabled 1-hour cooldown. Returns 0 always since limit is daily."""
     return 0
 
 async def schedule_tma_renewal_msg(client, chat_id: int, bot_id: int = None, delay: int = 3600):

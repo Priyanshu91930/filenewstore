@@ -589,12 +589,22 @@ async def start(client, message):
             
             if plan_cfg and plan_enabled and not user_is_vip:
                 if tma_mode:
-                    cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
-                    if cooldown > 0:
-                        mins, secs = divmod(cooldown, 60)
+                    ads_today = 0
+                    try:
+                        import pytz
+                        from datetime import datetime
+                        tz = pytz.timezone('Asia/Kolkata')
+                        today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                        doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                        if doc:
+                            ads_today = doc.get("ads_watched", 0)
+                    except Exception as e:
+                        logger.error(f"Error checking daily ads: {e}")
+
+                    if ads_today >= 3:
                         btn = [[InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]]
                         return await message.reply_text(
-                            text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                            text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
                             protect_content=True,
                             reply_markup=InlineKeyboardMarkup(btn)
                         )
@@ -621,14 +631,24 @@ async def start(client, message):
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
             elif tma_mode and not user_is_vip:
-                cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
-                if cooldown > 0:
-                    mins, secs = divmod(cooldown, 60)
+                ads_today = 0
+                try:
+                    import pytz
+                    from datetime import datetime
+                    tz = pytz.timezone('Asia/Kolkata')
+                    today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                    doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                    if doc:
+                        ads_today = doc.get("ads_watched", 0)
+                except Exception as e:
+                    logger.error(f"Error checking daily ads: {e}")
+
+                if ads_today >= 3:
                     btn = []
                     if plan_cfg and plan_enabled:
                         btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                     return await message.reply_text(
-                        text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                        text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
                         protect_content=True,
                         reply_markup=InlineKeyboardMarkup(btn) if btn else None
                     )
@@ -809,12 +829,22 @@ async def start(client, message):
     
     if plan_cfg and plan_enabled and not user_is_vip:
         if tma_mode:
-            cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
-            if cooldown > 0:
-                mins, secs = divmod(cooldown, 60)
+            ads_today = 0
+            try:
+                import pytz
+                from datetime import datetime
+                tz = pytz.timezone('Asia/Kolkata')
+                today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                if doc:
+                    ads_today = doc.get("ads_watched", 0)
+            except Exception as e:
+                logger.error(f"Error checking daily ads: {e}")
+
+            if ads_today >= 3:
                 btn = [[InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]]
                 return await message.reply_text(
-                    text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                    text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
                     protect_content=True,
                     reply_markup=InlineKeyboardMarkup(btn)
                 )
@@ -840,14 +870,24 @@ async def start(client, message):
                 reply_markup=InlineKeyboardMarkup(btn)
             )
     elif tma_mode and not user_is_vip:
-        cooldown = get_tma_cooldown_remaining(message.from_user.id, bot_id=me.id)
-        if cooldown > 0:
-            mins, secs = divmod(cooldown, 60)
+        ads_today = 0
+        try:
+            import pytz
+            from datetime import datetime
+            tz = pytz.timezone('Asia/Kolkata')
+            today_str = datetime.now(tz).strftime('%Y-%m-%d')
+            doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+            if doc:
+                ads_today = doc.get("ads_watched", 0)
+        except Exception as e:
+            logger.error(f"Error checking daily ads: {e}")
+
+        if ads_today >= 3:
             btn = []
             if plan_cfg and plan_enabled:
                 btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
             return await message.reply_text(
-                text=f"<b>⚠️ Limit Reached!</b>\n\nYou have already used your 3 free links.\n\nPlease wait <b>{mins}m {secs}s</b> to renew your validity and watch ads again.",
+                text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
                 protect_content=True,
                 reply_markup=InlineKeyboardMarkup(btn) if btn else None
             )
@@ -1274,7 +1314,7 @@ async def validity_command(client, message):
     total_ads_today = 0
     detailed_stats_text = ""
     try:
-        cursor = mongo_db.tma_stats.find({"bot_id": me.id, "date": today_str})
+        cursor = mongo_db.tma_stats.find({"bot_id": me.id, "date": today_str}).sort("ads_watched", -1)
         async for doc in cursor:
             total_users_today += 1
             ads_watched = doc.get("ads_watched", 0)
