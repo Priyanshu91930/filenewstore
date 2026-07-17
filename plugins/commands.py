@@ -927,14 +927,18 @@ async def stats_handler(client, message):
 async def tma_validity_command(client, message):
     from utils import TMA_VERIFIED, VERIFIED, TMA_TIMEOUT
     import time
+    import pytz
+    from datetime import datetime
+    
+    me = client.me or await client.get_me()
+    tz = pytz.timezone('Asia/Kolkata')
+    today_str = datetime.now(tz).strftime('%Y-%m-%d')
     
     text = "<b>📅 <u>Active Verifications</u></b>\n\n"
     
-    # 1. TMA Verifications (dynamic validity from TMA_TIMEOUT)
+    # 1. TMA Verifications
     tma_count = 0
-    tma_hours = TMA_TIMEOUT // 3600
-    tma_text = f"<b>⚡ TMA Verifications ({tma_hours}-Hour Validity):</b>\n"
-    current_time = time.time()
+    tma_text = "<b>⚡ TMA Verifications (Active):</b>\n"
     for uid, val in list(TMA_VERIFIED.items()):
         uid_str = str(uid)
         # Skip clone bot records (keys starting with bot_id_ or containing "_")
@@ -946,8 +950,18 @@ async def tma_validity_command(client, message):
             if links <= 0:
                 TMA_VERIFIED.pop(uid, None)
                 continue
+            
+            # Fetch ads watched today
+            ads_watched = 0
+            try:
+                doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": int(uid), "date": today_str})
+                if doc:
+                    ads_watched = doc.get("ads_watched", 0)
+            except Exception as e:
+                logger.error(f"Error fetching ads count for validity command: {e}")
+                
             tma_count += 1
-            tma_text += f"• <code>{uid}</code> ({links} links left)\n"
+            tma_text += f"• <code>{uid}</code> ({links} links left, Watched: {ads_watched} ads today)\n"
         else:
             TMA_VERIFIED.pop(uid, None)
             continue

@@ -1349,8 +1349,18 @@ async def validity_command(client, message):
                     if links_left <= 0:
                         TMA_VERIFIED.pop(key, None)
                         continue
+                    
+                    # Fetch ads watched today
+                    ads_watched = 0
+                    try:
+                        doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": int(uid), "date": today_str})
+                        if doc:
+                            ads_watched = doc.get("ads_watched", 0)
+                    except Exception as e:
+                        logger.error(f"Error fetching ads count for validity: {e}")
+                        
                     tma_count += 1
-                    tma_text += f"• <code>{uid}</code> ({links_left} links left)\n"
+                    tma_text += f"• <code>{uid}</code> ({links_left} links left, Watched: {ads_watched} ads today)\n"
                 else:
                     TMA_VERIFIED.pop(key, None)
             except Exception as e:
