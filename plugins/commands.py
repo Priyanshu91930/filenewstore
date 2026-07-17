@@ -367,11 +367,15 @@ async def start(client, message):
                 status_txt = "ON 🟢" if tma_mode else "OFF 🔴"
                 tma_btn = "Disable ❌ TMA Ads" if tma_mode else "Enable ✅ TMA Ads"
                 api_key = bot.get("shortener_api") or "Not set"
+                api2_key = bot.get("secondary_shortener_api") or "Not set"
+                api2_site = bot.get("secondary_shortener_site") or "vplink.in"
                 validity = bot.get("token_timeout", 10800) // 3600
                 tutorial = bot.get("token_tutorial", "None")
                 api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
+                api2_display = f"<code>{api2_key}</code> ({api2_site})" if api2_key != "Not set" else "<i>Not set</i>"
                 buttons = [
                     [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
+                    [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}")],
                     [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
                     [InlineKeyboardButton(f"{tma_btn}", callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
@@ -381,8 +385,10 @@ async def start(client, message):
                     f"  - Status: {status_txt}\n"
                     f"  - Domain: <code>vplink.in</code>\n"
                     f"  - API Key: {api_display}\n"
+                    f"  - 2nd API Key: {api2_display}\n"
                     f"  - Tutorial: {tutorial}\n"
-                    f"  - Validity: <code>{validity} hours</code>\n"
+                    f"  - Validity: <code>{validity} hours</code>\n\n"
+                    f"<i>🔄 2nd API is used on every 2nd, 4th, 6th... verification to prevent bot traffic detection.</i>"
                 )
                 return await message.reply_text(
                     text=text,
@@ -1728,12 +1734,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
         tma_btn = "Disable ❌ TMA Ads" if tma_mode else "Enable ✅ TMA Ads"
         
         api_key = bot.get("shortener_api") or "Not set"
+        api2_key = bot.get("secondary_shortener_api") or "Not set"
+        api2_site = bot.get("secondary_shortener_site") or "vplink.in"
         validity = bot.get("token_timeout", 10800) // 3600
         tutorial = bot.get("token_tutorial", "None")
         api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
+        api2_display = f"<code>{api2_key}</code> ({api2_site})" if api2_key != "Not set" else "<i>Not set</i>"
         
         buttons = [
             [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
+            [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}")],
             [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
             [InlineKeyboardButton(tma_btn, callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear All Settings", callback_data=f"tok_clr_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
@@ -1744,8 +1754,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f"  - Status: {status_txt}\n"
             f"  - Domain: <code>vplink.in</code>\n"
             f"  - API Key: {api_display}\n"
+            f"  - 2nd API Key: {api2_display}\n"
             f"  - Tutorial: {tutorial}\n"
-            f"  - Validity: <code>{validity} hours</code>\n"
+            f"  - Validity: <code>{validity} hours</code>\n\n"
+            f"<i>🔄 2nd API is used on every 2nd, 4th, 6th... verification to prevent bot traffic detection.</i>"
         )
         
         if query.message.photo:
