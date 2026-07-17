@@ -371,7 +371,11 @@ async def start(client, message):
                 api2_site = bot.get("secondary_shortener_site") or "arolinks.com"
                 api3_key = bot.get("tertiary_shortener_api") or "Not set"
                 api3_site = bot.get("tertiary_shortener_site") or "alpha-links.in"
-                validity = bot.get("token_timeout", 10800) // 3600
+                tma_type = bot.get("tma_type", "links")
+                if tma_type == "links":
+                    validity_txt = "3 Links / Ad (Daily reset)"
+                else:
+                    validity_txt = f"{bot.get('token_timeout', 10800) // 3600} hours"
                 tutorial = bot.get("token_tutorial", "None")
                 api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
                 api2_display = f"<code>{api2_key}</code> ({api2_site.upper()})" if api2_key != "Not set" else f"<i>Not set ({api2_site.upper()})</i>"
@@ -392,7 +396,7 @@ async def start(client, message):
                     f"  - 2nd API Key: {api2_display}\n"
                     f"  - 3rd API Key: {api3_display}\n"
                     f"  - Tutorial: {tutorial}\n"
-                    f"  - Validity: <code>{validity} hours</code>\n\n"
+                    f"  - Validity: <code>{validity_txt}</code>\n\n"
                     f"<i>🔄 APIs are rotated dynamically per verification to prevent duplicate IP issues.</i>"
                 )
                 return await message.reply_text(
@@ -1763,7 +1767,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
         api2_site = bot.get("secondary_shortener_site") or "arolinks.com"
         api3_key = bot.get("tertiary_shortener_api") or "Not set"
         api3_site = bot.get("tertiary_shortener_site") or "alpha-links.in"
-        validity = bot.get("token_timeout", 10800) // 3600
+        tma_type = bot.get("tma_type", "links")
+        if tma_type == "links":
+            validity_txt = "3 Links / Ad (Daily reset)"
+        else:
+            validity_txt = f"{bot.get('token_timeout', 10800) // 3600} hours"
         tutorial = bot.get("token_tutorial", "None")
         api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
         api2_display = f"<code>{api2_key}</code> ({api2_site.upper()})" if api2_key != "Not set" else f"<i>Not set ({api2_site.upper()})</i>"
@@ -1786,7 +1794,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f"  - 2nd API Key: {api2_display}\n"
             f"  - 3rd API Key: {api3_display}\n"
             f"  - Tutorial: {tutorial}\n"
-            f"  - Validity: <code>{validity} hours</code>\n\n"
+            f"  - Validity: <code>{validity_txt}</code>\n\n"
             f"<i>🔄 APIs are rotated dynamically per verification to prevent duplicate IP issues.</i>"
         )
         
