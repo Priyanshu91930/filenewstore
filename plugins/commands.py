@@ -3037,11 +3037,13 @@ async def add_vip_handler(client, message):
         await message.reply_text(f"<b>✅ User <code>{user_id}</code> is now a VIP member ({days_label})!</b>")
         
         try:
-            expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S') if expiry else "Lifetime"
+            import pytz
+            tz = pytz.timezone('Asia/Kolkata')
+            expiry_str = datetime.fromtimestamp(expiry, tz).strftime('%Y-%m-%d %H:%M:%S') if expiry else "Lifetime"
             await client.send_message(
                 chat_id=user_id,
                 text=f"🎉 <b>Congratulations! You have been granted VIP access for {days_label}.</b>\n\n"
-                     f"➜ Expires on: <code>{expiry_str}</code>\n"
+                     f"➜ Expires on: <code>{expiry_str}</code> (IST)\n"
                      f"You now bypass all shortlink/TMA verifications on this bot! Enjoy instant downloads."
             )
         except Exception as e:
@@ -3141,15 +3143,17 @@ async def list_vip_handler(client, message):
             return await message.reply_text("<b>📭 No active VIP users found.</b>")
             
         from datetime import datetime
+        import pytz
+        tz = pytz.timezone('Asia/Kolkata')
         text = f"<b>✨ <u>Active VIP Users ({len(vip_list)}):</u></b>\n\n"
         for i, user in enumerate(vip_list, 1):
             expiry = user.get("expiry")
             if expiry:
-                expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+                expiry_str = datetime.fromtimestamp(expiry, tz).strftime('%Y-%m-%d %H:%M:%S')
             else:
                 expiry_str = "Lifetime"
             text += f"{i}. User ID: <code>{user['user_id']}</code>\n" \
-                    f"   Expiry: <code>{expiry_str}</code>\n\n"
+                    f"   Expiry: <code>{expiry_str} (IST)</code>\n\n"
                     
         # Send in chunks if too long
         if len(text) > 4000:
