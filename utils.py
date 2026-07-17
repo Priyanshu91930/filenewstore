@@ -351,6 +351,9 @@ async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
             
             links = val.get("links", 0)
             new_val = max(0, links - 1)
+            if new_val == 0:
+                TMA_VERIFIED.pop(key, None)
+                return 0
             val["links"] = new_val
             TMA_VERIFIED[key] = val
             return new_val
@@ -440,18 +443,30 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
     primary_api_key = None
     primary_shortener_url = "vplink.in"
     secondary_api_key = None
-    secondary_shortener_url = "vplink.in"
+    secondary_shortener_url = "arolinks.com"
     tertiary_api_key = None
     tertiary_shortener_url = "alpha-links.in"
+    fourth_api_key = None
+    fourth_shortener_url = "nowshort.com"
+    fifth_api_key = None
+    fifth_shortener_url = "liteshort.com"
+    sixth_api_key = None
+    sixth_shortener_url = "instantlinks.co"
     
     bot = await db.bots.find_one({"username": bot_username})
     if bot:
         primary_api_key = bot.get("shortener_api")
         primary_shortener_url = bot.get("shortener_site") or "vplink.in"
         secondary_api_key = bot.get("secondary_shortener_api")
-        secondary_shortener_url = bot.get("secondary_shortener_site") or primary_shortener_url
+        secondary_shortener_url = bot.get("secondary_shortener_site") or "arolinks.com"
         tertiary_api_key = bot.get("tertiary_shortener_api")
         tertiary_shortener_url = bot.get("tertiary_shortener_site") or "alpha-links.in"
+        fourth_api_key = bot.get("fourth_shortener_api")
+        fourth_shortener_url = bot.get("fourth_shortener_site") or "nowshort.com"
+        fifth_api_key = bot.get("fifth_shortener_api")
+        fifth_shortener_url = bot.get("fifth_shortener_site") or "liteshort.com"
+        sixth_api_key = bot.get("sixth_shortener_api")
+        sixth_shortener_url = bot.get("sixth_shortener_site") or "instantlinks.co"
         bot_id = bot.get("bot_id")
     else:
         # Check if it's the main bot
@@ -460,22 +475,41 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
             from config import SHORTLINK_API, SHORTLINK_URL
             primary_api_key = SHORTLINK_API
             primary_shortener_url = SHORTLINK_URL
-            # Try to load secondary/tertiary shortener settings for main bot
+            
             try:
                 from config import SECONDARY_SHORTLINK_API, SECONDARY_SHORTLINK_URL
                 secondary_api_key = SECONDARY_SHORTLINK_API
-                secondary_shortener_url = SECONDARY_SHORTLINK_URL or primary_shortener_url
+                secondary_shortener_url = SECONDARY_SHORTLINK_URL or "arolinks.com"
             except ImportError:
-                secondary_api_key = None
-                secondary_shortener_url = primary_shortener_url
+                pass
                 
             try:
                 from config import TERTIARY_SHORTLINK_API, TERTIARY_SHORTLINK_URL
                 tertiary_api_key = TERTIARY_SHORTLINK_API
                 tertiary_shortener_url = TERTIARY_SHORTLINK_URL or "alpha-links.in"
             except ImportError:
-                tertiary_api_key = None
-                tertiary_shortener_url = "alpha-links.in"
+                pass
+                
+            try:
+                from config import FOURTH_SHORTLINK_API, FOURTH_SHORTLINK_URL
+                fourth_api_key = FOURTH_SHORTLINK_API
+                fourth_shortener_url = FOURTH_SHORTLINK_URL or "nowshort.com"
+            except ImportError:
+                pass
+                
+            try:
+                from config import FIFTH_SHORTLINK_API, FIFTH_SHORTLINK_URL
+                fifth_api_key = FIFTH_SHORTLINK_API
+                fifth_shortener_url = FIFTH_SHORTLINK_URL or "liteshort.com"
+            except ImportError:
+                pass
+                
+            try:
+                from config import SIXTH_SHORTLINK_API, SIXTH_SHORTLINK_URL
+                sixth_api_key = SIXTH_SHORTLINK_API
+                sixth_shortener_url = SIXTH_SHORTLINK_URL or "instantlinks.co"
+            except ImportError:
+                pass
             
             # Use pseudo bot_id for tracking main bot verifications count
             bot_id = 999999999
@@ -485,11 +519,17 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
     # Dynamically build a list of all configured APIs
     apis = []
     if primary_api_key and primary_api_key != "None":
-        apis.append((primary_api_key, primary_shortener_url, "PRIMARY"))
+        apis.append((primary_api_key, primary_shortener_url, "1ST"))
     if secondary_api_key and secondary_api_key != "None":
-        apis.append((secondary_api_key, secondary_shortener_url, "SECONDARY"))
+        apis.append((secondary_api_key, secondary_shortener_url, "2ND"))
     if tertiary_api_key and tertiary_api_key != "None":
-        apis.append((tertiary_api_key, tertiary_shortener_url, "TERTIARY"))
+        apis.append((tertiary_api_key, tertiary_shortener_url, "3RD"))
+    if fourth_api_key and fourth_api_key != "None":
+        apis.append((fourth_api_key, fourth_shortener_url, "4TH"))
+    if fifth_api_key and fifth_api_key != "None":
+        apis.append((fifth_api_key, fifth_shortener_url, "5TH"))
+    if sixth_api_key and sixth_api_key != "None":
+        apis.append((sixth_api_key, sixth_shortener_url, "6TH"))
 
     # Rotate through all available configured APIs based on verification count
     if apis and bot_id:
@@ -498,7 +538,7 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
             verify_count = count_doc.get("count", 0) if count_doc else 0
             selected_idx = verify_count % len(apis)
             api_key, shortener_url, label = apis[selected_idx]
-            logger.info(f"[get_tma_shortlink] Using {label} API for user {user_id} (count={verify_count})")
+            logger.info(f"[get_tma_shortlink] Using {label} API ({shortener_url}) for user {user_id} (count={verify_count})")
             shortened_verify_url = await get_verify_shorted_link(link, api_key=api_key, shortener_url=shortener_url)
         except Exception as e:
             logger.error(f"Error dynamically selecting shortener API: {e}")

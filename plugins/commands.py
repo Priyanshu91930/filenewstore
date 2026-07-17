@@ -371,19 +371,29 @@ async def start(client, message):
                 api2_site = bot.get("secondary_shortener_site") or "arolinks.com"
                 api3_key = bot.get("tertiary_shortener_api") or "Not set"
                 api3_site = bot.get("tertiary_shortener_site") or "alpha-links.in"
+                api4_key = bot.get("fourth_shortener_api") or "Not set"
+                api4_site = bot.get("fourth_shortener_site") or "nowshort.com"
+                api5_key = bot.get("fifth_shortener_api") or "Not set"
+                api5_site = bot.get("fifth_shortener_site") or "liteshort.com"
+                api6_key = bot.get("sixth_shortener_api") or "Not set"
+                api6_site = bot.get("sixth_shortener_site") or "instantlinks.co"
                 tma_type = bot.get("tma_type", "links")
                 if tma_type == "links":
-                    validity_txt = "3 Links / Ad (Daily reset)"
+                    validity_txt = "3 Links / Ad (No daily limit)"
                 else:
                     validity_txt = f"{bot.get('token_timeout', 10800) // 3600} hours"
                 tutorial = bot.get("token_tutorial", "None")
                 api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
                 api2_display = f"<code>{api2_key}</code> ({api2_site.upper()})" if api2_key != "Not set" else f"<i>Not set ({api2_site.upper()})</i>"
                 api3_display = f"<code>{api3_key}</code> ({api3_site.upper()})" if api3_key != "Not set" else f"<i>Not set ({api3_site.upper()})</i>"
+                api4_display = f"<code>{api4_key}</code> ({api4_site.upper()})" if api4_key != "Not set" else f"<i>Not set ({api4_site.upper()})</i>"
+                api5_display = f"<code>{api5_key}</code> ({api5_site.upper()})" if api5_key != "Not set" else f"<i>Not set ({api5_site.upper()})</i>"
+                api6_display = f"<code>{api6_key}</code> ({api6_site.upper()})" if api6_key != "Not set" else f"<i>Not set ({api6_site.upper()})</i>"
                 buttons = [
                     [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
-                    [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}")],
-                    [InlineKeyboardButton("🔑 Set 3rd API Key", callback_data=f"tok_api3_{bot_id}")],
+                    [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}"), InlineKeyboardButton("🔑 Set 3rd API Key", callback_data=f"tok_api3_{bot_id}")],
+                    [InlineKeyboardButton("🔑 Set 4th API Key", callback_data=f"tok_api4_{bot_id}"), InlineKeyboardButton("🔑 Set 5th API Key", callback_data=f"tok_api5_{bot_id}")],
+                    [InlineKeyboardButton("🔑 Set 6th API Key", callback_data=f"tok_api6_{bot_id}")],
                     [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
                     [InlineKeyboardButton(f"{tma_btn}", callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
@@ -395,6 +405,9 @@ async def start(client, message):
                     f"  - API Key: {api_display}\n"
                     f"  - 2nd API Key: {api2_display}\n"
                     f"  - 3rd API Key: {api3_display}\n"
+                    f"  - 4th API Key: {api4_display}\n"
+                    f"  - 5th API Key: {api5_display}\n"
+                    f"  - 6th API Key: {api6_display}\n"
                     f"  - Tutorial: {tutorial}\n"
                     f"  - Validity: <code>{validity_txt}</code>\n\n"
                     f"<i>🔄 APIs are rotated dynamically per verification to prevent duplicate IP issues.</i>"
@@ -524,30 +537,19 @@ async def start(client, message):
                 if not user_is_vip:
                     # TMA Mode: use Monetag Mini App for verification
                     if config.TMA_MODE and not is_unlocked:
-                        ads_today = 0
-                        try:
-                            import pytz
-                            from datetime import datetime
-                            tz = pytz.timezone('Asia/Kolkata')
-                            today_str = datetime.now(tz).strftime('%Y-%m-%d')
-                            doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-                            if doc:
-                                ads_today = doc.get("ads_watched", 0)
-                        except Exception as e:
-                            logger.error(f"Error checking daily ads: {e}")
-
-                        if ads_today >= 3:
-                            btn = []
-                            plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
-                            if plan_cfg:
-                                btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-                            await message.reply_text(
-                                text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
-                                protect_content=True,
-                                reply_markup=InlineKeyboardMarkup(btn) if btn else None
-                            )
-                            return
                         if not await check_tma_verification(message.from_user.id):
+                            ads_today = 0
+                            try:
+                                import pytz
+                                from datetime import datetime
+                                tz = pytz.timezone('Asia/Kolkata')
+                                today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                                doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                                if doc:
+                                    ads_today = doc.get("ads_watched", 0)
+                            except Exception as e:
+                                logger.error(f"Error checking daily ads: {e}")
+
                             tma_app_url = f"{URL.rstrip('/')}/tma"
                             # Pass the raw /start data so the Mini App knows which file to deliver
                             tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
@@ -555,8 +557,14 @@ async def start(client, message):
                             plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
                             if plan_cfg:
                                 btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+                            
+                            if ads_today > 0:
+                                unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
+                            else:
+                                unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+                                
                             await message.reply_text(
-                                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                                text=unlock_text,
                                 protect_content=True,
                                 reply_markup=InlineKeyboardMarkup(btn)
                             )
@@ -721,29 +729,19 @@ async def start(client, message):
         if not user_is_vip:
             # TMA Mode: use Monetag Mini App for verification
             if config.TMA_MODE and not is_unlocked:
-                ads_today = 0
-                try:
-                    import pytz
-                    from datetime import datetime
-                    tz = pytz.timezone('Asia/Kolkata')
-                    today_str = datetime.now(tz).strftime('%Y-%m-%d')
-                    doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-                    if doc:
-                        ads_today = doc.get("ads_watched", 0)
-                except Exception as e:
-                    logger.error(f"Error checking daily ads: {e}")
-
-                if ads_today >= 3:
-                    btn = []
-                    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
-                    if plan_cfg:
-                        btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-                    return await message.reply_text(
-                        text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
-                        protect_content=True,
-                        reply_markup=InlineKeyboardMarkup(btn) if btn else None
-                    )
                 if not await check_tma_verification(message.from_user.id):
+                    ads_today = 0
+                    try:
+                        import pytz
+                        from datetime import datetime
+                        tz = pytz.timezone('Asia/Kolkata')
+                        today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                        doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                        if doc:
+                            ads_today = doc.get("ads_watched", 0)
+                    except Exception as e:
+                        logger.error(f"Error checking daily ads: {e}")
+
                     tma_app_url = f"{URL.rstrip('/')}/tma"
                     # Pass the raw /start data so the Mini App knows which file to deliver
                     tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
@@ -751,8 +749,14 @@ async def start(client, message):
                     plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
                     if plan_cfg:
                         btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+                    
+                    if ads_today > 0:
+                        unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
+                    else:
+                        unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+
                     await message.reply_text(
-                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                        text=unlock_text,
                         protect_content=True,
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
@@ -1756,20 +1760,30 @@ async def cb_handler(client: Client, query: CallbackQuery):
         api2_site = bot.get("secondary_shortener_site") or "arolinks.com"
         api3_key = bot.get("tertiary_shortener_api") or "Not set"
         api3_site = bot.get("tertiary_shortener_site") or "alpha-links.in"
+        api4_key = bot.get("fourth_shortener_api") or "Not set"
+        api4_site = bot.get("fourth_shortener_site") or "nowshort.com"
+        api5_key = bot.get("fifth_shortener_api") or "Not set"
+        api5_site = bot.get("fifth_shortener_site") or "liteshort.com"
+        api6_key = bot.get("sixth_shortener_api") or "Not set"
+        api6_site = bot.get("sixth_shortener_site") or "instantlinks.co"
         tma_type = bot.get("tma_type", "links")
         if tma_type == "links":
-            validity_txt = "3 Links / Ad (Daily reset)"
+            validity_txt = "3 Links / Ad (No daily limit)"
         else:
             validity_txt = f"{bot.get('token_timeout', 10800) // 3600} hours"
         tutorial = bot.get("token_tutorial", "None")
         api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
         api2_display = f"<code>{api2_key}</code> ({api2_site.upper()})" if api2_key != "Not set" else f"<i>Not set ({api2_site.upper()})</i>"
         api3_display = f"<code>{api3_key}</code> ({api3_site.upper()})" if api3_key != "Not set" else f"<i>Not set ({api3_site.upper()})</i>"
+        api4_display = f"<code>{api4_key}</code> ({api4_site.upper()})" if api4_key != "Not set" else f"<i>Not set ({api4_site.upper()})</i>"
+        api5_display = f"<code>{api5_key}</code> ({api5_site.upper()})" if api5_key != "Not set" else f"<i>Not set ({api5_site.upper()})</i>"
+        api6_display = f"<code>{api6_key}</code> ({api6_site.upper()})" if api6_key != "Not set" else f"<i>Not set ({api6_site.upper()})</i>"
         
         buttons = [
             [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
-            [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}")],
-            [InlineKeyboardButton("🔑 Set 3rd API Key", callback_data=f"tok_api3_{bot_id}")],
+            [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}"), InlineKeyboardButton("🔑 Set 3rd API Key", callback_data=f"tok_api3_{bot_id}")],
+            [InlineKeyboardButton("🔑 Set 4th API Key", callback_data=f"tok_api4_{bot_id}"), InlineKeyboardButton("🔑 Set 5th API Key", callback_data=f"tok_api5_{bot_id}")],
+            [InlineKeyboardButton("🔑 Set 6th API Key", callback_data=f"tok_api6_{bot_id}")],
             [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
             [InlineKeyboardButton(tma_btn, callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear All Settings", callback_data=f"tok_clr_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
@@ -1782,6 +1796,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f"  - API Key: {api_display}\n"
             f"  - 2nd API Key: {api2_display}\n"
             f"  - 3rd API Key: {api3_display}\n"
+            f"  - 4th API Key: {api4_display}\n"
+            f"  - 5th API Key: {api5_display}\n"
+            f"  - 6th API Key: {api6_display}\n"
             f"  - Tutorial: {tutorial}\n"
             f"  - Validity: <code>{validity_txt}</code>\n\n"
             f"<i>🔄 APIs are rotated dynamically per verification to prevent duplicate IP issues.</i>"
@@ -1936,6 +1953,132 @@ async def cb_handler(client: Client, query: CallbackQuery):
         query.data = f"tokencfg_{bot_id}"
         return await cb_handler(client, query)
 
+    elif query.data.startswith("tok_api4_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        current_api4 = bot.get("fourth_shortener_api") or "Not set"
+        current_site4 = bot.get("fourth_shortener_site") or "nowshort.com"
+        msg = await client.ask(
+            query.message.chat.id,
+            f"<b>🔑 Set 4th API Key</b>\n\n"
+            f"Current 4th API Key: <code>{current_api4}</code>\n"
+            f"Current 4th Domain: <code>{current_site4}</code>\n\n"
+            f"Send your API key to set (e.g. for nowshort.com).\n"
+            f"Format: <code>api_key</code> or <code>api_key domain.com</code>\n\n"
+            f"Send <code>off</code> to remove 4th API.\n"
+            f"Send /cancel to skip."
+        )
+        if msg.text and msg.text.strip() == "/cancel": return await msg.reply("Cancelled.")
+        try:
+            txt = msg.text.strip()
+            if txt.lower() == "off":
+                await clone_mongo_db.bots.update_one(
+                    {"bot_id": bot_id},
+                    {"$unset": {"fourth_shortener_api": "", "fourth_shortener_site": ""}}
+                )
+                await msg.reply("<b>✅ 4th API removed.</b>")
+            else:
+                parts = txt.split(None, 1)
+                api4_key = parts[0]
+                api4_site = parts[1].strip() if len(parts) > 1 else "nowshort.com"
+                await clone_mongo_db.bots.update_one(
+                    {"bot_id": bot_id},
+                    {"$set": {"fourth_shortener_api": api4_key, "fourth_shortener_site": api4_site}}
+                )
+                await msg.reply(
+                    f"<b>✅ 4th API Key set!</b>\n\n"
+                    f"Domain: <code>{api4_site}</code>\n"
+                    f"API Key: <code>{api4_key}</code>"
+                )
+        except Exception as e:
+            await msg.reply(f"<b>❌ Error: {e}</b>")
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("tok_api5_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        current_api5 = bot.get("fifth_shortener_api") or "Not set"
+        current_site5 = bot.get("fifth_shortener_site") or "liteshort.com"
+        msg = await client.ask(
+            query.message.chat.id,
+            f"<b>🔑 Set 5th API Key</b>\n\n"
+            f"Current 5th API Key: <code>{current_api5}</code>\n"
+            f"Current 5th Domain: <code>{current_site5}</code>\n\n"
+            f"Send your API key to set (e.g. for liteshort.com).\n"
+            f"Format: <code>api_key</code> or <code>api_key domain.com</code>\n\n"
+            f"Send <code>off</code> to remove 5th API.\n"
+            f"Send /cancel to skip."
+        )
+        if msg.text and msg.text.strip() == "/cancel": return await msg.reply("Cancelled.")
+        try:
+            txt = msg.text.strip()
+            if txt.lower() == "off":
+                await clone_mongo_db.bots.update_one(
+                    {"bot_id": bot_id},
+                    {"$unset": {"fifth_shortener_api": "", "fifth_shortener_site": ""}}
+                )
+                await msg.reply("<b>✅ 5th API removed.</b>")
+            else:
+                parts = txt.split(None, 1)
+                api5_key = parts[0]
+                api5_site = parts[1].strip() if len(parts) > 1 else "liteshort.com"
+                await clone_mongo_db.bots.update_one(
+                    {"bot_id": bot_id},
+                    {"$set": {"fifth_shortener_api": api5_key, "fifth_shortener_site": api5_site}}
+                )
+                await msg.reply(
+                    f"<b>✅ 5th API Key set!</b>\n\n"
+                    f"Domain: <code>{api5_site}</code>\n"
+                    f"API Key: <code>{api5_key}</code>"
+                )
+        except Exception as e:
+            await msg.reply(f"<b>❌ Error: {e}</b>")
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("tok_api6_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        current_api6 = bot.get("sixth_shortener_api") or "Not set"
+        current_site6 = bot.get("sixth_shortener_site") or "instantlinks.co"
+        msg = await client.ask(
+            query.message.chat.id,
+            f"<b>🔑 Set 6th API Key</b>\n\n"
+            f"Current 6th API Key: <code>{current_api6}</code>\n"
+            f"Current 6th Domain: <code>{current_site6}</code>\n\n"
+            f"Send your API key to set (e.g. for instantlinks.co).\n"
+            f"Format: <code>api_key</code> or <code>api_key domain.com</code>\n\n"
+            f"Send <code>off</code> to remove 6th API.\n"
+            f"Send /cancel to skip."
+        )
+        if msg.text and msg.text.strip() == "/cancel": return await msg.reply("Cancelled.")
+        try:
+            txt = msg.text.strip()
+            if txt.lower() == "off":
+                await clone_mongo_db.bots.update_one(
+                    {"bot_id": bot_id},
+                    {"$unset": {"sixth_shortener_api": "", "sixth_shortener_site": ""}}
+                )
+                await msg.reply("<b>✅ 6th API removed.</b>")
+            else:
+                parts = txt.split(None, 1)
+                api6_key = parts[0]
+                api6_site = parts[1].strip() if len(parts) > 1 else "instantlinks.co"
+                await clone_mongo_db.bots.update_one(
+                    {"bot_id": bot_id},
+                    {"$set": {"sixth_shortener_api": api6_key, "sixth_shortener_site": api6_site}}
+                )
+                await msg.reply(
+                    f"<b>✅ 6th API Key set!</b>\n\n"
+                    f"Domain: <code>{api6_site}</code>\n"
+                    f"API Key: <code>{api6_key}</code>"
+                )
+        except Exception as e:
+            await msg.reply(f"<b>❌ Error: {e}</b>")
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
     elif query.data.startswith("tok_tut_"):
         bot_id = int(query.data.split("_")[-1])
         msg = await client.ask(query.message.chat.id, "<b>Send the Tutorial Link URL for how to bypass your shortener.\n\n/cancel to skip.</b>")
@@ -1966,6 +2109,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "secondary_shortener_site": None,
                 "tertiary_shortener_api": None,
                 "tertiary_shortener_site": None,
+                "fourth_shortener_api": None,
+                "fourth_shortener_site": None,
+                "fifth_shortener_api": None,
+                "fifth_shortener_site": None,
+                "sixth_shortener_api": None,
+                "sixth_shortener_site": None,
                 "token_tutorial": "None",
                 "token_timeout": 86400,
                 "token_verify": False,

@@ -589,35 +589,33 @@ async def start(client, message):
             
             if plan_cfg and plan_enabled and not user_is_vip:
                 if tma_mode:
-                    ads_today = 0
-                    try:
-                        import pytz
-                        from datetime import datetime
-                        tz = pytz.timezone('Asia/Kolkata')
-                        today_str = datetime.now(tz).strftime('%Y-%m-%d')
-                        doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-                        if doc:
-                            ads_today = doc.get("ads_watched", 0)
-                    except Exception as e:
-                        logger.error(f"Error checking daily ads: {e}")
+                    if not await check_tma_verification(message.from_user.id, bot_id=me.id):
+                        ads_today = 0
+                        try:
+                            import pytz
+                            from datetime import datetime
+                            tz = pytz.timezone('Asia/Kolkata')
+                            today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                            doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                            if doc:
+                                ads_today = doc.get("ads_watched", 0)
+                        except Exception as e:
+                            logger.error(f"Error checking daily ads: {e}")
 
-                    if ads_today >= 3:
-                        btn = [[InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]]
-                        return await message.reply_text(
-                            text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
-                            protect_content=True,
-                            reply_markup=InlineKeyboardMarkup(btn)
-                        )
-                    is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
-                    if not is_verified and not is_unlocked:
                         tma_app_url = f"{URL.rstrip('/')}/tma"
                         tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
                         btn = [
                             [InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))],
                             [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
                         ]
+                        
+                        if ads_today > 0:
+                            unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
+                        else:
+                            unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+
                         return await message.reply_text(
-                            text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                            text=unlock_text,
                             protect_content=True,
                             reply_markup=InlineKeyboardMarkup(btn)
                         )
@@ -631,28 +629,35 @@ async def start(client, message):
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
             elif tma_mode and not user_is_vip:
-                ads_today = 0
-                try:
-                    import pytz
-                    from datetime import datetime
-                    tz = pytz.timezone('Asia/Kolkata')
-                    today_str = datetime.now(tz).strftime('%Y-%m-%d')
-                    doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-                    if doc:
-                        ads_today = doc.get("ads_watched", 0)
-                except Exception as e:
-                    logger.error(f"Error checking daily ads: {e}")
+                if not await check_tma_verification(message.from_user.id, bot_id=me.id):
+                    ads_today = 0
+                    try:
+                        import pytz
+                        from datetime import datetime
+                        tz = pytz.timezone('Asia/Kolkata')
+                        today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                        doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                        if doc:
+                            ads_today = doc.get("ads_watched", 0)
+                    except Exception as e:
+                        logger.error(f"Error checking daily ads: {e}")
 
-                if ads_today >= 3:
-                    btn = []
-                    if plan_cfg and plan_enabled:
-                        btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+                    tma_app_url = f"{URL.rstrip('/')}/tma"
+                    tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+                    btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                    
+                    if ads_today > 0:
+                        unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
+                    else:
+                        unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+
                     return await message.reply_text(
-                        text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
+                        text=unlock_text,
                         protect_content=True,
-                        reply_markup=InlineKeyboardMarkup(btn) if btn else None
+                        reply_markup=InlineKeyboardMarkup(btn)
                     )
-                is_verified = await check_tma_verification(message.from_user.id, bot_id=me.id)
+                else:
+                    is_verified = True
                 if not is_verified and not is_unlocked:
                     tma_app_url = f"{URL.rstrip('/')}/tma"
                     tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
@@ -870,38 +875,35 @@ async def start(client, message):
                 reply_markup=InlineKeyboardMarkup(btn)
             )
     elif tma_mode and not user_is_vip:
-        ads_today = 0
-        try:
-            import pytz
-            from datetime import datetime
-            tz = pytz.timezone('Asia/Kolkata')
-            today_str = datetime.now(tz).strftime('%Y-%m-%d')
-            doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-            if doc:
-                ads_today = doc.get("ads_watched", 0)
-        except Exception as e:
-            logger.error(f"Error checking daily ads: {e}")
+        if not await check_tma_verification(message.from_user.id, bot_id=me.id):
+            ads_today = 0
+            try:
+                import pytz
+                from datetime import datetime
+                tz = pytz.timezone('Asia/Kolkata')
+                today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                if doc:
+                    ads_today = doc.get("ads_watched", 0)
+            except Exception as e:
+                logger.error(f"Error checking daily ads: {e}")
 
-        if ads_today >= 3:
-            btn = []
-            if plan_cfg and plan_enabled:
-                btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-            return await message.reply_text(
-                text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
-                protect_content=True,
-                reply_markup=InlineKeyboardMarkup(btn) if btn else None
-            )
-        bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
-        is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
-        if not is_verified and not is_unlocked:
             tma_app_url = f"{URL.rstrip('/')}/tma"
             tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
             btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+            
+            if ads_today > 0:
+                unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
+            else:
+                unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+
             return await message.reply_text(
-                text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                text=unlock_text,
                 protect_content=True,
                 reply_markup=InlineKeyboardMarkup(btn)
             )
+        else:
+            is_verified = True
     if tma_mode and not user_is_vip:
         await consume_tma_link(message.from_user.id, bot_id=me.id)
 
