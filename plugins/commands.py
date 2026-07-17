@@ -368,14 +368,14 @@ async def start(client, message):
                 tma_btn = "Disable ❌ TMA Ads" if tma_mode else "Enable ✅ TMA Ads"
                 api_key = bot.get("shortener_api") or "Not set"
                 api2_key = bot.get("secondary_shortener_api") or "Not set"
-                api2_site = bot.get("secondary_shortener_site") or "vplink.in"
+                api2_site = bot.get("secondary_shortener_site") or "arolinks.com"
                 api3_key = bot.get("tertiary_shortener_api") or "Not set"
                 api3_site = bot.get("tertiary_shortener_site") or "alpha-links.in"
                 validity = bot.get("token_timeout", 10800) // 3600
                 tutorial = bot.get("token_tutorial", "None")
                 api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
-                api2_display = f"<code>{api2_key}</code> ({api2_site})" if api2_key != "Not set" else "<i>Not set</i>"
-                api3_display = f"<code>{api3_key}</code> ({api3_site})" if api3_key != "Not set" else "<i>Not set</i>"
+                api2_display = f"<code>{api2_key}</code> ({api2_site.upper()})" if api2_key != "Not set" else f"<i>Not set ({api2_site.upper()})</i>"
+                api3_display = f"<code>{api3_key}</code> ({api3_site.upper()})" if api3_key != "Not set" else f"<i>Not set ({api3_site.upper()})</i>"
                 buttons = [
                     [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
                     [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}")],
@@ -1760,14 +1760,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         api_key = bot.get("shortener_api") or "Not set"
         api2_key = bot.get("secondary_shortener_api") or "Not set"
-        api2_site = bot.get("secondary_shortener_site") or "vplink.in"
+        api2_site = bot.get("secondary_shortener_site") or "arolinks.com"
         api3_key = bot.get("tertiary_shortener_api") or "Not set"
         api3_site = bot.get("tertiary_shortener_site") or "alpha-links.in"
         validity = bot.get("token_timeout", 10800) // 3600
         tutorial = bot.get("token_tutorial", "None")
         api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
-        api2_display = f"<code>{api2_key}</code> ({api2_site})" if api2_key != "Not set" else "<i>Not set</i>"
-        api3_display = f"<code>{api3_key}</code> ({api3_site})" if api3_key != "Not set" else "<i>Not set</i>"
+        api2_display = f"<code>{api2_key}</code> ({api2_site.upper()})" if api2_key != "Not set" else f"<i>Not set ({api2_site.upper()})</i>"
+        api3_display = f"<code>{api3_key}</code> ({api3_site.upper()})" if api3_key != "Not set" else f"<i>Not set ({api3_site.upper()})</i>"
         
         buttons = [
             [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
@@ -1852,15 +1852,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
         bot_id = int(query.data.split("_")[-1])
         bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
         current_api2 = bot.get("secondary_shortener_api") or "Not set"
-        current_site2 = bot.get("secondary_shortener_site") or "vplink.in"
+        current_site2 = bot.get("secondary_shortener_site") or "arolinks.com"
         msg = await client.ask(
             query.message.chat.id,
             f"<b>🔑 Set Secondary API Key</b>\n\n"
             f"Current 2nd API Key: <code>{current_api2}</code>\n"
             f"Current 2nd Domain: <code>{current_site2}</code>\n\n"
             f"🔄 <b>What is this?</b>\n"
-            f"Used on every 2nd, 4th, 6th... verification to prevent bot traffic detection.\n\n"
-            f"Send your API key to set (same site different account is fine too).\n"
+            f"Used on every 2nd verification to rotate between networks.\n\n"
+            f"Send your API key to set (e.g. for arolinks.com).\n"
             f"Format: <code>api_key</code> or <code>api_key domain.com</code>\n\n"
             f"Send <code>off</code> to remove secondary API.\n"
             f"Send /cancel to skip."
@@ -1877,7 +1877,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             else:
                 parts = txt.split(None, 1)
                 api2_key = parts[0]
-                api2_site = parts[1].strip() if len(parts) > 1 else "vplink.in"
+                api2_site = parts[1].strip() if len(parts) > 1 else "arolinks.com"
                 await clone_mongo_db.bots.update_one(
                     {"bot_id": bot_id},
                     {"$set": {"secondary_shortener_api": api2_key, "secondary_shortener_site": api2_site}}
