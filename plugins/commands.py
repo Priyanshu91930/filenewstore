@@ -938,26 +938,15 @@ async def tma_validity_command(client, message):
             continue
             
         if isinstance(val, dict):
-            verified_at = val.get("verified_at", 0)
-            elapsed = current_time - verified_at
-            timeout = 3600
             links = val.get("links", 0)
-            if links > 0:
-                label = f"({links} links left, Remaining: "
-            else:
-                label = "(In Cooldown, Remaining: "
+            if links <= 0:
+                TMA_VERIFIED.pop(uid, None)
+                continue
+            tma_count += 1
+            tma_text += f"• <code>{uid}</code> ({links} links left)\n"
         else:
             TMA_VERIFIED.pop(uid, None)
             continue
-
-        if elapsed < timeout:
-            tma_count += 1
-            remaining = int(timeout - elapsed)
-            hours = remaining // 3600
-            mins = (remaining % 3600) // 60
-            tma_text += f"• <code>{uid}</code> {label}{hours}h {mins}m)\n"
-        else:
-            TMA_VERIFIED.pop(uid, None)
             
     if tma_count == 0:
         tma_text += "<i>No active TMA verifications.</i>\n"

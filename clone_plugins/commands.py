@@ -1343,25 +1343,13 @@ async def validity_command(client, message):
             uid = key_str.split("_")[-1]
             try:
                 if isinstance(val, dict):
-                    verified_at = val.get("verified_at", 0)
-                    elapsed = time.time() - verified_at
-                    if elapsed > 3600:
+                    links_left = int(val.get("links", 0))
+                    if links_left <= 0:
                         TMA_VERIFIED.pop(key, None)
                         continue
-                    links_left = int(val.get("links", 0))
-                    
-                    if links_left > 0:
-                        tma_count += 1
-                        remaining = max(0, int(3600 - elapsed))
-                        mins = remaining // 60
-                        tma_text += f"• <code>{uid}</code> ({links_left} links left, {mins}m remaining)\n"
-                    else:
-                        tma_count += 1
-                        remaining = max(0, int(3600 - elapsed))
-                        mins = remaining // 60
-                        tma_text += f"• <code>{uid}</code> (In Cooldown: {mins}m remaining)\n"
+                    tma_count += 1
+                    tma_text += f"• <code>{uid}</code> ({links_left} links left)\n"
                 else:
-                    # Pop legacy formats immediately
                     TMA_VERIFIED.pop(key, None)
             except Exception as e:
                 logger.error(f"Error parsing validity key {key}: {e}")
