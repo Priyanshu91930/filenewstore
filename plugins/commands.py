@@ -3125,6 +3125,14 @@ async def msg_user_handler(client, message):
 async def list_vip_handler(client, message):
     try:
         me = client.me or await client.get_me()
+        
+        # Clean up expired VIP users first
+        import time
+        await clone_mongo_db.vip_users.delete_many({
+            "bot_id": me.id,
+            "expiry": {"$ne": None, "$lt": int(time.time())}
+        })
+        
         vip_list = []
         async for user in clone_mongo_db.vip_users.find({"bot_id": me.id}):
             vip_list.append(user)

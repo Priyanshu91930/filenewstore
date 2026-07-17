@@ -2631,6 +2631,13 @@ async def list_vip_handler(client, message):
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
         
     try:
+        # Clean up expired VIP users first
+        import time
+        await mongo_db.vip_users.delete_many({
+            "bot_id": me.id,
+            "expiry": {"$ne": None, "$lt": int(time.time())}
+        })
+        
         vip_list = []
         async for user in mongo_db.vip_users.find({"bot_id": me.id}):
             vip_list.append(user)
