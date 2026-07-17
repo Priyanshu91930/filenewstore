@@ -458,6 +458,8 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
     primary_shortener_url = "vplink.in"
     secondary_api_key = None
     secondary_shortener_url = "vplink.in"
+    tertiary_api_key = None
+    tertiary_shortener_url = "alpha-links.in"
     
     bot = await db.bots.find_one({"username": bot_username})
     if bot:
@@ -465,6 +467,8 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
         primary_shortener_url = bot.get("shortener_site") or "vplink.in"
         secondary_api_key = bot.get("secondary_shortener_api")
         secondary_shortener_url = bot.get("secondary_shortener_site") or primary_shortener_url
+        tertiary_api_key = bot.get("tertiary_shortener_api")
+        tertiary_shortener_url = bot.get("tertiary_shortener_site") or "alpha-links.in"
         bot_id = bot.get("bot_id")
     else:
         # Check if it's the main bot
@@ -473,7 +477,7 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
             from config import SHORTLINK_API, SHORTLINK_URL
             primary_api_key = SHORTLINK_API
             primary_shortener_url = SHORTLINK_URL
-            # Try to load secondary shortener settings for main bot
+            # Try to load secondary/tertiary shortener settings for main bot
             try:
                 from config import SECONDARY_SHORTLINK_API, SECONDARY_SHORTLINK_URL
                 secondary_api_key = SECONDARY_SHORTLINK_API
@@ -481,30 +485,42 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
             except ImportError:
                 secondary_api_key = None
                 secondary_shortener_url = primary_shortener_url
+                
+            try:
+                from config import TERTIARY_SHORTLINK_API, TERTIARY_SHORTLINK_URL
+                tertiary_api_key = TERTIARY_SHORTLINK_API
+                tertiary_shortener_url = TERTIARY_SHORTLINK_URL or "alpha-links.in"
+            except ImportError:
+                tertiary_api_key = None
+                tertiary_shortener_url = "alpha-links.in"
             
             # Use pseudo bot_id for tracking main bot verifications count
             bot_id = 999999999
         else:
             bot_id = None
 
-    # Determine which API to use based on user's verification count
-    # Odd count → primary API, Even count → secondary API (alternating to avoid bot detection)
-    use_secondary = False
-    if secondary_api_key and bot_id:
+    # Dynamically build a list of all configured APIs
+    apis = []
+    if primary_api_key and primary_api_key != "None":
+        apis.append((primary_api_key, primary_shortener_url, "PRIMARY"))
+    if secondary_api_key and secondary_api_key != "None":
+        apis.append((secondary_api_key, secondary_shortener_url, "SECONDARY"))
+    if tertiary_api_key and tertiary_api_key != "None":
+        apis.append((tertiary_api_key, tertiary_shortener_url, "TERTIARY"))
+
+    # Rotate through all available configured APIs based on verification count
+    if apis and bot_id:
         try:
             count_doc = await db.tma_verify_count.find_one({"bot_id": bot_id, "user_id": user_id})
             verify_count = count_doc.get("count", 0) if count_doc else 0
-            # Next verification will be count+1; if even → use secondary API
-            next_count = verify_count + 1
-            use_secondary = (next_count % 2 == 0)
+            selected_idx = verify_count % len(apis)
+            api_key, shortener_url, label = apis[selected_idx]
+            logger.info(f"[get_tma_shortlink] Using {label} API for user {user_id} (count={verify_count})")
+            shortened_verify_url = await get_verify_shorted_link(link, api_key=api_key, shortener_url=shortener_url)
         except Exception as e:
-            logger.error(f"Error fetching verify count for API alternation: {e}")
-
-    if use_secondary and secondary_api_key:
-        logger.info(f"[get_tma_shortlink] Using SECONDARY API for user {user_id} (even verification)")
-        shortened_verify_url = await get_verify_shorted_link(link, api_key=secondary_api_key, shortener_url=secondary_shortener_url)
+            logger.error(f"Error dynamically selecting shortener API: {e}")
+            shortened_verify_url = await get_verify_shorted_link(link, api_key=primary_api_key, shortener_url=primary_shortener_url)
     else:
-        logger.info(f"[get_tma_shortlink] Using PRIMARY API for user {user_id} (odd verification)")
         shortened_verify_url = await get_verify_shorted_link(link, api_key=primary_api_key, shortener_url=primary_shortener_url)
         
     return str(shortened_verify_url)

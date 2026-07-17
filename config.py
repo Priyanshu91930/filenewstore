@@ -65,6 +65,8 @@ SHORTLINK_URL = environ.get("SHORTLINK_URL", "vplink.in") # shortlink domain wit
 SHORTLINK_API = environ.get("SHORTLINK_API", "35591ad98834a002e1fe0b3b4acc6d84ef401782") # shortlink api
 SECONDARY_SHORTLINK_URL = environ.get("SECONDARY_SHORTLINK_URL", "arolinks.com") # 2nd shortlink domain
 SECONDARY_SHORTLINK_API = environ.get("SECONDARY_SHORTLINK_API", "3c18358955e8a22e6f76145366e0102a0ba2b9c0") # 2nd shortlink api
+TERTIARY_SHORTLINK_URL = environ.get("TERTIARY_SHORTLINK_URL", "alpha-links.in") # 3rd shortlink domain
+TERTIARY_SHORTLINK_API = environ.get("TERTIARY_SHORTLINK_API", "") # 3rd shortlink api (initially empty)
 VERIFY_TUTORIAL = environ.get("VERIFY_TUTORIAL", "") # how to open link 
 
 

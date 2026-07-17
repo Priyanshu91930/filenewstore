@@ -369,13 +369,17 @@ async def start(client, message):
                 api_key = bot.get("shortener_api") or "Not set"
                 api2_key = bot.get("secondary_shortener_api") or "Not set"
                 api2_site = bot.get("secondary_shortener_site") or "vplink.in"
+                api3_key = bot.get("tertiary_shortener_api") or "Not set"
+                api3_site = bot.get("tertiary_shortener_site") or "alpha-links.in"
                 validity = bot.get("token_timeout", 10800) // 3600
                 tutorial = bot.get("token_tutorial", "None")
                 api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
                 api2_display = f"<code>{api2_key}</code> ({api2_site})" if api2_key != "Not set" else "<i>Not set</i>"
+                api3_display = f"<code>{api3_key}</code> ({api3_site})" if api3_key != "Not set" else "<i>Not set</i>"
                 buttons = [
                     [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
                     [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}")],
+                    [InlineKeyboardButton("🔑 Set 3rd API Key", callback_data=f"tok_api3_{bot_id}")],
                     [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
                     [InlineKeyboardButton(f"{tma_btn}", callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
@@ -386,9 +390,10 @@ async def start(client, message):
                     f"  - Domain: <code>vplink.in</code>\n"
                     f"  - API Key: {api_display}\n"
                     f"  - 2nd API Key: {api2_display}\n"
+                    f"  - 3rd API Key: {api3_display}\n"
                     f"  - Tutorial: {tutorial}\n"
                     f"  - Validity: <code>{validity} hours</code>\n\n"
-                    f"<i>🔄 2nd API is used on every 2nd, 4th, 6th... verification to prevent bot traffic detection.</i>"
+                    f"<i>🔄 APIs are rotated dynamically per verification to prevent duplicate IP issues.</i>"
                 )
                 return await message.reply_text(
                     text=text,
@@ -1736,14 +1741,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
         api_key = bot.get("shortener_api") or "Not set"
         api2_key = bot.get("secondary_shortener_api") or "Not set"
         api2_site = bot.get("secondary_shortener_site") or "vplink.in"
+        api3_key = bot.get("tertiary_shortener_api") or "Not set"
+        api3_site = bot.get("tertiary_shortener_site") or "alpha-links.in"
         validity = bot.get("token_timeout", 10800) // 3600
         tutorial = bot.get("token_tutorial", "None")
         api_display = f"<code>{api_key}</code>" if api_key != "Not set" else "<i>⚠️ Not set — tap Set API Key!</i>"
         api2_display = f"<code>{api2_key}</code> ({api2_site})" if api2_key != "Not set" else "<i>Not set</i>"
+        api3_display = f"<code>{api3_key}</code> ({api3_site})" if api3_key != "Not set" else "<i>Not set</i>"
         
         buttons = [
             [InlineKeyboardButton("🔑 Set API Key", callback_data=f"tok_api_{bot_id}")],
             [InlineKeyboardButton("🔑 Set 2nd API Key", callback_data=f"tok_api2_{bot_id}")],
+            [InlineKeyboardButton("🔑 Set 3rd API Key", callback_data=f"tok_api3_{bot_id}")],
             [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
             [InlineKeyboardButton(tma_btn, callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear All Settings", callback_data=f"tok_clr_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
@@ -1755,9 +1764,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f"  - Domain: <code>vplink.in</code>\n"
             f"  - API Key: {api_display}\n"
             f"  - 2nd API Key: {api2_display}\n"
+            f"  - 3rd API Key: {api3_display}\n"
             f"  - Tutorial: {tutorial}\n"
             f"  - Validity: <code>{validity} hours</code>\n\n"
-            f"<i>🔄 2nd API is used on every 2nd, 4th, 6th... verification to prevent bot traffic detection.</i>"
+            f"<i>🔄 APIs are rotated dynamically per verification to prevent duplicate IP issues.</i>"
         )
         
         if query.message.photo:
@@ -1865,6 +1875,50 @@ async def cb_handler(client: Client, query: CallbackQuery):
         query.data = f"tokencfg_{bot_id}"
         return await cb_handler(client, query)
 
+    elif query.data.startswith("tok_api3_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        current_api3 = bot.get("tertiary_shortener_api") or "Not set"
+        current_site3 = bot.get("tertiary_shortener_site") or "alpha-links.in"
+        msg = await client.ask(
+            query.message.chat.id,
+            f"<b>🔑 Set 3rd API Key</b>\n\n"
+            f"Current 3rd API Key: <code>{current_api3}</code>\n"
+            f"Current 3rd Domain: <code>{current_site3}</code>\n\n"
+            f"🔄 <b>What is this?</b>\n"
+            f"Used on every 3rd verification to rotate between 3 networks.\n\n"
+            f"Send your API key to set (e.g. for alpha-links.in).\n"
+            f"Format: <code>api_key</code> or <code>api_key domain.com</code>\n\n"
+            f"Send <code>off</code> to remove 3rd API.\n"
+            f"Send /cancel to skip."
+        )
+        if msg.text and msg.text.strip() == "/cancel": return await msg.reply("Cancelled.")
+        try:
+            txt = msg.text.strip()
+            if txt.lower() == "off":
+                await clone_mongo_db.bots.update_one(
+                    {"bot_id": bot_id},
+                    {"$unset": {"tertiary_shortener_api": "", "tertiary_shortener_site": ""}}
+                )
+                await msg.reply("<b>✅ 3rd API removed.</b>")
+            else:
+                parts = txt.split(None, 1)
+                api3_key = parts[0]
+                api3_site = parts[1].strip() if len(parts) > 1 else "alpha-links.in"
+                await clone_mongo_db.bots.update_one(
+                    {"bot_id": bot_id},
+                    {"$set": {"tertiary_shortener_api": api3_key, "tertiary_shortener_site": api3_site}}
+                )
+                await msg.reply(
+                    f"<b>✅ 3rd API Key set!</b>\n\n"
+                    f"Domain: <code>{api3_site}</code>\n"
+                    f"API Key: <code>{api3_key}</code>"
+                )
+        except Exception as e:
+            await msg.reply(f"<b>❌ Error: {e}</b>")
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
     elif query.data.startswith("tok_tut_"):
         bot_id = int(query.data.split("_")[-1])
         msg = await client.ask(query.message.chat.id, "<b>Send the Tutorial Link URL for how to bypass your shortener.\n\n/cancel to skip.</b>")
@@ -1893,6 +1947,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 "shortener_api": "None",
                 "secondary_shortener_api": None,
                 "secondary_shortener_site": None,
+                "tertiary_shortener_api": None,
+                "tertiary_shortener_site": None,
                 "token_tutorial": "None",
                 "token_timeout": 86400,
                 "token_verify": False,
