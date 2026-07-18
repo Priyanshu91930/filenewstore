@@ -275,9 +275,9 @@ async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: in
             {"$inc": {"ads_watched": 1}},
             upsert=True
         )
-        # Track lifetime verification count per user per bot (used for API alternation)
+        # Track daily verification count per user per bot (used for API alternation, resets daily)
         await async_mongo_db.tma_verify_count.update_one(
-            {"bot_id": bot_id, "user_id": user_id},
+            {"bot_id": bot_id, "user_id": user_id, "date": today_str},
             {"$inc": {"count": 1}},
             upsert=True
         )
@@ -534,7 +534,11 @@ async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_userna
     # Rotate through all available configured APIs based on verification count
     if apis and bot_id:
         try:
-            count_doc = await db.tma_verify_count.find_one({"bot_id": bot_id, "user_id": user_id})
+            import pytz
+            from datetime import datetime
+            tz = pytz.timezone('Asia/Kolkata')
+            today_str = datetime.now(tz).strftime('%Y-%m-%d')
+            count_doc = await db.tma_verify_count.find_one({"bot_id": bot_id, "user_id": user_id, "date": today_str})
             verify_count = count_doc.get("count", 0) if count_doc else 0
             selected_idx = verify_count % len(apis)
             api_key, shortener_url, label = apis[selected_idx]
