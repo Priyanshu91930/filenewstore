@@ -309,6 +309,17 @@ async def check_tma_verification(user_id: int, timeout: int = 0, bot_id: int = N
                 TMA_VERIFIED.pop(key, None)
                 return False
 
+            # Ensure verification session was created today (IST). If from a previous day, expire it.
+            verified_at = val.get("verified_at", 0)
+            import pytz
+            from datetime import datetime
+            tz = pytz.timezone('Asia/Kolkata')
+            verified_date = datetime.fromtimestamp(verified_at, tz).strftime('%Y-%m-%d')
+            today_str = datetime.now(tz).strftime('%Y-%m-%d')
+            if verified_date != today_str:
+                TMA_VERIFIED.pop(key, None)
+                return False
+
             if tma_type == "links":
                 # Removed 1-hour rolling expiration check (limit is daily instead)
                 links = val.get("links", 0)

@@ -1334,6 +1334,12 @@ async def validity_command(client, message):
             try:
                 uid = int(uid_str)
                 if isinstance(val, dict):
+                    # Ensure the verification session is from today
+                    verified_at = val.get("verified_at", 0)
+                    verified_date = datetime.fromtimestamp(verified_at, tz).strftime('%Y-%m-%d')
+                    if verified_date != today_str:
+                        TMA_VERIFIED.pop(key, None)
+                        continue
                     links_left = int(val.get("links", 0))
                     if links_left <= 0:
                         TMA_VERIFIED.pop(key, None)
