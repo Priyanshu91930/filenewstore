@@ -934,41 +934,63 @@ async def tma_validity_command(client, message):
     tz = pytz.timezone('Asia/Kolkata')
     today_str = datetime.now(tz).strftime('%Y-%m-%d')
     
-    text = "<b>📅 <u>Active Verifications</u></b>\n\n"
+    total_users_today = 0
+    total_ads_today = 0
+    user_records = {}
     
-    # 1. TMA Verifications
-    tma_count = 0
-    tma_text = "<b>⚡ TMA Verifications (Active):</b>\n"
-    for uid, val in list(TMA_VERIFIED.items()):
-        uid_str = str(uid)
-        # Skip clone bot records (keys starting with bot_id_ or containing "_")
-        if "_" in uid_str:
-            continue
-            
-        if isinstance(val, dict):
-            links = val.get("links", 0)
-            if links <= 0:
-                TMA_VERIFIED.pop(uid, None)
-                continue
-            
-            # Fetch ads watched today
-            ads_watched = 0
-            try:
-                doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": int(uid), "date": today_str})
-                if doc:
-                    ads_watched = doc.get("ads_watched", 0)
-            except Exception as e:
-                logger.error(f"Error fetching ads count for validity command: {e}")
-                
-            tma_count += 1
-            tma_text += f"• <code>{uid}</code> ({links} links left, Watched: {ads_watched} ads today)\n"
-        else:
-            TMA_VERIFIED.pop(uid, None)
-            continue
-            
-    if tma_count == 0:
-        tma_text += "<i>No active TMA verifications.</i>\n"
+    # Query stats for today from database
+    try:
+        cursor = clone_mongo_db.tma_stats.find({"bot_id": me.id, "date": today_str})
+        async for doc in cursor:
+            uid = int(doc.get("user_id"))
+            ads_watched = doc.get("ads_watched", 0)
+            total_ads_today += ads_watched
+            user_records[uid] = {"ads": ads_watched, "links": 0}
+    except Exception as e:
+        logger.error(f"Error querying tma_stats for validity: {e}")
         
+    # Merge active TMA verifications (remaining links)
+    for key, val in list(TMA_VERIFIED.items()):
+        key_str = str(key)
+        # Skip clone bot records
+        if "_" in key_str:
+            continue
+        try:
+            uid = int(key_str)
+            if isinstance(val, dict):
+                links_left = int(val.get("links", 0))
+                if links_left <= 0:
+                    TMA_VERIFIED.pop(key, None)
+                    continue
+                if uid in user_records:
+                    user_records[uid]["links"] = links_left
+                else:
+                    user_records[uid] = {"ads": 0, "links": links_left}
+            else:
+                TMA_VERIFIED.pop(key, None)
+        except Exception as e:
+            logger.error(f"Error parsing validity key {key}: {e}")
+            TMA_VERIFIED.pop(key, None)
+
+    # Sort records by ads watched descending, then by remaining links descending
+    sorted_users = sorted(user_records.items(), key=lambda x: (x[1]["ads"], x[1]["links"]), reverse=True)
+    total_users_today = len(sorted_users)
+    
+    detailed_stats_text = ""
+    for uid, data in sorted_users:
+        detailed_stats_text += f"• <code>{uid}</code> (Watched: {data['ads']} Ads today, Links Left: {data['links']})\n"
+        
+    if not detailed_stats_text:
+        detailed_stats_text = "<i>No user activity today yet.</i>\n"
+        
+    text = (
+        f"<b>📅 <u>Verification Stats (Today - {today_str})</u></b>\n"
+        f"👥 <b>Total Users Today:</b> <code>{total_users_today}</code>\n"
+        f"🎯 <b>Total Ads Watched Today:</b> <code>{total_ads_today}</code>\n\n"
+        f"<b>📊 Today's User Activity & Validity:</b>\n"
+        f"{detailed_stats_text}\n"
+    )
+    
     # 2. Standard Verifications (24 Hours / Today)
     std_count = 0
     std_text = "\n<b>🔗 Standard Verifications (Daily):</b>\n"
@@ -979,7 +1001,7 @@ async def tma_validity_command(client, message):
     if std_count == 0:
         std_text += "<i>No active standard verifications.</i>\n"
         
-    total_text = text + tma_text + std_text
+    total_text = text + std_text
     await message.reply_text(total_text)
 
 @Client.on_message(filters.command("remove_validity") & filters.user(ADMINS) & filters.private)

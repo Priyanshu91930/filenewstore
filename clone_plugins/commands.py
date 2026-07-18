@@ -1305,71 +1305,68 @@ async def validity_command(client, message):
     
     text = "<b>📅 <u>Active Verifications</u></b>\n\n"
     
-    # 1. TMA Verifications & Stats
+    # 1. TMA Verifications & Stats combined
     import pytz
     from datetime import datetime
     tz = pytz.timezone('Asia/Kolkata')
     today_str = datetime.now(tz).strftime('%Y-%m-%d')
     
-    # Query stats for today from database
     total_users_today = 0
     total_ads_today = 0
-    detailed_stats_text = ""
+    user_records = {}
+    
+    # Query stats for today from database
     try:
-        cursor = mongo_db.tma_stats.find({"bot_id": me.id, "date": today_str}).sort("ads_watched", -1)
+        cursor = mongo_db.tma_stats.find({"bot_id": me.id, "date": today_str})
         async for doc in cursor:
-            total_users_today += 1
+            uid = int(doc.get("user_id"))
             ads_watched = doc.get("ads_watched", 0)
             total_ads_today += ads_watched
-            uid = doc.get("user_id")
-            detailed_stats_text += f"• <code>{uid}</code> (Watched: {ads_watched} ads)\n"
+            user_records[uid] = {"ads": ads_watched, "links": 0}
     except Exception as e:
         logger.error(f"Error querying tma_stats for validity: {e}")
         
-    if not detailed_stats_text:
-        detailed_stats_text = "<i>No ads watched today yet.</i>\n"
-        
-    text = (
-        f"<b>📅 <u>Verification Stats (Today - {today_str})</u></b>\n"
-        f"👥 <b>Total Users Today:</b> <code>{total_users_today}</code>\n"
-        f"🎯 <b>Total Ads Watched Today:</b> <code>{total_ads_today}</code>\n\n"
-        f"<b>📊 Today's Detailed Ads Watched:</b>\n"
-        f"{detailed_stats_text}\n"
-    )
-    
-    tma_count = 0
-    tma_text = "<b>⚡ Active TMA Verifications (Remaining Links):</b>\n"
+    # Merge active TMA verifications (remaining links)
     for key, val in list(TMA_VERIFIED.items()):
         key_str = str(key)
         if key_str.startswith(f"{me.id}_"):
-            uid = key_str.split("_")[-1]
+            uid_str = key_str.split("_")[-1]
             try:
+                uid = int(uid_str)
                 if isinstance(val, dict):
                     links_left = int(val.get("links", 0))
                     if links_left <= 0:
                         TMA_VERIFIED.pop(key, None)
                         continue
-                    
-                    # Fetch ads watched today
-                    ads_watched = 0
-                    try:
-                        doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": int(uid), "date": today_str})
-                        if doc:
-                            ads_watched = doc.get("ads_watched", 0)
-                    except Exception as e:
-                        logger.error(f"Error fetching ads count for validity: {e}")
-                        
-                    tma_count += 1
-                    tma_text += f"• <code>{uid}</code> ({links_left} links left, Watched: {ads_watched} ads today)\n"
+                    if uid in user_records:
+                        user_records[uid]["links"] = links_left
+                    else:
+                        user_records[uid] = {"ads": 0, "links": links_left}
                 else:
                     TMA_VERIFIED.pop(key, None)
             except Exception as e:
                 logger.error(f"Error parsing validity key {key}: {e}")
                 TMA_VERIFIED.pop(key, None)
-            
-    if tma_count == 0:
-        tma_text += "<i>No active TMA verifications.</i>\n"
+
+    # Sort records by ads watched descending, then by remaining links descending
+    sorted_users = sorted(user_records.items(), key=lambda x: (x[1]["ads"], x[1]["links"]), reverse=True)
+    total_users_today = len(sorted_users)
+    
+    detailed_stats_text = ""
+    for uid, data in sorted_users:
+        detailed_stats_text += f"• <code>{uid}</code> (Watched: {data['ads']} Ads today, Links Left: {data['links']})\n"
         
+    if not detailed_stats_text:
+        detailed_stats_text = "<i>No user activity today yet.</i>\n"
+        
+    text = (
+        f"<b>📅 <u>Verification Stats (Today - {today_str})</u></b>\n"
+        f"👥 <b>Total Users Today:</b> <code>{total_users_today}</code>\n"
+        f"🎯 <b>Total Ads Watched Today:</b> <code>{total_ads_today}</code>\n\n"
+        f"<b>📊 Today's User Activity & Validity:</b>\n"
+        f"{detailed_stats_text}\n"
+    )
+    
     # 2. Standard Verifications (24 Hours / Custom Timeout)
     std_count = 0
     std_text = "\n<b>🔗 Standard Verifications:</b>\n"
@@ -1390,7 +1387,7 @@ async def validity_command(client, message):
     if std_count == 0:
         std_text += "<i>No active standard verifications.</i>\n"
         
-    total_text = text + tma_text + std_text
+    total_text = text + std_text
     await message.reply_text(total_text)
 
 # Don't Remove Credit Tg - @viralverse0909
