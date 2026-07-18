@@ -2650,6 +2650,9 @@ async def list_vip_handler(client, message):
         if not vip_list:
             return await message.reply_text("<b>📭 No active VIP users found.</b>")
             
+        # Sort VIP users by expiry date ascending (soonest first, Lifetime last)
+        vip_list.sort(key=lambda x: x.get("expiry") if x.get("expiry") is not None else float('inf'))
+
         from datetime import datetime
         import pytz
         tz = pytz.timezone('Asia/Kolkata')
