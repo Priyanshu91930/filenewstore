@@ -422,7 +422,7 @@ async def start(client, message):
         if data.startswith("manageclone_"):
             bot_id = int(data.split("_")[-1])
             bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
-            if not bot or int(bot.get("user_id", 0)) != message.from_user.id:
+            if not bot or (int(bot.get("user_id", 0)) != message.from_user.id and message.from_user.id not in ADMINS):
                 return await message.reply("<b>❌ You don't own this bot!</b>")
                 
             buttons = [
@@ -1342,7 +1342,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if query.from_user.id not in ADMINS:
             return await query.answer("❌ Only the bot owner can manage/create clone bots.", show_alert=True)
         user_id = query.from_user.id
-        bots = [b async for b in clone_mongo_db.bots.find({"user_id": user_id})]
+        if query.from_user.id in ADMINS:
+            bots = [b async for b in clone_mongo_db.bots.find({})]
+        else:
+            bots = [b async for b in clone_mongo_db.bots.find({"user_id": user_id})]
         buttons = []
         for bot in bots:
             buttons.append([InlineKeyboardButton(f"{bot['name']}", callback_data=f"cust_{bot['bot_id']}")])

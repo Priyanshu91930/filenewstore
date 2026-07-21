@@ -1129,7 +1129,7 @@ async def settings_command(client, message):
     from TechVJ.bot import StreamBot
     from clone_plugins.db_referral import is_participant
     main_bot_username = (await StreamBot.get_me()).username
-    is_owner = bot_doc and int(bot_doc['user_id']) == message.from_user.id
+    is_owner = bot_doc and (int(bot_doc.get('user_id', 0)) == message.from_user.id or message.from_user.id in ADMINS)
     
     if is_owner:
         buttons.insert(0, [InlineKeyboardButton('⚙️ Bot Settings', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
@@ -1863,7 +1863,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         from TechVJ.bot import StreamBot
         from clone_plugins.db_referral import is_participant
         main_bot_username = (await StreamBot.get_me()).username
-        is_owner = bot_doc and int(bot_doc['user_id']) == query.from_user.id
+        is_owner = bot_doc and (int(bot_doc.get('user_id', 0)) == query.from_user.id or query.from_user.id in ADMINS)
         
         if is_owner:
             buttons.insert(0, [InlineKeyboardButton('⚙️ Bot Settings', url=f"https://t.me/{main_bot_username}?start=manageclone_{me.id}")])
