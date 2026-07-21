@@ -144,7 +144,10 @@ async def start():
         logger.info(f"Web server running on port {PORT}")
 
         logger.info(f"Sending restart message to LOG_CHANNEL={LOG_CHANNEL}")
-        await StreamBot.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(today, time_str))
+        try:
+            await StreamBot.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(today, time_str))
+        except Exception as log_err:
+            logger.warning(f"Could not send restart message to LOG_CHANNEL ({LOG_CHANNEL}): {log_err}")
 
         if CLONE_MODE:
             logger.info("CLONE_MODE=True — restarting clone bots...")
