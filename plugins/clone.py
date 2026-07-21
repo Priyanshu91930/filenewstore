@@ -42,6 +42,8 @@ async def set_clone_commands(vj: Client):
             BotCommand("plan", "View VIP status / prices"),
             BotCommand("validity", "View active user verifications"),
             BotCommand("post", "Post a message or media to a channel"),
+            BotCommand("editpost", "Edit a post in a channel"),
+            BotCommand("delpost", "Delete a post from a channel"),
         ])
     except Exception as e:
         logger.error(f"Error setting bot commands for clone: {e}")

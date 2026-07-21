@@ -2852,3 +2852,89 @@ async def post_channel_handler(client, message: Message):
     except Exception as e:
         await message.reply_text(f"<b>❌ Failed to post to channel:</b>\n<code>{e}</code>")
 
+
+@Client.on_message(filters.command(["editpost", "edit"]) & filters.private)
+async def edit_post_handler(client, message: Message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
+        return await message.reply("<b>❌ Only the bot owner, moderators, and admins can use this command.</b>")
+
+    if len(message.command) < 3:
+        return await message.reply(
+            "<b>✏️ <u>Edit Channel Post Usage:</u></b>\n\n"
+            "<code>/editpost (channel_id_or_username) (message_id) (new_text)</code>\n"
+            "<i>Example:</i> <code>/editpost -1003842749347 45 New updated message content!</code>"
+        )
+
+    target_chat = message.command[1].strip()
+    try:
+        if target_chat.startswith("-100") or target_chat.isdigit() or (target_chat.startswith("-") and target_chat[1:].isdigit()):
+            target_chat = int(target_chat)
+    except ValueError:
+        pass
+
+    try:
+        msg_id = int(message.command[2])
+    except ValueError:
+        return await message.reply("<b>❌ Invalid Message ID. Must be an integer.</b>")
+
+    if len(message.command) < 4:
+        return await message.reply("<b>❌ Please provide the new text to update the post.</b>")
+
+    new_text = message.text.split(None, 3)[3]
+
+    try:
+        try:
+            edited = await client.edit_message_text(chat_id=target_chat, message_id=msg_id, text=new_text)
+        except Exception:
+            edited = await client.edit_message_caption(chat_id=target_chat, message_id=msg_id, caption=new_text)
+
+        await message.reply_text(f"<b>✅ Message <code>{msg_id}</code> in <code>{target_chat}</code> successfully edited!</b>")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Failed to edit channel post:</b>\n<code>{e}</code>")
+
+
+@Client.on_message(filters.command(["delpost", "del"]) & filters.private)
+async def delete_post_handler(client, message: Message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
+        return await message.reply("<b>❌ Only the bot owner, moderators, and admins can use this command.</b>")
+
+    if len(message.command) < 3:
+        return await message.reply(
+            "<b>🗑️ <u>Delete Channel Post Usage:</u></b>\n\n"
+            "<code>/delpost (channel_id_or_username) (message_id)</code>\n"
+            "<i>Example:</i> <code>/delpost -1003842749347 45</code>"
+        )
+
+    target_chat = message.command[1].strip()
+    try:
+        if target_chat.startswith("-100") or target_chat.isdigit() or (target_chat.startswith("-") and target_chat[1:].isdigit()):
+            target_chat = int(target_chat)
+    except ValueError:
+        pass
+
+    try:
+        msg_id = int(message.command[2])
+    except ValueError:
+        return await message.reply("<b>❌ Invalid Message ID. Must be an integer.</b>")
+
+    try:
+        await client.delete_messages(chat_id=target_chat, message_ids=msg_id)
+        await message.reply_text(f"<b>✅ Message <code>{msg_id}</code> deleted successfully from <code>{target_chat}</code>!</b>")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Failed to delete channel post:</b>\n<code>{e}</code>")
+
+
