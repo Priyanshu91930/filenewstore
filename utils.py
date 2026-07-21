@@ -382,7 +382,7 @@ async def schedule_tma_renewal_msg(client, chat_id: int, bot_id: int = None, del
     try:
         from utils import check_tma_verification, is_vip, get_tma_link
         from config import URL
-        import script
+        from Script import script
         
         me = client.me or await client.get_me()
         user_is_vip = await is_vip(me.id, chat_id)
