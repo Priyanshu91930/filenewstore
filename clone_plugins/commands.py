@@ -1084,10 +1084,10 @@ async def settings_command(client, message):
     if bot_doc and bot_doc.get("is_deactivated", False):
         return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
-    # Owner/Moderator check
+    # Owner/Moderator/Admin check
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can access settings.</b>")
 
     # Force Subscribe Check
@@ -1160,7 +1160,9 @@ async def set_caption_handler(client, m: Message):
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
-    if not bot_owner or int(bot_owner['user_id']) != m.from_user.id:
+    owner_id = int(bot_owner.get("user_id", 0)) if bot_owner else 0
+    mods = bot_owner.get("moderators", []) if bot_owner else []
+    if m.from_user.id != owner_id and m.from_user.id not in mods and m.from_user.id not in ADMINS:
         return await m.reply("<b>❌ Only the bot owner can use this command.</b>")
 
     cmd = m.command
@@ -1187,10 +1189,10 @@ async def shortener_api_handler(client, m: Message):
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
-    # Owner/Moderator check
+    # Owner/Moderator/Admin check
     owner_id = int(bot_owner.get("user_id", 0)) if bot_owner else 0
     mods = bot_owner.get("moderators", []) if bot_owner else []
-    if m.from_user.id != owner_id and m.from_user.id not in mods:
+    if m.from_user.id != owner_id and m.from_user.id not in mods and m.from_user.id not in ADMINS:
         return await m.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
     vplink_verified = bot_owner.get("vplink_verified", False) if bot_owner else False
@@ -1235,10 +1237,10 @@ async def base_site_handler(client, m: Message):
     if bot_owner and bot_owner.get("is_deactivated", False):
         return await m.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
-    # Owner/Moderator check
+    # Owner/Moderator/Admin check
     owner_id = int(bot_owner.get("user_id", 0)) if bot_owner else 0
     mods = bot_owner.get("moderators", []) if bot_owner else []
-    if m.from_user.id != owner_id and m.from_user.id not in mods:
+    if m.from_user.id != owner_id and m.from_user.id not in mods and m.from_user.id not in ADMINS:
         return await m.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
     vplink_verified = bot_owner.get("vplink_verified", False) if bot_owner else False
@@ -1276,10 +1278,10 @@ async def stats_handler(client, message):
     bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
     if not bot_doc: return
     
-    # Owner/Moderator check
+    # Owner/Moderator/Admin check
     owner_id = int(bot_doc.get("user_id", 0))
     mods = bot_doc.get("moderators", [])
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
     m = await message.reply_text("<b>Calculating statistics...</b>")
@@ -1307,10 +1309,10 @@ async def validity_command(client, message):
     if bot_doc and bot_doc.get("is_deactivated", False):
         return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
 
-    # Owner/Moderator check
+    # Owner/Moderator/Admin check
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can access this command.</b>")
 
     # Check if TMA ads are configured
@@ -2507,7 +2509,7 @@ async def add_vip_handler(client, message):
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
     
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
         
     if len(message.command) < 3:
@@ -2560,7 +2562,7 @@ async def del_vip_handler(client, message):
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
     
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
         
     if len(message.command) < 2:
@@ -2593,7 +2595,7 @@ async def decline_vip_handler(client, message):
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
     
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
         
     if len(message.command) < 2:
@@ -2624,7 +2626,7 @@ async def msg_user_handler(client, message):
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
     
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
         
     if len(message.command) < 3:
@@ -2651,7 +2653,7 @@ async def list_vip_handler(client, message):
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
     
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
         
     try:
@@ -2704,7 +2706,7 @@ async def makepaid_handler(client, message):
 
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
     paid_links_enabled = bot_doc.get("paid_links", False) if bot_doc else False
@@ -2762,7 +2764,7 @@ async def approvepaid_handler(client, message):
 
     owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
     mods = bot_doc.get("moderators", []) if bot_doc else []
-    if message.from_user.id != owner_id and message.from_user.id not in mods:
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
         return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
 
     if len(message.command) < 3:
