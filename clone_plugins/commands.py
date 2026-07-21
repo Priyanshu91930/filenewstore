@@ -916,13 +916,60 @@ async def start(client, message):
             InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
         ]])
         
-        msg = await client.send_cached_media(
-            chat_id=message.from_user.id,
-            file_id=file_id,
-            reply_markup=reply_markup,
-            protect_content=is_nofwd
-        )
-        logger.info(f"send_cached_media successful (protect_content={is_nofwd})")
+        msg = None
+        try:
+            msg = await client.send_cached_media(
+                chat_id=message.from_user.id,
+                file_id=file_id,
+                reply_markup=reply_markup,
+                protect_content=is_nofwd
+            )
+            logger.info(f"send_cached_media successful (protect_content={is_nofwd})")
+        except Exception as e1:
+            logger.warning(f"Clone bot send_cached_media failed: {e1}. Trying copy_message fallback...")
+            # Fallback 1: Clone bot copy_message from original chat/msg if available
+            if file_doc and "chat_id" in file_doc and "message_id" in file_doc:
+                try:
+                    msg = await client.copy_message(
+                        chat_id=message.from_user.id,
+                        from_chat_id=int(file_doc["chat_id"]),
+                        message_id=int(file_doc["message_id"]),
+                        reply_markup=reply_markup,
+                        protect_content=is_nofwd
+                    )
+                    logger.info("Fallback copy_message via clone bot successful")
+                except Exception as e2:
+                    logger.warning(f"Clone bot copy_message failed: {e2}. Trying Main Bot copy_message...")
+            
+            # Fallback 2: Main bot copy_message
+            if not msg and file_doc and "chat_id" in file_doc and "message_id" in file_doc:
+                try:
+                    from TechVJ.bot import StreamBot
+                    msg = await StreamBot.copy_message(
+                        chat_id=message.from_user.id,
+                        from_chat_id=int(file_doc["chat_id"]),
+                        message_id=int(file_doc["message_id"]),
+                        reply_markup=reply_markup,
+                        protect_content=is_nofwd
+                    )
+                    logger.info("Fallback copy_message via Main Bot successful")
+                except Exception as e3:
+                    logger.warning(f"Main Bot copy_message failed: {e3}. Trying Main Bot send_cached_media...")
+
+            # Fallback 3: Main bot send_cached_media
+            if not msg:
+                try:
+                    from TechVJ.bot import StreamBot
+                    msg = await StreamBot.send_cached_media(
+                        chat_id=message.from_user.id,
+                        file_id=file_id,
+                        reply_markup=reply_markup,
+                        protect_content=is_nofwd
+                    )
+                    logger.info("Fallback send_cached_media via Main Bot successful")
+                except Exception as e4:
+                    logger.error(f"All fallbacks failed. Last error: {e4}")
+                    raise e4
         
         # Send portal link immediately here to bypass downstream exceptions
         try:
