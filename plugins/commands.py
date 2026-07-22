@@ -3758,6 +3758,47 @@ async def upload_gdrive_cmd_handler(client, message):
     if not downloaded_path or not os.path.exists(downloaded_path):
         return await sts.edit_text("<b>❌ Failed to download file from Telegram.</b>")
         
+    import uuid
+    post_id = str(uuid.uuid4())[:8]
+
+    await sts.edit_text("<b>⏳ Processing video & extracting previews...</b>")
+
+    # ── Frame Extraction (Animated Previews) ──
+    duration = getattr(media, "duration", 0)
+    if not duration:
+        duration = 10 # default fallback
+        
+    offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
+    thumbnail_gdrive_ids = []
+    
+    import subprocess
+    for idx, offset in enumerate(offsets):
+        thumb_name = f"thumb_{post_id}_{idx}.jpg"
+        thumb_path = os.path.join(temp_dir, thumb_name)
+        
+        try:
+            cmd = [
+                'ffmpeg', '-y',
+                '-ss', str(offset),
+                '-i', downloaded_path,
+                '-vframes', '1',
+                '-q:v', '3',
+                thumb_path
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            
+            if os.path.exists(thumb_path):
+                # Upload frame to Google Drive
+                t_gdrive_id, _ = upload_file_to_gdrive(thumb_path, thumb_name)
+                if t_gdrive_id:
+                    thumbnail_gdrive_ids.append(t_gdrive_id)
+                try:
+                    os.remove(thumb_path)
+                except:
+                    pass
+        except Exception as fe:
+            logger.error(f"Failed to extract frame at {offset}s: {fe}")
+
     await sts.edit_text("<b>⏳ Uploading video to Google Drive with anti-ban masking...</b>")
     
     # 4. Upload to Google Drive using helper
@@ -3774,14 +3815,19 @@ async def upload_gdrive_cmd_handler(client, message):
         return await sts.edit_text(f"<b>❌ GDrive Upload Failed:</b>\n<code>{masked_name}</code>")
         
     # 5. Insert into MongoDB collection
-    import uuid
-    post_id = str(uuid.uuid4())[:8]
-    
+    # Map GDrive ID URLs for frames preview
+    thumbnails_urls = [f"https://miniapp.anihubyt.com/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
+    default_thumb = thumbnails_urls[0] if thumbnails_urls else image_url
+
+    # Determine category based on duration override
+    final_category = "Viral Shorts" if (duration and duration < 20) else category
+
     await clone_mongo_db.posts.insert_one({
         "_id": post_id,
         "title": title,
-        "image_url": image_url,
-        "category": category,
+        "image_url": default_thumb,
+        "thumbnails": thumbnails_urls,
+        "category": final_category,
         "gdrive_file_id": gdrive_file_id,
         "is_gdrive": True,
         "bot_username": client.me.username,
