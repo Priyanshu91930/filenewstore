@@ -3846,6 +3846,21 @@ async def upload_gdrive_cmd_handler(client, message):
     )
 
 
+@Client.on_message(filters.command("migrate_gdrive") & filters.private)
+async def migrate_gdrive_command(client: Client, message: Message):
+    from config import ADMINS
+    user_id = message.from_user.id
+    if user_id not in ADMINS:
+        return await message.reply_text("<b>❌ Access Denied:</b> This command is restricted to bot admins only.")
+        
+    global MIGRATION_RUNNING
+    if MIGRATION_RUNNING:
+        return await message.reply_text("<b>⚠️ GDrive Migration is already running in background!</b>")
+        
+    status_msg = await message.reply_text("<b>⏳ Initializing GDrive Migration Worker...</b>")
+    asyncio.create_task(migration_background_worker(client, status_msg, message.chat.id))
+
+
 # Global migration lock to prevent multiple tasks
 MIGRATION_RUNNING = False
 
