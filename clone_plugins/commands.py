@@ -3125,7 +3125,7 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
     CLONE_MIGRATION_RUNNING = True
     CLONE_MIGRATION_CANCELLED = False
     
-    from gdrive_helper import upload_file_to_gdrive
+    from gdrive_helper import upload_file_to_gdrive, create_gdrive_folder
     from config import LOG_CHANNEL
     from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     import uuid
@@ -3168,9 +3168,11 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
 
             post_id = post["_id"]
             title = post.get("title", "Untitled")
+            caption = post.get("caption", post.get("title", ""))
             deeplink = post.get("file_deeplink", "")
             
             gdrive_ids = []
+            gdrive_folder_id = None
             is_batch = False
             
             if not deeplink:
@@ -3194,6 +3196,12 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                                 os.remove(batch_json_path)
                             except:
                                 pass
+                            
+                            # Create a dedicated GDrive folder for this batch collection
+                            folder_name = caption or title or f"batch_{post_id}"
+                            gdrive_folder_id, _ = create_gdrive_folder(folder_name)
+                            if not gdrive_folder_id:
+                                logger.error(f"Failed to create GDrive folder for batch {post_id}, uploading to root folder.")
                                 
                             for b_idx, item in enumerate(batch_data):
                                 if CLONE_MIGRATION_CANCELLED:
@@ -3204,12 +3212,16 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                                 video_msg = await client.get_messages(channel_id, msg_id)
                                 if video_msg and (video_msg.video or video_msg.document):
                                     media = video_msg.video or video_msg.document
+                                    # Preserve original caption from first part for batch caption
+                                    if b_idx == 0 and not caption:
+                                        caption = video_msg.caption or ""
                                     local_filename = getattr(media, "file_name", f"video_{post_id}_{b_idx}.mp4")
                                     local_path = os.path.join(temp_dir, local_filename)
                                     
                                     video_path = await client.download_media(media.file_id, file_name=local_path)
                                     if video_path and os.path.exists(video_path):
-                                        gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename)
+                                        # Upload into the batch's dedicated folder
+                                        gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename, parent_folder_id=gdrive_folder_id)
                                         try:
                                             os.remove(video_path)
                                         except:
@@ -3255,16 +3267,18 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                     logger.error(f"Error migrating single file {post_id}: {e}")
 
             if gdrive_ids:
+                update_fields = {
+                    "is_gdrive": True,
+                    "is_batch": is_batch,
+                    "gdrive_file_id": gdrive_ids[0],
+                    "gdrive_file_ids": gdrive_ids,
+                    "caption": caption  # Save original caption for app display
+                }
+                if gdrive_folder_id:
+                    update_fields["gdrive_folder_id"] = gdrive_folder_id  # Batch collection folder
                 await mongo_db.posts.update_one(
                     {"_id": post_id},
-                    {
-                        "$set": {
-                            "is_gdrive": True,
-                            "is_batch": is_batch,
-                            "gdrive_file_id": gdrive_ids[0],
-                            "gdrive_file_ids": gdrive_ids
-                        }
-                    }
+                    {"$set": update_fields}
                 )
                 success_count += 1
             else:
