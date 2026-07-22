@@ -677,7 +677,7 @@ def _gdrive_file_to_post(gfile, category_name="All"):
 
 @routes.get("/gdrive-portal-data", allow_head=True)
 async def gdrive_portal_data_handler(request: web.Request):
-    """GDrive-based video feed for React Native app."""
+    """GDrive-based video feed joined with MongoDB metadata."""
     import asyncio
     import math
     from config import GDRIVE_FOLDER_ID
@@ -701,6 +701,35 @@ async def gdrive_portal_data_handler(request: web.Request):
             else:
                 files = await loop.run_in_executor(None, lambda: _list_gdrive_files_sync(GDRIVE_FOLDER_ID, limit * page))
                 posts = [_gdrive_file_to_post(f, 'All') for f in files]
+
+        # ── MongoDB Integration: Fetch actual captions & images ──
+        from plugins.clone import async_mongo_db
+        file_ids = [p['gdrive_file_id'] for p in posts if p.get('gdrive_file_id')]
+        if file_ids:
+            cursor = async_mongo_db.posts.find({
+                "$or": [
+                    {"gdrive_file_id": {"$in": file_ids}},
+                    {"gdrive_file_ids": {"$in": file_ids}}
+                ]
+            })
+            db_posts = await cursor.to_list(length=100)
+            
+            db_map = {}
+            for db_p in db_posts:
+                gid = db_p.get("gdrive_file_id")
+                if gid:
+                    db_map[gid] = db_p
+                gids = db_p.get("gdrive_file_ids") or []
+                for sub_gid in gids:
+                    db_map[sub_gid] = db_p
+
+            for p in posts:
+                match = db_map.get(p['gdrive_file_id'])
+                if match:
+                    p['title'] = match.get('title') or p['title']
+                    p['image_url'] = match.get('image_url') or p['image_url']
+                    p['views'] = int(match.get('views', 0)) or p['views']
+                    p['is_paid'] = bool(match.get('is_paid', False))
 
         start = (page - 1) * limit
         paged = posts[start:start + limit]
