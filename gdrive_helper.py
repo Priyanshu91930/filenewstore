@@ -26,17 +26,26 @@ def upload_file_to_gdrive(local_file_path, original_filename):
     if not os.path.exists(local_file_path):
         return None, f"Local file does not exist: {local_file_path}"
         
-    sa_path = GDRIVE_SERVICE_ACCOUNT_FILE
-    if not os.path.exists(sa_path):
-        return None, f"Google Service Account key file not found at: {sa_path}"
-        
     if not GDRIVE_FOLDER_ID:
         return None, "GDRIVE_FOLDER_ID is not configured in config.py"
 
     try:
         # Load Google Credentials
         scopes = ['https://www.googleapis.com/auth/drive']
-        creds = service_account.Credentials.from_service_account_file(sa_path, scopes=scopes)
+        creds = None
+        
+        # Check if token.json (User OAuth2) is present - RECOMMENDED for personal accounts
+        if os.path.exists('token.json'):
+            logger.info("Loading Google Drive OAuth2 User credentials from token.json...")
+            from google.oauth2.credentials import Credentials
+            creds = Credentials.from_authorized_user_file('token.json', scopes)
+        # Fallback to Service Account
+        elif os.path.exists(GDRIVE_SERVICE_ACCOUNT_FILE):
+            logger.info(f"Loading Google Drive Service Account credentials from {GDRIVE_SERVICE_ACCOUNT_FILE}...")
+            creds = service_account.Credentials.from_service_account_file(GDRIVE_SERVICE_ACCOUNT_FILE, scopes=scopes)
+        else:
+            return None, "Google Credentials not found. Please provide token.json or service_account.json"
+            
         service = build('drive', 'v3', credentials=creds)
         
         # Mask the filename to bypass AI scanning (UUID + .dat)
