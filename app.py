@@ -183,7 +183,9 @@ def portal_data():
             'bot_username': doc.get('bot_username', ''),
             'views': doc.get('views', 0),
             'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
-            'is_paid': bool(doc.get('is_paid', False))
+            'is_paid': bool(doc.get('is_paid', False)),
+            'gdrive_file_id': doc.get('gdrive_file_id', ''),
+            'is_gdrive': bool(doc.get('is_gdrive', False))
         })
 
     # Get unique categories

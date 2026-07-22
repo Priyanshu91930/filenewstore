@@ -3663,6 +3663,316 @@ async def add_post_cmd_handler(client, message):
     await message.reply_text(f"<b>✅ Post added successfully!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}\nBot Username: {bot_username or 'Default'}</b>")
 
 
+@Client.on_message(filters.command("upload_gdrive") & filters.private & filters.user(ADMINS))
+async def upload_gdrive_cmd_handler(client, message):
+    replied = message.reply_to_message
+    if not replied:
+        return await message.reply_text("<b>❌ Please reply to a video file to upload to Google Drive.</b>")
+        
+    media = replied.video or replied.document
+    if not media:
+        return await message.reply_text("<b>❌ Replied message does not contain a video or document file.</b>")
+        
+    # Check mime type for documents to ensure it's video
+    if replied.document and not (media.mime_type and media.mime_type.startswith("video/")):
+        return await message.reply_text("<b>❌ The replied document is not a valid video file.</b>")
+        
+    # 1. Parse Title and Category
+    caption = replied.caption or ""
+    lines = [l.strip() for l in caption.split('\n') if l.strip()]
+    
+    title = lines[0] if lines else getattr(media, "file_name", f"Video_{int(time.time())}")
+    title = re.sub(r'<[^>]+>', '', title)
+    title = re.sub(r'[*_`~]', '', title).strip()
+    
+    category = "General"
+    if len(message.command) > 1:
+        category = message.text.split(" ", 1)[1].strip()
+    else:
+        for line in lines:
+            if line.lower().startswith("category:") or line.lower().startswith("genre:"):
+                parsed_cat = line.split(":", 1)[1].strip()
+                parsed_cat = re.sub(r'<[^>]+>', '', parsed_cat).strip()
+                if parsed_cat:
+                    category = parsed_cat
+                    break
+
+    sts = await message.reply_text("<b>⏳ Downloading thumbnail and generating image link...</b>")
+    
+    # 2. Extract and Upload Thumbnail
+    image_url = None
+    if media.thumbs:
+        try:
+            thumb_file = await client.download_media(media.thumbs[0].file_id)
+            if thumb_file:
+                thumb_msg = await client.send_photo(chat_id=message.chat.id, photo=thumb_file)
+                image_url, _ = await upload_image(client, thumb_msg)
+                try:
+                    os.remove(thumb_file)
+                    await thumb_msg.delete()
+                except:
+                    pass
+        except Exception as e:
+            logger.error(f"Thumbnail generation error: {e}")
+            
+    if not image_url:
+        image_url = "https://graph.org/file/6a869326b7756a622bd48-6213fc97b75f7bfb30.jpg" # default placeholder
+        
+    await sts.edit_text("<b>⏳ Starting video download from Telegram...</b>")
+    
+    # Create temp directory
+    temp_dir = "scratch/temp_upload"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # Create a progress reporter state
+    class ProgressState:
+        def __init__(self):
+            self.last_update = 0
+
+    state = ProgressState()
+    
+    async def progress_callback(current, total):
+        now = time.time()
+        if now - state.last_update < 4:
+            return
+        state.last_update = now
+        pct = (current / total) * 100
+        try:
+            await sts.edit_text(f"<b>⏳ Downloading video from Telegram...</b>\n<code>[{'●' * int(pct // 10)}{'○' * (10 - int(pct // 10))}] {pct:.1f}%</code>")
+        except:
+            pass
+
+    # 3. Download the video file
+    local_filename = getattr(media, "file_name", f"video_{int(time.time())}.mp4")
+    local_path = os.path.join(temp_dir, local_filename)
+    
+    try:
+        downloaded_path = await client.download_media(
+            message=media.file_id,
+            file_name=local_path,
+            progress=progress_callback
+        )
+    except Exception as e:
+        return await sts.edit_text(f"<b>❌ Telegram Download Failed:</b>\n<code>{e}</code>")
+        
+    if not downloaded_path or not os.path.exists(downloaded_path):
+        return await sts.edit_text("<b>❌ Failed to download file from Telegram.</b>")
+        
+    await sts.edit_text("<b>⏳ Uploading video to Google Drive with anti-ban masking...</b>")
+    
+    # 4. Upload to Google Drive using helper
+    from gdrive_helper import upload_file_to_gdrive
+    gdrive_file_id, masked_name = upload_file_to_gdrive(downloaded_path, local_filename)
+    
+    # Clean up local file immediately
+    try:
+        os.remove(downloaded_path)
+    except Exception as e:
+        logger.error(f"Failed to remove temp file: {e}")
+        
+    if not gdrive_file_id:
+        return await sts.edit_text(f"<b>❌ GDrive Upload Failed:</b>\n<code>{masked_name}</code>")
+        
+    # 5. Insert into MongoDB collection
+    import uuid
+    post_id = str(uuid.uuid4())[:8]
+    
+    await clone_mongo_db.posts.insert_one({
+        "_id": post_id,
+        "title": title,
+        "image_url": image_url,
+        "category": category,
+        "gdrive_file_id": gdrive_file_id,
+        "is_gdrive": True,
+        "bot_username": client.me.username,
+        "created_at": time.time(),
+        "views": 0,
+        "reactions": {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}
+    })
+    
+    await sts.edit_text(
+        f"<b>✅ Video uploaded and synced successfully!</b>\n\n"
+        f"📋 <b>Post ID:</b> <code>{post_id}</code>\n"
+        f"🎬 <b>Title:</b> {title}\n"
+        f"📂 <b>Category:</b> {category}\n"
+        f"🔑 <b>GDrive File ID:</b> <code>{gdrive_file_id}</code>\n"
+        f"🎭 <b>Masked Name:</b> <code>{masked_name}</code>"
+    )
+
+
+# Global migration lock to prevent multiple tasks
+MIGRATION_RUNNING = False
+
+async def migration_background_worker(client, status_msg, admin_chat_id):
+    global MIGRATION_RUNNING
+    MIGRATION_RUNNING = True
+    
+    from plugins.clone import async_mongo_db as clone_mongo_db
+    from gdrive_helper import upload_file_to_gdrive
+    from config import LOG_CHANNEL
+    import uuid
+    import os
+    import base64
+    import json
+
+    try:
+        bot_username = client.me.username
+        query = {"bot_username": bot_username, "is_gdrive": {"$ne": True}}
+        total_posts = await clone_mongo_db.posts.count_documents(query)
+        
+        await status_msg.edit_text(f"<b>🚀 Starting GDrive Migration!</b>\n🔍 Found <b>{total_posts}</b> posts to process for @{bot_username}.\n<i>I will update you every 10 posts.</i>")
+        
+        temp_dir = "scratch/temp_migration"
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        success_count = 0
+        fail_count = 0
+        
+        posts_cursor = clone_mongo_db.posts.find(query).sort("created_at", -1)
+        
+        async for post in posts_cursor:
+            post_id = post["_id"]
+            title = post.get("title", "Untitled")
+            deeplink = post.get("file_deeplink", "")
+            
+            gdrive_ids = []
+            is_batch = False
+            
+            if not deeplink:
+                continue
+                
+            if deeplink.startswith("BATCH-"):
+                is_batch = True
+                try:
+                    batch_file_id = deeplink.split("-", 1)[1]
+                    decoded_msg_id = int(base64.urlsafe_b64decode(batch_file_id + "=" * (-len(batch_file_id) % 4)).decode("ascii"))
+                    
+                    msg = await client.get_messages(LOG_CHANNEL, decoded_msg_id)
+                    if msg and msg.document:
+                        batch_json_path = await client.download_media(msg.document.file_id, file_name=os.path.join(temp_dir, f"batch_{post_id}.json"))
+                        if batch_json_path and os.path.exists(batch_json_path):
+                            with open(batch_json_path, "r", encoding="utf-8") as f:
+                                batch_data = json.load(f)
+                            try:
+                                os.remove(batch_json_path)
+                            except:
+                                pass
+                                
+                            for b_idx, item in enumerate(batch_data):
+                                channel_id = item["channel_id"]
+                                msg_id = item["msg_id"]
+                                
+                                video_msg = await client.get_messages(channel_id, msg_id)
+                                if video_msg and (video_msg.video or video_msg.document):
+                                    media = video_msg.video or video_msg.document
+                                    local_filename = getattr(media, "file_name", f"video_{post_id}_{b_idx}.mp4")
+                                    local_path = os.path.join(temp_dir, local_filename)
+                                    
+                                    video_path = await client.download_media(media.file_id, file_name=local_path)
+                                    if video_path and os.path.exists(video_path):
+                                        gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename)
+                                        try:
+                                            os.remove(video_path)
+                                        except:
+                                            pass
+                                        if gdrive_id:
+                                            gdrive_ids.append(gdrive_id)
+                except Exception as e:
+                    logger.error(f"Error migrating batch {post_id}: {e}")
+            else:
+                try:
+                    decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
+                    if "_" in decoded:
+                        _, decode_file_id = decoded.split("_", 1)
+                    else:
+                        decode_file_id = decoded
+
+                    file_id = None
+                    if decode_file_id.isdigit():
+                        msg = await client.get_messages(LOG_CHANNEL, int(decode_file_id))
+                        if msg and msg.media:
+                            media = getattr(msg, msg.media.value)
+                            file_id = media.file_id
+                            local_filename = getattr(media, "file_name", f"video_{post_id}.mp4")
+                    else:
+                        file_doc = await clone_mongo_db.clone_files.find_one({"_id": decode_file_id})
+                        if file_doc:
+                            file_id = file_doc.get("file_id")
+                            local_filename = f"video_{post_id}.mp4"
+                            
+                    if file_id:
+                        local_path = os.path.join(temp_dir, local_filename)
+                        video_path = await client.download_media(file_id, file_name=local_path)
+                        if video_path and os.path.exists(video_path):
+                            gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename)
+                            try:
+                                os.remove(video_path)
+                            except:
+                                pass
+                            if gdrive_id:
+                                gdrive_ids.append(gdrive_id)
+                except Exception as e:
+                    logger.error(f"Error migrating single file {post_id}: {e}")
+
+            if gdrive_ids:
+                await clone_mongo_db.posts.update_one(
+                    {"_id": post_id},
+                    {
+                        "$set": {
+                            "is_gdrive": True,
+                            "is_batch": is_batch,
+                            "gdrive_file_id": gdrive_ids[0],
+                            "gdrive_file_ids": gdrive_ids
+                        }
+                    }
+                )
+                success_count += 1
+            else:
+                fail_count += 1
+                
+            # Log progress every 10 posts
+            processed = success_count + fail_count
+            if processed % 10 == 0 or processed == total_posts:
+                try:
+                    await client.send_message(
+                        chat_id=admin_chat_id,
+                        text=f"<b>📊 GDrive Migration Progress:</b>\n"
+                             f"Processed: <code>{processed}/{total_posts}</code>\n"
+                             f"✅ Success: <code>{success_count}</code>\n"
+                             f"❌ Failed: <code>{fail_count}</code>"
+                    )
+                except Exception as ex:
+                    logger.error(f"Failed to send migration progress message: {ex}")
+                    
+        await client.send_message(
+            chat_id=admin_chat_id,
+            text=f"<b>🎉 GDrive Migration Task Finished!</b>\n\n"
+                 f"Total Processed: <code>{success_count + fail_count}</code>\n"
+                 f"✅ Successfully Migrated: <code>{success_count}</code>\n"
+                 f"❌ Failed: <code>{fail_count}</code>\n\n"
+                 f"All GDrive videos are now playable in your React Native app."
+        )
+    except Exception as e:
+        logger.error(f"Migration background worker error: {e}")
+        try:
+            await client.send_message(chat_id=admin_chat_id, text=f"<b>❌ GDrive Migration crashed with error:</b>\n<code>{e}</code>")
+        except:
+            pass
+    finally:
+        MIGRATION_RUNNING = False
+
+@Client.on_message(filters.command("migrate_gdrive") & filters.private & filters.user(ADMINS))
+async def migrate_gdrive_cmd_handler(client, message):
+    global MIGRATION_RUNNING
+    if MIGRATION_RUNNING:
+        return await message.reply_text("<b>⚠️ GDrive Migration task is already running in the background! Please wait.</b>")
+        
+    sts = await message.reply_text("<b>⏳ Spawning background task to migrate all old videos...</b>")
+    
+    # Run task in background
+    asyncio.create_task(migration_background_worker(client, sts, message.chat.id))
+
+
 @Client.on_message(filters.command("delpost") & filters.private & filters.user(ADMINS))
 async def del_post_cmd_handler(client, message):
     replied = message.reply_to_message
