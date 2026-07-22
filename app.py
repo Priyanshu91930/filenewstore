@@ -185,6 +185,9 @@ def portal_data():
             'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
             'is_paid': bool(doc.get('is_paid', False)),
             'gdrive_file_id': doc.get('gdrive_file_id', ''),
+            'gdrive_file_ids': doc.get('gdrive_file_ids', []),
+            'is_batch': bool(doc.get('is_batch', False)),
+            'caption': doc.get('caption', doc.get('title', '')),
             'is_gdrive': bool(doc.get('is_gdrive', False))
         })
 
