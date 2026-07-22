@@ -3139,7 +3139,7 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
     ]])
 
     try:
-        query = {"bot_username": bot_username, "is_gdrive": {"$ne": True}}
+        query = {"bot_username": bot_username}
         total_posts = await mongo_db.posts.count_documents(query)
         
         await status_msg.edit_text(
