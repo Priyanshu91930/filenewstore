@@ -3298,6 +3298,9 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                     except Exception as ex:
                         logger.error(f"Failed to edit migration progress message: {ex}")
                         
+        except Exception as iter_err:
+            logger.error(f"Error in posts cursor loop: {iter_err}")
+            
         if not CLONE_MIGRATION_CANCELLED:
             await status_msg.edit_text(
                 text=f"<b>🎉 GDrive Migration Task Finished!</b>\n\n"
