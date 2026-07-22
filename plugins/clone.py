@@ -207,5 +207,5 @@ async def restart_bots():
             # Set bot commands so they appear in Telegram menu
             await set_clone_commands(vj)
             running_clones[bot_id] = vj
-        except:
-            pass
+        except Exception as startup_err:
+            logger.error(f"Error starting clone bot {bot_id}: {startup_err}")
