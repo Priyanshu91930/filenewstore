@@ -256,6 +256,7 @@ def api_react_post():
 
 
 
+
 @app.route('/api/check-vip')
 def api_check_vip():
     """API endpoint to check if a user is VIP."""
@@ -286,6 +287,169 @@ def api_check_vip():
             is_user_vip = True
 
     return jsonify({'is_vip': is_user_vip})
+
+
+# ─── GDrive Video Feed (for React Native App) ────────────────────────────────
+
+CLOUDFLARE_WORKER_URL = "https://appvideo.solankipriyanshu94.workers.dev"
+
+def _get_gdrive_service_app():
+    """Returns authenticated Google Drive service for app.py."""
+    import os
+    from googleapiclient.discovery import build
+    from google.oauth2 import service_account
+    from google.oauth2.credentials import Credentials
+
+    scopes = ['https://www.googleapis.com/auth/drive.readonly']
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', scopes)
+    elif os.path.exists('service_account.json'):
+        creds = service_account.Credentials.from_service_account_file(
+            'service_account.json', scopes=scopes
+        )
+    else:
+        raise FileNotFoundError("No Google credentials found.")
+    return build('drive', 'v3', credentials=creds)
+
+
+def _list_gdrive_files_app(folder_id, page_size=50):
+    """Lists .dat video files in a GDrive folder."""
+    try:
+        service = _get_gdrive_service_app()
+        query = f"'{folder_id}' in parents and trashed=false and mimeType != 'application/vnd.google-apps.folder'"
+        results = service.files().list(
+            q=query,
+            pageSize=page_size,
+            fields="files(id, name, description, mimeType, createdTime, thumbnailLink, appProperties)"
+        ).execute()
+        return results.get('files', [])
+    except Exception as e:
+        print(f"GDrive list files error: {e}")
+        return []
+
+
+def _list_gdrive_subfolders_app(parent_folder_id):
+    """Lists sub-folders in a GDrive folder."""
+    try:
+        service = _get_gdrive_service_app()
+        query = f"'{parent_folder_id}' in parents and trashed=false and mimeType = 'application/vnd.google-apps.folder'"
+        results = service.files().list(
+            q=query,
+            pageSize=100,
+            fields="files(id, name, description)"
+        ).execute()
+        return results.get('files', [])
+    except Exception as e:
+        print(f"GDrive list subfolders error: {e}")
+        return []
+
+
+def _gdrive_file_to_post_app(gfile, category_name="All"):
+    """Converts a GDrive file dict to React Native app post format."""
+    props = gfile.get('appProperties') or {}
+    file_id = gfile['id']
+    title = props.get('title') or gfile['name'].replace('.dat', '').replace('-', ' ').replace('_', ' ').title()
+    thumbnail = props.get('thumbnail_url') or gfile.get('thumbnailLink') or \
+        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'
+    stream_url = f"{CLOUDFLARE_WORKER_URL}/video.mp4?fileId={file_id}"
+
+    # Handle multi-part videos stored as comma-separated file IDs in appProperties
+    raw_ids = props.get('gdrive_file_ids', '')
+    if raw_ids and isinstance(raw_ids, str):
+        gdrive_file_ids = [x.strip() for x in raw_ids.split(',') if x.strip()]
+    elif isinstance(raw_ids, list):
+        gdrive_file_ids = raw_ids
+    else:
+        gdrive_file_ids = [file_id]
+
+    return {
+        "id": file_id,
+        "title": title,
+        "category": category_name,
+        "views": int(props.get('views', 0)),
+        "duration": props.get('duration', '03:15'),
+        "image_url": thumbnail,
+        "stream_url": stream_url,
+        "is_gdrive": True,
+        "gdrive_file_id": file_id,
+        "gdrive_file_ids": gdrive_file_ids,
+        "is_paid": props.get('is_paid', 'false') == 'true',
+        "bot_username": props.get('bot_username', 'ViralVideosBot'),
+        "created_time": gfile.get('createdTime', ''),
+        "reactions": {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0},
+    }
+
+
+@app.route('/gdrive-portal-data')
+def gdrive_portal_data():
+    """
+    GDrive-based video feed for React Native app.
+    Lists .dat files from GDrive folder, returns stream URLs via Cloudflare Worker.
+    Query params: category (All or folder ID/name), limit, page
+    """
+    from config import GDRIVE_FOLDER_ID
+    import math
+
+    category = request.args.get('category', 'All')
+    limit = int(request.args.get('limit', 30))
+    page = int(request.args.get('page', 1))
+
+    try:
+        posts = []
+
+        if category == 'All':
+            files = _list_gdrive_files_app(GDRIVE_FOLDER_ID, page_size=limit * page)
+            for f in files:
+                posts.append(_gdrive_file_to_post_app(f, category_name='All'))
+        else:
+            subfolders = _list_gdrive_subfolders_app(GDRIVE_FOLDER_ID)
+            matched_folder = None
+            for folder in subfolders:
+                if folder['id'] == category or folder['name'].lower() == category.lower():
+                    matched_folder = folder
+                    break
+
+            if matched_folder:
+                files = _list_gdrive_files_app(matched_folder['id'], page_size=limit * page)
+                for f in files:
+                    posts.append(_gdrive_file_to_post_app(f, category_name=matched_folder['name']))
+            else:
+                files = _list_gdrive_files_app(GDRIVE_FOLDER_ID, page_size=limit * page)
+                for f in files:
+                    posts.append(_gdrive_file_to_post_app(f, category_name='All'))
+
+        # Simple pagination: slice to current page
+        start = (page - 1) * limit
+        end = start + limit
+        paged_posts = posts[start:end]
+        total_pages = math.ceil(len(posts) / limit) if posts else 1
+
+        return jsonify({
+            "status": "ok",
+            "posts": paged_posts,
+            "categories": ['All'],
+            "page": page,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+        })
+
+    except Exception as e:
+        print(f"/gdrive-portal-data error: {e}")
+        return jsonify({"error": str(e), "posts": [], "categories": ['All']}), 500
+
+
+@app.route('/gdrive-folders')
+def gdrive_folders_app():
+    """Returns GDrive sub-folders as categories for the React Native app."""
+    from config import GDRIVE_FOLDER_ID
+    try:
+        folders = _list_gdrive_subfolders_app(GDRIVE_FOLDER_ID)
+        categories = [{"id": f['id'], "name": f['name']} for f in folders]
+        return jsonify({"categories": categories})
+    except Exception as e:
+        return jsonify({"error": str(e), "categories": []}), 500
+
 
 if __name__ == "__main__":
     app.run()
