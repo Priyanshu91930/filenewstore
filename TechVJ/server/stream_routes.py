@@ -648,7 +648,7 @@ def _list_gdrive_subfolders_sync(parent_folder_id):
 def _gdrive_file_to_post(gfile, category_name="All"):
     props = gfile.get('appProperties') or {}
     file_id = gfile['id']
-    title = props.get('title') or gfile['name'].replace('.dat', '').replace('-', ' ').replace('_', ' ').title()
+    title = props.get('title') or gfile.get('description') or gfile['name'].replace('.dat', '').replace('-', ' ').replace('_', ' ').title()
     thumbnail = props.get('thumbnail_url') or gfile.get('thumbnailLink') or \
         'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'
 
