@@ -3153,8 +3153,8 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
         success_count = 0
         fail_count = 0
         
-        # Load posts to process in batches/lists to prevent Atlas tier CursorTimeout restrictions
-        posts_list = await mongo_db.posts.find(query).sort("created_at", -1).to_list(length=1000)
+        # Load posts to process in chronological order (oldest first). We set length=None to fetch all unmigrated posts.
+        posts_list = await mongo_db.posts.find(query).sort("created_at", 1).to_list(length=None)
         
         for post in posts_list:
             # Check for cancellation
