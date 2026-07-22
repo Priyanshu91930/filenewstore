@@ -645,12 +645,46 @@ def _list_gdrive_subfolders_sync(parent_folder_id):
         return []
 
 
+def _get_aesthetic_thumbnail(title, original_thumbnail):
+    t = (title or "").lower()
+    # If it is a real non-default image link, use it
+    if original_thumbnail and "unsplash.com/photo-1618005182384" not in original_thumbnail and original_thumbnail.startswith("http"):
+        return original_thumbnail
+
+    # Keyword matched sexy/adult assets
+    if any(x in t for x in ["nud", "sex", "fuck", "girl", "hot", "bhabhi", "aunty", "nude", "desi"]):
+        adults = [
+            "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&auto=format&fit=crop&q=60",
+            "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500&auto=format&fit=crop&q=60",
+            "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=500&auto=format&fit=crop&q=60",
+            "https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?w=500&auto=format&fit=crop&q=60"
+        ]
+        val = sum(ord(c) for c in t)
+        return adults[val % len(adults)]
+
+    # Tech collections
+    if any(x in t for x in ["tech", "code", "ai", "cyber"]):
+        return "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=500&auto=format&fit=crop&q=60"
+
+    # Music/Dance collections
+    if any(x in t for x in ["music", "song", "dance"]):
+        return "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&auto=format&fit=crop&q=60"
+
+    # Fallback general collection
+    general = [
+        "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60",
+        "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=500&auto=format&fit=crop&q=60",
+        "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500&auto=format&fit=crop&q=60"
+    ]
+    val = sum(ord(c) for c in t)
+    return general[val % len(general)]
+
+
 def _gdrive_file_to_post(gfile, category_name="All"):
     props = gfile.get('appProperties') or {}
     file_id = gfile['id']
     title = props.get('title') or gfile.get('description') or gfile['name'].replace('.dat', '').replace('-', ' ').replace('_', ' ').title()
-    thumbnail = props.get('thumbnail_url') or gfile.get('thumbnailLink') or \
-        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'
+    thumbnail = _get_aesthetic_thumbnail(title, props.get('thumbnail_url') or gfile.get('thumbnailLink'))
 
     raw_ids = props.get('gdrive_file_ids', '')
     if raw_ids and isinstance(raw_ids, str):
@@ -727,9 +761,13 @@ async def gdrive_portal_data_handler(request: web.Request):
                 match = db_map.get(p['gdrive_file_id'])
                 if match:
                     p['title'] = match.get('title') or p['title']
-                    p['image_url'] = match.get('image_url') or p['image_url']
+                    p['image_url'] = _get_aesthetic_thumbnail(p['title'], match.get('image_url'))
                     p['views'] = int(match.get('views', 0)) or p['views']
                     p['is_paid'] = bool(match.get('is_paid', False))
+
+        # Fetch unique categories dynamically from GDrive subfolders
+        subfolders = await loop.run_in_executor(None, lambda: _list_gdrive_subfolders_sync(GDRIVE_FOLDER_ID))
+        categories = ['All'] + [f['name'] for f in subfolders]
 
         start = (page - 1) * limit
         paged = posts[start:start + limit]
@@ -738,7 +776,7 @@ async def gdrive_portal_data_handler(request: web.Request):
         return web.json_response({
             "status": "ok",
             "posts": paged,
-            "categories": ['All'],
+            "categories": categories,
             "page": page,
             "total_pages": total_pages,
             "has_next": page < total_pages,
