@@ -11,6 +11,20 @@
  * - OR configure Service Account parameters below if using private files.
  */
 
+class XorTransformStream {
+  constructor(key = 0x5A) {
+    this.key = key;
+  }
+  
+  transform(chunk, controller) {
+    const decrypted = new Uint8Array(chunk.length);
+    for (let i = 0; i < chunk.length; i++) {
+      decrypted[i] = chunk[i] ^ this.key;
+    }
+    controller.enqueue(decrypted);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -73,8 +87,16 @@ export default {
           });
         }
 
+        // Decrypt the stream on-the-fly using TransformStream (only for successful requests)
+        let responseBody = driveResponse.body;
+        if (responseBody && (driveResponse.status === 200 || driveResponse.status === 206)) {
+          const decryptor = new TransformStream(new XorTransformStream(0x5A));
+          responseBody.pipeTo(decryptor.writable);
+          responseBody = decryptor.readable;
+        }
+
         // Return the stream with modified headers
-        return new Response(driveResponse.body, {
+        return new Response(responseBody, {
           status: driveResponse.status,
           statusText: driveResponse.statusText,
           headers: responseHeaders

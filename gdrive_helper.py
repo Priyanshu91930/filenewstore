@@ -29,6 +29,7 @@ def upload_file_to_gdrive(local_file_path, original_filename):
     if not GDRIVE_FOLDER_ID:
         return None, "GDRIVE_FOLDER_ID is not configured in config.py"
 
+    temp_encrypted_path = None
     try:
         # Load Google Credentials
         scopes = ['https://www.googleapis.com/auth/drive']
@@ -53,6 +54,20 @@ def upload_file_to_gdrive(local_file_path, original_filename):
         masked_filename = f"{uuid.uuid4()}{file_ext}"
         logger.info(f"Masking file: '{original_filename}' -> '{masked_filename}'")
         
+        # Encrypt the file using XOR (key 0x5A) to block Google AI scans and previews
+        temp_encrypted_path = f"{local_file_path}.enc"
+        logger.info(f"Encrypting file with XOR: {local_file_path} -> {temp_encrypted_path}")
+        try:
+            with open(local_file_path, 'rb') as f_in:
+                with open(temp_encrypted_path, 'wb') as f_out:
+                    while True:
+                        chunk = f_in.read(65536)
+                        if not chunk:
+                            break
+                        f_out.write(bytes(b ^ 0x5A for b in chunk))
+        except Exception as enc_err:
+            return None, f"XOR Encryption Failed: {enc_err}"
+        
         # Prepare file metadata and media upload
         file_metadata = {
             'name': masked_filename,
@@ -62,7 +77,7 @@ def upload_file_to_gdrive(local_file_path, original_filename):
         # Determine appropriate chunk size (e.g. 5MB)
         chunk_size = 5 * 1024 * 1024
         media = MediaFileUpload(
-            local_file_path, 
+            temp_encrypted_path, 
             mimetype='application/octet-stream', 
             resumable=True,
             chunksize=chunk_size
@@ -104,3 +119,10 @@ def upload_file_to_gdrive(local_file_path, original_filename):
         error_msg = f"GDrive Upload Exception: {e}"
         logger.error(error_msg)
         return None, error_msg
+    finally:
+        if temp_encrypted_path and os.path.exists(temp_encrypted_path):
+            try:
+                os.remove(temp_encrypted_path)
+                logger.info(f"Cleaned up temporary encrypted file: {temp_encrypted_path}")
+            except Exception as clean_err:
+                logger.error(f"Failed to delete temporary encrypted file: {clean_err}")
