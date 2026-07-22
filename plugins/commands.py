@@ -3164,7 +3164,7 @@ async def successful_payment_handler(client, message):
             except Exception as e:
                 logger.error(f"Failed to notify admin {admin} of successful payment: {e}")
 
-@Client.on_message(filters.photo & filters.private & filters.incoming)
+@Client.on_message((filters.photo | filters.document) & filters.private & filters.incoming)
 async def photo_message_handler(client, message):
     me = client.me or await client.get_me()
     state_doc = await clone_mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id})
