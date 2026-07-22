@@ -152,7 +152,7 @@ def portal_data():
     page = int(request.args.get('page', 1))
     category = request.args.get('category', 'All')
     search = request.args.get('search', '')
-    limit = 12
+    limit = int(request.args.get('limit', 100))
 
     db_client = MongoClient(DB_URI)
     db = db_client["cloned_vjbotz"]
