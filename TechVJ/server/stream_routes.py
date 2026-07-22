@@ -706,6 +706,7 @@ def _gdrive_file_to_post(gfile, category_name="All"):
         "is_paid": props.get('is_paid', 'false') == 'true',
         "bot_username": props.get('bot_username', 'ViralVideosBot'),
         "reactions": {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0},
+        "thumbnails": [thumbnail],
     }
 
 
@@ -764,6 +765,12 @@ async def gdrive_portal_data_handler(request: web.Request):
                     p['image_url'] = _get_aesthetic_thumbnail(p['title'], match.get('image_url'))
                     p['views'] = int(match.get('views', 0)) or p['views']
                     p['is_paid'] = bool(match.get('is_paid', False))
+                    p['thumbnails'] = match.get('thumbnails') or [p['image_url']]
+                else:
+                    p['thumbnails'] = [p['image_url']]
+
+            # Sort all fetched posts by views count descending (highest views first)
+            posts.sort(key=lambda x: x.get('views', 0), reverse=True)
 
         # Fetch unique categories dynamically from GDrive subfolders
         subfolders = await loop.run_in_executor(None, lambda: _list_gdrive_subfolders_sync(GDRIVE_FOLDER_ID))
