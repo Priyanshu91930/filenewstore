@@ -3153,9 +3153,10 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
         success_count = 0
         fail_count = 0
         
-        posts_cursor = mongo_db.posts.find(query).sort("created_at", -1)
+        posts_cursor = mongo_db.posts.find(query, no_cursor_timeout=True).sort("created_at", -1)
         
-        async for post in posts_cursor:
+        try:
+            async for post in posts_cursor:
             # Check for cancellation
             if CLONE_MIGRATION_CANCELLED:
                 await status_msg.edit_text(
@@ -3305,6 +3306,8 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                      f"❌ Failed: <code>{fail_count}</code>\n\n"
                      f"All GDrive videos are now playable in your React Native app."
             )
+        finally:
+            await posts_cursor.close()
     except Exception as e:
         logger.error(f"Migration background worker error: {e}")
         try:
