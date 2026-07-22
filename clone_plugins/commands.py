@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 CLONE_TOKENS = {}
 CLONE_VERIFIED = MongoDict("clone_verifications")
+CLONE_MIGRATION_CANCELLED = False
 BATCH_FILES = {}
 
 def from_small_caps(text: str) -> str:
@@ -1443,6 +1444,18 @@ async def join_reqs_handler(client, join_request):
 async def cb_handler(client: Client, query: CallbackQuery):
     me = client.me or await client.get_me()
     
+    if query.data == "cancel_gdrive_migration":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods and query.from_user.id not in ADMINS:
+            return await query.answer("❌ Only the bot owner and moderators can cancel this task!", show_alert=True)
+            
+        global CLONE_MIGRATION_CANCELLED
+        CLONE_MIGRATION_CANCELLED = True
+        await query.answer("🛑 Cancellation request received! Stopping migration...", show_alert=True)
+        return
+
     if query.data.startswith("sub_pay_"):
         payload = query.data.split("sub_pay_", 1)[1]
         await mongo_db.user_states.update_one(
@@ -3108,21 +3121,31 @@ async def clone_upload_gdrive_cmd_handler(client, message):
 CLONE_MIGRATION_RUNNING = False
 
 async def clone_migration_background_worker(client, status_msg, admin_chat_id, bot_username):
-    global CLONE_MIGRATION_RUNNING
+    global CLONE_MIGRATION_RUNNING, CLONE_MIGRATION_CANCELLED
     CLONE_MIGRATION_RUNNING = True
+    CLONE_MIGRATION_CANCELLED = False
     
     from gdrive_helper import upload_file_to_gdrive
     from config import LOG_CHANNEL
+    from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     import uuid
     import os
     import base64
     import json
 
+    # Define inline keyboard markup for cancellation
+    markup = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🛑 Cancel Migration", callback_data="cancel_gdrive_migration")
+    ]])
+
     try:
         query = {"bot_username": bot_username, "is_gdrive": {"$ne": True}}
         total_posts = await mongo_db.posts.count_documents(query)
         
-        await status_msg.edit_text(f"<b>🚀 Starting GDrive Migration!</b>\n🔍 Found <b>{total_posts}</b> posts to process for @{bot_username}.\n<i>I will update you every 10 posts.</i>")
+        await status_msg.edit_text(
+            text=f"<b>🚀 Starting GDrive Migration!</b>\n🔍 Found <b>{total_posts}</b> posts to process for @{bot_username}.\n<i>I will update this dashboard live.</i>",
+            reply_markup=markup
+        )
         
         temp_dir = "scratch/temp_migration"
         os.makedirs(temp_dir, exist_ok=True)
@@ -3133,6 +3156,16 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
         posts_cursor = mongo_db.posts.find(query).sort("created_at", -1)
         
         async for post in posts_cursor:
+            # Check for cancellation
+            if CLONE_MIGRATION_CANCELLED:
+                await status_msg.edit_text(
+                    text=f"<b>🛑 GDrive Migration has been Cancelled!</b>\n\n"
+                         f"Processed before cancellation: <code>{success_count + fail_count}/{total_posts}</code>\n"
+                         f"✅ Success: <code>{success_count}</code>\n"
+                         f"❌ Failed: <code>{fail_count}</code>"
+                )
+                break
+
             post_id = post["_id"]
             title = post.get("title", "Untitled")
             deeplink = post.get("file_deeplink", "")
@@ -3163,6 +3196,8 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                                 pass
                                 
                             for b_idx, item in enumerate(batch_data):
+                                if CLONE_MIGRATION_CANCELLED:
+                                    break
                                 channel_id = item["channel_id"]
                                 msg_id = item["msg_id"]
                                 
@@ -3238,28 +3273,28 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
             processed = success_count + fail_count
             if processed % 10 == 0 or processed == total_posts:
                 try:
-                    await client.send_message(
-                        chat_id=admin_chat_id,
+                    await status_msg.edit_text(
                         text=f"<b>📊 GDrive Migration Progress:</b>\n"
                              f"Processed: <code>{processed}/{total_posts}</code>\n"
                              f"✅ Success: <code>{success_count}</code>\n"
-                             f"❌ Failed: <code>{fail_count}</code>"
+                             f"❌ Failed: <code>{fail_count}</code>",
+                        reply_markup=markup
                     )
                 except Exception as ex:
-                    logger.error(f"Failed to send migration progress message: {ex}")
+                    logger.error(f"Failed to edit migration progress message: {ex}")
                     
-        await client.send_message(
-            chat_id=admin_chat_id,
-            text=f"<b>🎉 GDrive Migration Task Finished!</b>\n\n"
-                 f"Total Processed: <code>{success_count + fail_count}</code>\n"
-                 f"✅ Successfully Migrated: <code>{success_count}</code>\n"
-                 f"❌ Failed: <code>{fail_count}</code>\n\n"
-                 f"All GDrive videos are now playable in your React Native app."
-        )
+        if not CLONE_MIGRATION_CANCELLED:
+            await status_msg.edit_text(
+                text=f"<b>🎉 GDrive Migration Task Finished!</b>\n\n"
+                     f"Total Processed: <code>{success_count + fail_count}/{total_posts}</code>\n"
+                     f"✅ Successfully Migrated: <code>{success_count}</code>\n"
+                     f"❌ Failed: <code>{fail_count}</code>\n\n"
+                     f"All GDrive videos are now playable in your React Native app."
+            )
     except Exception as e:
         logger.error(f"Migration background worker error: {e}")
         try:
-            await client.send_message(chat_id=admin_chat_id, text=f"<b>❌ GDrive Migration crashed with error:</b>\n<code>{e}</code>")
+            await status_msg.edit_text(text=f"<b>❌ GDrive Migration crashed with error:</b>\n<code>{e}</code>")
         except:
             pass
     finally:
