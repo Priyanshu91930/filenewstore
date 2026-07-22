@@ -604,7 +604,7 @@ def _get_gdrive_service_sync():
     from google.oauth2 import service_account
     from google.oauth2.credentials import Credentials
 
-    scopes = ['https://www.googleapis.com/auth/drive.readonly']
+    scopes = ['https://www.googleapis.com/auth/drive']
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', scopes)
     elif os.path.exists('service_account.json'):
