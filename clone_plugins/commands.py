@@ -3157,147 +3157,147 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
         
         try:
             async for post in posts_cursor:
-            # Check for cancellation
-            if CLONE_MIGRATION_CANCELLED:
-                await status_msg.edit_text(
-                    text=f"<b>🛑 GDrive Migration has been Cancelled!</b>\n\n"
-                         f"Processed before cancellation: <code>{success_count + fail_count}/{total_posts}</code>\n"
-                         f"✅ Success: <code>{success_count}</code>\n"
-                         f"❌ Failed: <code>{fail_count}</code>"
-                )
-                break
-
-            post_id = post["_id"]
-            title = post.get("title", "Untitled")
-            caption = post.get("caption", post.get("title", ""))
-            deeplink = post.get("file_deeplink", "")
-            
-            gdrive_ids = []
-            gdrive_folder_id = None
-            is_batch = False
-            
-            if not deeplink:
-                continue
-                
-            if deeplink.startswith("BATCH-"):
-                is_batch = True
-                try:
-                    batch_file_id = deeplink.split("-", 1)[1]
-                    decoded_msg_id = int(base64.urlsafe_b64decode(batch_file_id + "=" * (-len(batch_file_id) % 4)).decode("ascii"))
-                    
-                    # Log channel JSON fetching
-                    from TechVJ.bot import StreamBot
-                    msg = await StreamBot.get_messages(LOG_CHANNEL, decoded_msg_id)
-                    if msg and msg.document:
-                        batch_json_path = await StreamBot.download_media(msg.document.file_id, file_name=os.path.join(temp_dir, f"batch_{post_id}.json"))
-                        if batch_json_path and os.path.exists(batch_json_path):
-                            with open(batch_json_path, "r", encoding="utf-8") as f:
-                                batch_data = json.load(f)
-                            try:
-                                os.remove(batch_json_path)
-                            except:
-                                pass
-                            
-                            # Create a dedicated GDrive folder for this batch collection
-                            folder_name = caption or title or f"batch_{post_id}"
-                            gdrive_folder_id, _ = create_gdrive_folder(folder_name)
-                            if not gdrive_folder_id:
-                                logger.error(f"Failed to create GDrive folder for batch {post_id}, uploading to root folder.")
-                                
-                            for b_idx, item in enumerate(batch_data):
-                                if CLONE_MIGRATION_CANCELLED:
-                                    break
-                                channel_id = item["channel_id"]
-                                msg_id = item["msg_id"]
-                                
-                                video_msg = await client.get_messages(channel_id, msg_id)
-                                if video_msg and (video_msg.video or video_msg.document):
-                                    media = video_msg.video or video_msg.document
-                                    # Preserve original caption from first part for batch caption
-                                    if b_idx == 0 and not caption:
-                                        caption = video_msg.caption or ""
-                                    local_filename = getattr(media, "file_name", f"video_{post_id}_{b_idx}.mp4")
-                                    local_path = os.path.join(temp_dir, local_filename)
-                                    
-                                    video_path = await client.download_media(media.file_id, file_name=local_path)
-                                    if video_path and os.path.exists(video_path):
-                                        # Upload into the batch's dedicated folder
-                                        gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename, parent_folder_id=gdrive_folder_id)
-                                        try:
-                                            os.remove(video_path)
-                                        except:
-                                            pass
-                                        if gdrive_id:
-                                            gdrive_ids.append(gdrive_id)
-                except Exception as e:
-                    logger.error(f"Error migrating batch {post_id}: {e}")
-            else:
-                try:
-                    decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
-                    if "_" in decoded:
-                        _, decode_file_id = decoded.split("_", 1)
-                    else:
-                        decode_file_id = decoded
-
-                    file_id = None
-                    if decode_file_id.isdigit():
-                        from TechVJ.bot import StreamBot
-                        msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
-                        if msg and msg.media:
-                            media = getattr(msg, msg.media.value)
-                            file_id = media.file_id
-                            local_filename = getattr(media, "file_name", f"video_{post_id}.mp4")
-                    else:
-                        file_doc = await mongo_db.clone_files.find_one({"_id": decode_file_id})
-                        if file_doc:
-                            file_id = file_doc.get("file_id")
-                            local_filename = f"video_{post_id}.mp4"
-                            
-                    if file_id:
-                        local_path = os.path.join(temp_dir, local_filename)
-                        video_path = await client.download_media(file_id, file_name=local_path)
-                        if video_path and os.path.exists(video_path):
-                            gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename)
-                            try:
-                                os.remove(video_path)
-                            except:
-                                pass
-                            if gdrive_id:
-                                gdrive_ids.append(gdrive_id)
-                except Exception as e:
-                    logger.error(f"Error migrating single file {post_id}: {e}")
-
-            if gdrive_ids:
-                update_fields = {
-                    "is_gdrive": True,
-                    "is_batch": is_batch,
-                    "gdrive_file_id": gdrive_ids[0],
-                    "gdrive_file_ids": gdrive_ids,
-                    "caption": caption  # Save original caption for app display
-                }
-                if gdrive_folder_id:
-                    update_fields["gdrive_folder_id"] = gdrive_folder_id  # Batch collection folder
-                await mongo_db.posts.update_one(
-                    {"_id": post_id},
-                    {"$set": update_fields}
-                )
-                success_count += 1
-            else:
-                fail_count += 1
-                
-            processed = success_count + fail_count
-            if processed % 10 == 0 or processed == total_posts:
-                try:
+                # Check for cancellation
+                if CLONE_MIGRATION_CANCELLED:
                     await status_msg.edit_text(
-                        text=f"<b>📊 GDrive Migration Progress:</b>\n"
-                             f"Processed: <code>{processed}/{total_posts}</code>\n"
+                        text=f"<b>🛑 GDrive Migration has been Cancelled!</b>\n\n"
+                             f"Processed before cancellation: <code>{success_count + fail_count}/{total_posts}</code>\n"
                              f"✅ Success: <code>{success_count}</code>\n"
-                             f"❌ Failed: <code>{fail_count}</code>",
-                        reply_markup=markup
+                             f"❌ Failed: <code>{fail_count}</code>"
                     )
-                except Exception as ex:
-                    logger.error(f"Failed to edit migration progress message: {ex}")
+                    break
+
+                post_id = post["_id"]
+                title = post.get("title", "Untitled")
+                caption = post.get("caption", post.get("title", ""))
+                deeplink = post.get("file_deeplink", "")
+                
+                gdrive_ids = []
+                gdrive_folder_id = None
+                is_batch = False
+                
+                if not deeplink:
+                    continue
                     
+                if deeplink.startswith("BATCH-"):
+                    is_batch = True
+                    try:
+                        batch_file_id = deeplink.split("-", 1)[1]
+                        decoded_msg_id = int(base64.urlsafe_b64decode(batch_file_id + "=" * (-len(batch_file_id) % 4)).decode("ascii"))
+                        
+                        # Log channel JSON fetching
+                        from TechVJ.bot import StreamBot
+                        msg = await StreamBot.get_messages(LOG_CHANNEL, decoded_msg_id)
+                        if msg and msg.document:
+                            batch_json_path = await StreamBot.download_media(msg.document.file_id, file_name=os.path.join(temp_dir, f"batch_{post_id}.json"))
+                            if batch_json_path and os.path.exists(batch_json_path):
+                                with open(batch_json_path, "r", encoding="utf-8") as f:
+                                    batch_data = json.load(f)
+                                try:
+                                    os.remove(batch_json_path)
+                                except:
+                                    pass
+                                
+                                # Create a dedicated GDrive folder for this batch collection
+                                folder_name = caption or title or f"batch_{post_id}"
+                                gdrive_folder_id, _ = create_gdrive_folder(folder_name)
+                                if not gdrive_folder_id:
+                                    logger.error(f"Failed to create GDrive folder for batch {post_id}, uploading to root folder.")
+                                    
+                                for b_idx, item in enumerate(batch_data):
+                                    if CLONE_MIGRATION_CANCELLED:
+                                        break
+                                    channel_id = item["channel_id"]
+                                    msg_id = item["msg_id"]
+                                    
+                                    video_msg = await client.get_messages(channel_id, msg_id)
+                                    if video_msg and (video_msg.video or video_msg.document):
+                                        media = video_msg.video or video_msg.document
+                                        # Preserve original caption from first part for batch caption
+                                        if b_idx == 0 and not caption:
+                                            caption = video_msg.caption or ""
+                                        local_filename = getattr(media, "file_name", f"video_{post_id}_{b_idx}.mp4")
+                                        local_path = os.path.join(temp_dir, local_filename)
+                                        
+                                        video_path = await client.download_media(media.file_id, file_name=local_path)
+                                        if video_path and os.path.exists(video_path):
+                                            # Upload into the batch's dedicated folder
+                                            gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename, parent_folder_id=gdrive_folder_id)
+                                            try:
+                                                os.remove(video_path)
+                                            except:
+                                                pass
+                                            if gdrive_id:
+                                                gdrive_ids.append(gdrive_id)
+                    except Exception as e:
+                        logger.error(f"Error migrating batch {post_id}: {e}")
+                else:
+                    try:
+                        decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
+                        if "_" in decoded:
+                            _, decode_file_id = decoded.split("_", 1)
+                        else:
+                            decode_file_id = decoded
+
+                        file_id = None
+                        if decode_file_id.isdigit():
+                            from TechVJ.bot import StreamBot
+                            msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
+                            if msg and msg.media:
+                                media = getattr(msg, msg.media.value)
+                                file_id = media.file_id
+                                local_filename = getattr(media, "file_name", f"video_{post_id}.mp4")
+                        else:
+                            file_doc = await mongo_db.clone_files.find_one({"_id": decode_file_id})
+                            if file_doc:
+                                file_id = file_doc.get("file_id")
+                                local_filename = f"video_{post_id}.mp4"
+                                
+                        if file_id:
+                            local_path = os.path.join(temp_dir, local_filename)
+                            video_path = await client.download_media(file_id, file_name=local_path)
+                            if video_path and os.path.exists(video_path):
+                                gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename)
+                                try:
+                                    os.remove(video_path)
+                                except:
+                                    pass
+                                if gdrive_id:
+                                    gdrive_ids.append(gdrive_id)
+                    except Exception as e:
+                        logger.error(f"Error migrating single file {post_id}: {e}")
+
+                if gdrive_ids:
+                    update_fields = {
+                        "is_gdrive": True,
+                        "is_batch": is_batch,
+                        "gdrive_file_id": gdrive_ids[0],
+                        "gdrive_file_ids": gdrive_ids,
+                        "caption": caption  # Save original caption for app display
+                    }
+                    if gdrive_folder_id:
+                        update_fields["gdrive_folder_id"] = gdrive_folder_id  # Batch collection folder
+                    await mongo_db.posts.update_one(
+                        {"_id": post_id},
+                        {"$set": update_fields}
+                    )
+                    success_count += 1
+                else:
+                    fail_count += 1
+                    
+                processed = success_count + fail_count
+                if processed % 10 == 0 or processed == total_posts:
+                    try:
+                        await status_msg.edit_text(
+                            text=f"<b>📊 GDrive Migration Progress:</b>\n"
+                                 f"Processed: <code>{processed}/{total_posts}</code>\n"
+                                 f"✅ Success: <code>{success_count}</code>\n"
+                                 f"❌ Failed: <code>{fail_count}</code>",
+                            reply_markup=markup
+                        )
+                    except Exception as ex:
+                        logger.error(f"Failed to edit migration progress message: {ex}")
+                        
         if not CLONE_MIGRATION_CANCELLED:
             await status_msg.edit_text(
                 text=f"<b>🎉 GDrive Migration Task Finished!</b>\n\n"
