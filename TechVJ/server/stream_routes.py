@@ -1211,6 +1211,9 @@ async def get_user_stats(request: web.Request):
                 dt = datetime.fromtimestamp(expiry)
                 vip_expiry_str = dt.strftime("%d %b %Y, %I:%M %p")
 
+        user_record = await async_mongo_db.user.find_one({"email": email})
+        allowed_views = user_record.get("allowed_views", 0) if user_record else 0
+
         return web.json_response({
             "status": "ok",
             "liked_count": liked_count,
@@ -1220,9 +1223,168 @@ async def get_user_stats(request: web.Request):
             "downloads_enabled": is_vip,
             "is_vip": is_vip,
             "vip_expiry": vip_expiry_str,
+            "allowed_views": allowed_views,
         })
     except Exception as e:
         logging.error(f"/user/stats error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/user/ad-watched")
+async def register_ad_watched(request: web.Request):
+    """Credit 3 video views to free user after ad completion."""
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+
+        await async_mongo_db.user.update_one(
+            {"email": email},
+            {"$inc": {"allowed_views": 3}},
+            upsert=True
+        )
+
+        user_record = await async_mongo_db.user.find_one({"email": email})
+        allowed_views = user_record.get("allowed_views", 0) if user_record else 0
+
+        return web.json_response({
+            "status": "ok",
+            "message": "3 views credited successfully!",
+            "allowed_views": allowed_views
+        })
+    except Exception as e:
+        logging.error(f"/user/ad-watched error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/verify/generate-link")
+async def generate_verification_shortlink(request: web.Request):
+    """Generates a shortened link that redirects back to the app schema after completion."""
+    from utils import get_verify_shorted_link
+    from plugins.clone import async_mongo_db
+    import time
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+            
+        token = data.get("token")
+        if not token:
+            return web.json_response({"status": "error", "message": "token required"}, status=400)
+            
+        # Target redirect URL (backend verify endpoint that registers view and redirects to app deep link)
+        target_url = f"https://miniapp.anihubyt.com/verify/complete?email={email}&token={token}"
+        
+        # Shorten using configured main shortlink
+        short_link = await get_verify_shorted_link(target_url)
+        
+        # Save token in DB for validation on redirection
+        await async_mongo_db.user_verifications.update_one(
+            {"email": email},
+            {"$set": {"token": token, "verified": False, "created_at": time.time()}},
+            upsert=True
+        )
+        
+        return web.json_response({"status": "ok", "shortlink": short_link})
+    except Exception as e:
+        logging.error(f"/verify/generate-link error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/verify/complete")
+async def verification_complete_redirect(request: web.Request):
+    """Processes verification completion and redirects back to the app via deep link scheme."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        token = request.rel_url.query.get("token", "")
+        
+        record = await async_mongo_db.user_verifications.find_one({"email": email})
+        if record and record.get("token") == token:
+            # Mark verified
+            await async_mongo_db.user_verifications.update_one(
+                {"email": email},
+                {"$set": {"verified": True}}
+            )
+            # Credit 3 views
+            await async_mongo_db.user.update_one(
+                {"email": email},
+                {"$inc": {"allowed_views": 3}},
+                upsert=True
+            )
+            
+        # Redirect back to the app using custom URI scheme (viralverse://)
+        raise web.HTTPFound("viralverse://home?verified=true")
+    except web.HTTPFound as redirect:
+        raise redirect
+    except Exception as e:
+        logging.error(f"/verify/complete error: {e}")
+        return web.Response(text=f"Verification Error: {str(e)}", status=500)
+
+
+@routes.get("/verify/check-status")
+async def check_verification_status(request: web.Request):
+    """Allows app to poll status if deep link redirection fails or to verify view credits."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        record = await async_mongo_db.user_verifications.find_one({"email": email})
+        
+        if record and record.get("verified") is True:
+            # Clear status so it isn't reused
+            await async_mongo_db.user_verifications.delete_one({"email": email})
+            
+            user_record = await async_mongo_db.user.find_one({"email": email})
+            allowed_views = user_record.get("allowed_views", 0) if user_record else 0
+            
+            return web.json_response({"status": "verified", "allowed_views": allowed_views})
+            
+        return web.json_response({"status": "pending"})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/user/consume-view")
+async def consume_user_view(request: web.Request):
+    """Decrement allowed_views by 1 when a free user plays a video."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+
+        vip = await async_mongo_db.vip_users.find_one({"email": email})
+        is_vip = False
+        if vip:
+            expiry = vip.get("expiry")
+            is_vip = expiry is None or time.time() < expiry
+
+        if is_vip:
+            return web.json_response({"status": "ok", "is_vip": True})
+
+        user_record = await async_mongo_db.user.find_one({"email": email})
+        current_views = user_record.get("allowed_views", 0) if user_record else 0
+
+        if current_views > 0:
+            await async_mongo_db.user.update_one(
+                {"email": email},
+                {"$inc": {"allowed_views": -1}}
+            )
+            new_views = current_views - 1
+        else:
+            new_views = 0
+
+        return web.json_response({
+            "status": "ok",
+            "allowed_views": new_views
+        })
+    except Exception as e:
+        logging.error(f"/user/consume-view error: {e}")
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
