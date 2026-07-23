@@ -157,7 +157,7 @@ def portal_data():
     db_client = MongoClient(DB_URI)
     db = db_client["cloned_vjbotz"]
 
-    query = {}
+    query = {"is_gdrive": True}
     if category != 'All':
         query['category'] = category
     if search:
