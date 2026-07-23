@@ -3089,7 +3089,9 @@ async def clone_upload_gdrive_cmd_handler(client, message):
         logger.error(f"Failed to remove temp file: {e}")
         
     if not gdrive_file_id:
-        return await sts.edit_text(f"<b>❌ GDrive Upload Failed:</b>\n<code>{masked_name}</code>")
+        import html
+        safe_msg = html.escape(str(masked_name))
+        return await sts.edit_text(f"<b>❌ GDrive Upload Failed:</b>\n<code>{safe_msg}</code>")
         
     import uuid
     post_id = str(uuid.uuid4())[:8]

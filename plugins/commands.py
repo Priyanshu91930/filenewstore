@@ -3812,7 +3812,9 @@ async def upload_gdrive_cmd_handler(client, message):
         logger.error(f"Failed to remove temp file: {e}")
         
     if not gdrive_file_id:
-        return await sts.edit_text(f"<b>❌ GDrive Upload Failed:</b>\n<code>{masked_name}</code>")
+        import html
+        safe_msg = html.escape(str(masked_name))
+        return await sts.edit_text(f"<b>❌ GDrive Upload Failed:</b>\n<code>{safe_msg}</code>")
         
     # 5. Insert into MongoDB collection
     thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
