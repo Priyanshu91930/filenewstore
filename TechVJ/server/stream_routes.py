@@ -481,9 +481,9 @@ async def portal_data_route_handler(request: web.Request):
     page = int(request.rel_url.query.get('page', 1))
     category = request.rel_url.query.get('category', 'All')
     search = request.rel_url.query.get('search', '')
-    limit = 12
+    limit = int(request.rel_url.query.get('limit', 100))
 
-    query = {}
+    query = {"is_gdrive": True}
     if category != 'All':
         query['category'] = category
     if search:
@@ -494,7 +494,7 @@ async def portal_data_route_handler(request: web.Request):
     page = max(1, min(page, total_pages))
     skip = (page - 1) * limit
 
-    posts_cursor = async_mongo_db.posts.find(query).sort('created_at', -1).skip(skip).limit(limit)
+    posts_cursor = async_mongo_db.posts.find(query).sort([('is_paid', -1), ('created_at', -1)]).skip(skip).limit(limit)
     posts = []
     async for doc in posts_cursor:
         posts.append({
@@ -505,7 +505,14 @@ async def portal_data_route_handler(request: web.Request):
             'file_deeplink': doc.get('file_deeplink', ''),
             'bot_username': doc.get('bot_username', ''),
             'views': doc.get('views', 0),
-            'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0})
+            'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
+            'is_paid': bool(doc.get('is_paid', False)),
+            'gdrive_file_id': doc.get('gdrive_file_id', ''),
+            'gdrive_file_ids': doc.get('gdrive_file_ids', []),
+            'is_batch': bool(doc.get('is_batch', False)),
+            'caption': doc.get('caption', doc.get('title', '')),
+            'is_gdrive': bool(doc.get('is_gdrive', False)),
+            'thumbnails': doc.get('thumbnails', [])
         })
 
     # Get unique categories
