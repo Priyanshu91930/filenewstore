@@ -1292,16 +1292,28 @@ async def register_ad_watched(request: web.Request):
 @routes.post("/get-ad-link")
 async def get_ad_link_handler(request: web.Request):
     """
-    Returns the correct ad shortlink for a given app user based on visit history.
-    
-    Logic:
-      - New user (never seen an ad before) → vplink.in
-      - Returning user (has seen ads before)  → arolinks.com
-    
+    Returns the correct ad shortlink for a given app user based on visit count.
+
+    Rotation (round-robin across all 5 providers):
+      visit 1  → vplink.in       (primary)
+      visit 2  → arolinks.com    (secondary)
+      visit 3  → alpha-links.in  (tertiary)
+      visit 4  → nowshort.com    (fourth)
+      visit 5  → liteshort.com   (fifth)
+      visit 6  → vplink.in again  … and so on
+
     Tracks total ad impressions per email in 'app_ad_views' MongoDB collection.
-    
+
     Request body: { "email": "user@example.com" }
-    Response:     { "status": "ok", "ad_url": "https://...", "provider": "vplink|arolinks", "is_new_user": true|false }
+    Response:
+      {
+        "status": "ok",
+        "ad_url": "https://...",
+        "provider": "vplink",
+        "site": "vplink.in",
+        "is_new_user": true,
+        "total_views": 1
+      }
     """
     from plugins.clone import async_mongo_db
     import time
@@ -1312,61 +1324,70 @@ async def get_ad_link_handler(request: web.Request):
         if not email:
             return web.json_response({"status": "error", "message": "email required"}, status=400)
 
-        # ── Fetch the bot's configured ad shortener API keys ──────────────────
-        from config import BOT_USERNAME
+        # ── Load all 5 provider keys (from config.py defaults) ────────────────
+        from config import (
+            BOT_USERNAME,
+            SHORTLINK_API,        SHORTLINK_URL,
+            SECONDARY_SHORTLINK_API,  SECONDARY_SHORTLINK_URL,
+            TERTIARY_SHORTLINK_API,   TERTIARY_SHORTLINK_URL,
+            FOURTH_SHORTLINK_API,     FOURTH_SHORTLINK_URL,
+            FIFTH_SHORTLINK_API,      FIFTH_SHORTLINK_URL,
+        )
+
+        # Allow bot-level override from DB, else fall back to global config
         bot_doc = await async_mongo_db.bots.find_one({"username": BOT_USERNAME})
 
-        # Primary (vplink) config
-        primary_api   = (bot_doc.get("shortener_api") if bot_doc else None) or ""
-        primary_site  = (bot_doc.get("shortener_site") if bot_doc else None) or "vplink.in"
+        def _b(key, fallback):
+            return (bot_doc.get(key) if bot_doc else None) or fallback
 
-        # Secondary (arolinks) config
-        secondary_api  = (bot_doc.get("secondary_shortener_api") if bot_doc else None) or ""
-        secondary_site = (bot_doc.get("secondary_shortener_site") if bot_doc else None) or "arolinks.com"
+        ALL_PROVIDERS = [
+            # (label, api_key, site)
+            ("vplink",      _b("shortener_api",           SHORTLINK_API),         _b("shortener_site",           SHORTLINK_URL or "vplink.in")),
+            ("arolinks",    _b("secondary_shortener_api",  SECONDARY_SHORTLINK_API), _b("secondary_shortener_site", SECONDARY_SHORTLINK_URL or "arolinks.com")),
+            ("alpha-links", _b("tertiary_shortener_api",   TERTIARY_SHORTLINK_API),  _b("tertiary_shortener_site",  TERTIARY_SHORTLINK_URL or "alpha-links.in")),
+            ("nowshort",    _b("fourth_shortener_api",     FOURTH_SHORTLINK_API),    _b("fourth_shortener_site",    FOURTH_SHORTLINK_URL or "nowshort.com")),
+            ("liteshort",   _b("fifth_shortener_api",      FIFTH_SHORTLINK_API),     _b("fifth_shortener_site",     FIFTH_SHORTLINK_URL or "liteshort.com")),
+        ]
+        # Filter out any unconfigured providers
+        PROVIDERS = [(label, api, site) for label, api, site in ALL_PROVIDERS if api and api != "None"]
+        if not PROVIDERS:
+            PROVIDERS = [("vplink", SHORTLINK_API, SHORTLINK_URL or "vplink.in")]
 
-        # ── Check if user has ever viewed an ad ───────────────────────────────
-        ad_record = await async_mongo_db.app_ad_views.find_one({"email": email})
+        # ── Check user's existing ad view count ──────────────────────────────
+        ad_record   = await async_mongo_db.app_ad_views.find_one({"email": email})
         is_new_user = ad_record is None
         total_views = ad_record.get("total_views", 0) if ad_record else 0
 
-        # ── Decide which ad provider to use ───────────────────────────────────
-        # First ever visit → vplink (primary)
-        # Any subsequent visit → arolinks (secondary)
-        if is_new_user:
-            chosen_api  = primary_api
-            chosen_site = primary_site
-            provider    = "vplink"
-        else:
-            chosen_api  = secondary_api
-            chosen_site = secondary_site
-            provider    = "arolinks"
+        # ── Round-robin: index = total_views % number_of_providers ───────────
+        idx           = total_views % len(PROVIDERS)
+        provider, chosen_api, chosen_site = PROVIDERS[idx]
 
-        # ── Update visit count in app_ad_views ───────────────────────────────
+        logging.info(f"[get-ad-link] email={email} views={total_views} idx={idx} provider={provider} ({chosen_site})")
+
+        # ── Increment visit count ─────────────────────────────────────────────
         await async_mongo_db.app_ad_views.update_one(
             {"email": email},
             {
-                "$inc":  {"total_views": 1},
-                "$set":  {"last_seen": time.time()},
-                "$setOnInsert": {"email": email, "first_seen": time.time()}
+                "$inc": {"total_views": 1},
+                "$set": {"last_seen": time.time()},
+                "$setOnInsert": {"email": email, "first_seen": time.time()},
             },
-            upsert=True
+            upsert=True,
         )
 
-        # ── Build target URL (app deep-link or fallback) ─────────────────────
+        # ── Build target URL & shorten ────────────────────────────────────────
         target_url = f"https://miniapp.anihubyt.com/app-return?email={email}"
+        ad_url     = target_url  # plain fallback
 
-        # ── Shorten the URL through the chosen provider ───────────────────────
-        ad_url = target_url  # fallback — plain URL if API key not configured
-        if chosen_api:
-            try:
-                from utils import get_verify_shorted_link
-                ad_url = await get_verify_shorted_link(
-                    target_url,
-                    api_key=chosen_api,
-                    shortener_url=chosen_site
-                )
-            except Exception as shorten_err:
-                logging.warning(f"/get-ad-link shortening failed ({chosen_site}): {shorten_err}")
+        try:
+            from utils import get_verify_shorted_link
+            ad_url = await get_verify_shorted_link(
+                target_url,
+                api_key=chosen_api,
+                shortener_url=chosen_site,
+            )
+        except Exception as shorten_err:
+            logging.warning(f"/get-ad-link shortening failed ({chosen_site}): {shorten_err}")
 
         return web.json_response({
             "status":      "ok",
