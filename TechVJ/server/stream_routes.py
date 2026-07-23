@@ -1278,8 +1278,15 @@ async def generate_verification_shortlink(request: web.Request):
         # Target redirect URL (backend verify endpoint that registers view and redirects to app deep link)
         target_url = f"https://miniapp.anihubyt.com/verify/complete?email={email}&token={token}"
         
-        # Shorten using configured main shortlink
-        short_link = await get_verify_shorted_link(target_url)
+        # Get rotated shortlink based on user's daily verification count
+        from utils import get_tma_shortlink
+        from config import BOT_USERNAME
+        
+        # Get numeric user_id if exists in database or fall back to hash
+        user_rec = await async_mongo_db.user.find_one({"email": email})
+        user_id = user_rec.get("user_id", 999999) if user_rec else 999999
+        
+        short_link = await get_tma_shortlink(user_id=user_id, token=token, file_data="", bot_username=BOT_USERNAME, custom_link=target_url)
         
         # Save token in DB for validation on redirection
         await async_mongo_db.user_verifications.update_one(
@@ -1321,6 +1328,24 @@ async def verification_complete_redirect(request: web.Request):
                 {"$inc": {"allowed_views": 3}},
                 upsert=True
             )
+            
+            # Increment daily verify count to trigger shortlink rotation for next time
+            try:
+                import pytz
+                from datetime import datetime
+                tz = pytz.timezone('Asia/Kolkata')
+                today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                user_rec = await async_mongo_db.user.find_one({"email": email})
+                user_id = user_rec.get("user_id", 999999) if user_rec else 999999
+                
+                # Update main bot verification count (bot_id = 999999999 as configured in rotation utils)
+                await async_mongo_db.tma_verify_count.update_one(
+                    {"bot_id": 999999999, "user_id": user_id, "date": today_str},
+                    {"$inc": {"count": 1}},
+                    upsert=True
+                )
+            except Exception as ex:
+                logging.error(f"Error updating verify count for rotation: {ex}")
             
             # Redirect back to the app using custom URI scheme (viralverse://)
             raise web.HTTPFound("viralverse://home?verified=true")

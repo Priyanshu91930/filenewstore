@@ -435,14 +435,14 @@ async def consume_token(token: str):
     except Exception as e:
         logger.error(f"Error consuming token: {e}")
 
-async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_username: str) -> str:
+async def get_tma_shortlink(user_id: int, token: str, file_data: str, bot_username: str, custom_link: str = None) -> str:
     """Build the target unlock link and shorten it.
     
     Alternates between primary API and secondary API on every verification
     to avoid bot traffic detection on shortlink sites (same-IP issue).
     Odd verifications → primary API, Even verifications → secondary API.
     """
-    link = f"https://t.me/{bot_username}?start=unlock-{user_id}-{token}-{file_data}"
+    link = custom_link or f"https://t.me/{bot_username}?start=unlock-{user_id}-{token}-{file_data}"
     
     # Query database for the bot's configured API Key and shortener URL
     import motor.motor_asyncio
