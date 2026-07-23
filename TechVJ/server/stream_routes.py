@@ -512,6 +512,7 @@ async def portal_data_route_handler(request: web.Request):
             'is_batch': bool(doc.get('is_batch', False)),
             'caption': doc.get('caption', doc.get('title', '')),
             'is_gdrive': bool(doc.get('is_gdrive', False)),
+            'duration': doc.get('duration', '03:15'),
             'thumbnails': [_normalize_image_url(t) for t in doc.get('thumbnails', [])] if doc.get('thumbnails') else [_normalize_image_url(doc.get('image_url', ''))]
         })
 
