@@ -3334,8 +3334,7 @@ Processed before cancellation: <code>{success_count + fail_count}/{total_posts}<
                     logger.error(f"Error migrating single file {post_id}: {e}")
 
             if gdrive_ids:
-                # Map GDrive ID URLs for frames preview
-                thumbnails_urls = [f"https://miniapp.anihubyt.com/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
+                thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
                 
                 update_fields = {
                     "is_gdrive": True,

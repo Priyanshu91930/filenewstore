@@ -500,7 +500,7 @@ async def portal_data_route_handler(request: web.Request):
         posts.append({
             'id': str(doc['_id']),
             'title': doc.get('title', ''),
-            'image_url': doc.get('image_url', ''),
+            'image_url': _normalize_image_url(doc.get('image_url', '')),
             'category': doc.get('category', ''),
             'file_deeplink': doc.get('file_deeplink', ''),
             'bot_username': doc.get('bot_username', ''),
@@ -512,7 +512,7 @@ async def portal_data_route_handler(request: web.Request):
             'is_batch': bool(doc.get('is_batch', False)),
             'caption': doc.get('caption', doc.get('title', '')),
             'is_gdrive': bool(doc.get('is_gdrive', False)),
-            'thumbnails': doc.get('thumbnails', [])
+            'thumbnails': [_normalize_image_url(t) for t in doc.get('thumbnails', [])] if doc.get('thumbnails') else [_normalize_image_url(doc.get('image_url', ''))]
         })
 
     # Get unique categories
@@ -604,6 +604,21 @@ async def api_check_vip_route_handler(request: web.Request):
 
 CLOUDFLARE_WORKER_URL = "https://appvideo.solankipriyanshu94.workers.dev"
 
+def _normalize_image_url(url_str):
+    if not url_str:
+        return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80'
+    
+    if "miniapp.anihubyt.com/stream" in url_str:
+        url_str = url_str.replace("https://miniapp.anihubyt.com/stream", f"{CLOUDFLARE_WORKER_URL}/stream")
+        
+    if url_str.startswith("/static/"):
+        from config import URL
+        base_url = (URL or "https://miniapp.anihubyt.com").rstrip("/")
+        url_str = f"{base_url}{url_str}"
+        
+    return url_str
+
+
 def _get_gdrive_service_sync():
     """Returns authenticated Google Drive service."""
     import os
@@ -691,7 +706,7 @@ def _gdrive_file_to_post(gfile, category_name="All"):
     props = gfile.get('appProperties') or {}
     file_id = gfile['id']
     title = props.get('title') or gfile.get('description') or gfile['name'].replace('.dat', '').replace('-', ' ').replace('_', ' ').title()
-    thumbnail = _get_aesthetic_thumbnail(title, props.get('thumbnail_url') or gfile.get('thumbnailLink'))
+    thumbnail = _normalize_image_url(_get_aesthetic_thumbnail(title, props.get('thumbnail_url') or gfile.get('thumbnailLink')))
 
     raw_ids = props.get('gdrive_file_ids', '')
     if raw_ids and isinstance(raw_ids, str):
@@ -769,11 +784,12 @@ async def gdrive_portal_data_handler(request: web.Request):
                 match = db_map.get(p['gdrive_file_id'])
                 if match:
                     p['title'] = match.get('title') or p['title']
-                    p['image_url'] = _get_aesthetic_thumbnail(p['title'], match.get('image_url'))
+                    p['image_url'] = _normalize_image_url(_get_aesthetic_thumbnail(p['title'], match.get('image_url')))
                     p['views'] = int(match.get('views', 0)) or p['views']
                     p['is_paid'] = bool(match.get('is_paid', False))
-                    p['thumbnails'] = match.get('thumbnails') or [p['image_url']]
+                    p['thumbnails'] = [_normalize_image_url(t) for t in match.get('thumbnails', [])] if match.get('thumbnails') else [p['image_url']]
                 else:
+                    p['image_url'] = _normalize_image_url(p['image_url'])
                     p['thumbnails'] = [p['image_url']]
 
             # Sort all fetched posts by views count descending (highest views first)

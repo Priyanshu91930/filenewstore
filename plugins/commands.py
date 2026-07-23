@@ -3815,8 +3815,7 @@ async def upload_gdrive_cmd_handler(client, message):
         return await sts.edit_text(f"<b>❌ GDrive Upload Failed:</b>\n<code>{masked_name}</code>")
         
     # 5. Insert into MongoDB collection
-    # Map GDrive ID URLs for frames preview
-    thumbnails_urls = [f"https://miniapp.anihubyt.com/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
+    thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
     default_thumb = thumbnails_urls[0] if thumbnails_urls else image_url
 
     # Determine category based on duration override
