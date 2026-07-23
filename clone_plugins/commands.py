@@ -2951,6 +2951,69 @@ async def delete_post_handler(client, message: Message):
         await message.reply_text(f"<b>❌ Failed to delete channel post:</b>\n<code>{e}</code>")
 
 
+@Client.on_message(filters.command(["delapppost", "delapp"]) & filters.private)
+async def delete_app_post_handler(client, message: Message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
+        return await message.reply("<b>❌ Only the bot owner, moderators, and admins can use this command.</b>")
+
+    replied = message.reply_to_message
+    deeplink = None
+
+    if replied:
+        text_to_search = replied.caption or replied.text or ""
+        if text_to_search:
+            import re
+            bot_match = re.search(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", text_to_search)
+            if bot_match:
+                deeplink = bot_match.group(1)
+            else:
+                links = re.findall(r"start=([A-Za-z0-9_-]+)", text_to_search)
+                if links:
+                    deeplink = links[0]
+                elif " " not in text_to_search.strip():
+                    deeplink = text_to_search.strip()
+
+    if not deeplink and len(message.command) >= 2:
+        deeplink = message.command[1].strip()
+
+    if not deeplink:
+        return await message.reply_text(
+            "<b>📋 Usage:</b> <code>/delapppost [Post ID / Start Payload]</code>\n"
+            "<b>Usage (Reply):</b> Reply to a message containing the post ID or payload link with <code>/delapppost</code>"
+        )
+
+    post_doc = await mongo_db.posts.find_one({"_id": deeplink})
+    if not post_doc:
+        post_doc = await mongo_db.posts.find_one({"file_deeplink": deeplink})
+
+    if post_doc:
+        from gdrive_helper import delete_file_from_gdrive
+        gdrive_file_id = post_doc.get("gdrive_file_id")
+        if gdrive_file_id:
+            delete_file_from_gdrive(gdrive_file_id)
+
+        thumbnails = post_doc.get("thumbnails", [])
+        for thumb_url in thumbnails:
+            if "fileId=" in thumb_url:
+                try:
+                    tid = thumb_url.split("fileId=")[1].split("&")[0]
+                    delete_file_from_gdrive(tid)
+                except:
+                    pass
+
+        await mongo_db.posts.delete_one({"_id": post_doc["_id"]})
+        return await message.reply_text(f"<b>✅ Post <code>{post_doc['_id']}</code> & its Google Drive files deleted successfully from App!</b>")
+    else:
+        return await message.reply_text("<b>❌ Post not found in App database for this Post ID or link.</b>")
+
+
 # ── Google Drive Automation & Migration Commands for Cloned Bots ──
 
 async def upload_image_via_main_bot(thumb_path) -> tuple:

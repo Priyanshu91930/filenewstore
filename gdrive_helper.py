@@ -182,3 +182,18 @@ def upload_file_to_gdrive(local_file_path, original_filename, parent_folder_id=N
                 logger.info(f"Cleaned up temp encrypted file: {temp_encrypted_path}")
             except Exception as clean_err:
                 logger.error(f"Failed to delete temp encrypted file: {clean_err}")
+
+
+def delete_file_from_gdrive(file_id: str) -> bool:
+    """Permanently delete a file or folder from Google Drive."""
+    if not file_id:
+        return False
+    try:
+        service = _get_gdrive_service()
+        service.files().delete(fileId=file_id).execute()
+        logger.info(f"Successfully deleted file {file_id} from Google Drive.")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to delete file {file_id} from GDrive: {e}")
+        return False
+

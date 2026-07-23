@@ -4070,14 +4070,28 @@ async def del_post_cmd_handler(client, message):
             else:
                 deeplink = links[0]
             
-        res = await clone_mongo_db.posts.delete_one({"file_deeplink": deeplink})
-        if res.deleted_count > 0:
-            return await message.reply_text("<b>✅ Post deleted successfully by reply!</b>")
+        post_doc = await clone_mongo_db.posts.find_one({"file_deeplink": deeplink})
+        if not post_doc:
+            post_doc = await clone_mongo_db.posts.find_one({"_id": deeplink})
+
+        if post_doc:
+            from gdrive_helper import delete_file_from_gdrive
+            gdrive_file_id = post_doc.get("gdrive_file_id")
+            if gdrive_file_id:
+                delete_file_from_gdrive(gdrive_file_id)
+
+            thumbnails = post_doc.get("thumbnails", [])
+            for thumb_url in thumbnails:
+                if "fileId=" in thumb_url:
+                    try:
+                        tid = thumb_url.split("fileId=")[1].split("&")[0]
+                        delete_file_from_gdrive(tid)
+                    except:
+                        pass
+
+            await clone_mongo_db.posts.delete_one({"_id": post_doc["_id"]})
+            return await message.reply_text("<b>✅ Post and Google Drive files deleted successfully from App and Cloud!</b>")
         else:
-            # Try to delete by ID if the deeplink matches a post ID
-            res_id = await clone_mongo_db.posts.delete_one({"_id": deeplink})
-            if res_id.deleted_count > 0:
-                return await message.reply_text("<b>✅ Post deleted successfully by ID!</b>")
             return await message.reply_text("<b>❌ Post not found in database for this link or ID.</b>")
 
     if len(message.command) < 2:
@@ -4101,14 +4115,31 @@ async def del_post_cmd_handler(client, message):
         else:
             deeplink = input_val
             
-    # Try deleting by _id first, then by file_deeplink
-    res = await clone_mongo_db.posts.delete_one({"_id": input_val})
-    if res.deleted_count > 0:
-        return await message.reply_text("<b>✅ Post deleted successfully by ID!</b>")
+    # Find post document to extract GDrive file IDs before deleting
+    post_doc = await clone_mongo_db.posts.find_one({"_id": input_val})
+    if not post_doc and deeplink:
+        post_doc = await clone_mongo_db.posts.find_one({"file_deeplink": deeplink})
+
+    if post_doc:
+        from gdrive_helper import delete_file_from_gdrive
         
-    res = await clone_mongo_db.posts.delete_one({"file_deeplink": deeplink})
-    if res.deleted_count > 0:
-        return await message.reply_text("<b>✅ Post deleted successfully by Start Payload!</b>")
+        # Delete video file from GDrive
+        gdrive_file_id = post_doc.get("gdrive_file_id")
+        if gdrive_file_id:
+            delete_file_from_gdrive(gdrive_file_id)
+
+        # Delete thumbnail files from GDrive if available
+        thumbnails = post_doc.get("thumbnails", [])
+        for thumb_url in thumbnails:
+            if "fileId=" in thumb_url:
+                try:
+                    tid = thumb_url.split("fileId=")[1].split("&")[0]
+                    delete_file_from_gdrive(tid)
+                except:
+                    pass
+
+        await clone_mongo_db.posts.delete_one({"_id": post_doc["_id"]})
+        return await message.reply_text("<b>✅ Post and Google Drive files deleted successfully from App and Cloud!</b>")
         
     await message.reply_text("<b>❌ Post not found in database.</b>")
 
