@@ -1262,18 +1262,33 @@ async def get_user_stats(request: web.Request):
 
 @routes.post("/user/ad-watched")
 async def register_ad_watched(request: web.Request):
-    """Credit 3 video views to free user after ad completion."""
+    """Credit 3 video views to free user after ad completion.
+    Also increments the app_ad_views rotation counter so next ad uses the next provider.
+    """
     from plugins.clone import async_mongo_db
+    import time
     try:
         data = await request.json()
         email = data.get("email", "").strip().lower()
         if not email:
             return web.json_response({"status": "error", "message": "email required"}, status=400)
 
+        # Credit 3 video views
         await async_mongo_db.user.update_one(
             {"email": email},
             {"$inc": {"allowed_views": 3}},
             upsert=True
+        )
+
+        # Increment ad rotation counter (so next /get-ad-link uses next provider)
+        await async_mongo_db.app_ad_views.update_one(
+            {"email": email},
+            {
+                "$inc": {"total_views": 1},
+                "$set": {"last_seen": time.time()},
+                "$setOnInsert": {"email": email, "first_seen": time.time()},
+            },
+            upsert=True,
         )
 
         user_record = await async_mongo_db.user.find_one({"email": email})
@@ -1353,27 +1368,24 @@ async def get_ad_link_handler(request: web.Request):
         if not PROVIDERS:
             PROVIDERS = [("vplink", SHORTLINK_API, SHORTLINK_URL or "vplink.in")]
 
-        # ── Check user's existing ad view count ──────────────────────────────
+        # ── Check user's existing ad view count (READ ONLY - do NOT increment here) ──
+        # Counter is incremented only in /user/ad-watched when ad is actually completed
         ad_record   = await async_mongo_db.app_ad_views.find_one({"email": email})
         is_new_user = ad_record is None
         total_views = ad_record.get("total_views", 0) if ad_record else 0
 
+        # Ensure the user document exists (upsert with no-op if already there)
+        await async_mongo_db.app_ad_views.update_one(
+            {"email": email},
+            {"$setOnInsert": {"email": email, "total_views": 0, "first_seen": time.time()}},
+            upsert=True,
+        )
+
         # ── Round-robin: index = total_views % number_of_providers ───────────
-        idx           = total_views % len(PROVIDERS)
+        idx                              = total_views % len(PROVIDERS)
         provider, chosen_api, chosen_site = PROVIDERS[idx]
 
         logging.info(f"[get-ad-link] email={email} views={total_views} idx={idx} provider={provider} ({chosen_site})")
-
-        # ── Increment visit count ─────────────────────────────────────────────
-        await async_mongo_db.app_ad_views.update_one(
-            {"email": email},
-            {
-                "$inc": {"total_views": 1},
-                "$set": {"last_seen": time.time()},
-                "$setOnInsert": {"email": email, "first_seen": time.time()},
-            },
-            upsert=True,
-        )
 
         # ── Build target URL & shorten ────────────────────────────────────────
         target_url = f"https://miniapp.anihubyt.com/app-return?email={email}"
