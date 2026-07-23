@@ -127,14 +127,49 @@ async def clone_broadcast_app_handler(bot, message):
     try:
         from plugins.clone import async_mongo_db
         await async_mongo_db.app_notifications.insert_one(notification_doc)
+        
+        # Fetch all registered user push tokens from database
+        cursor = async_mongo_db.user.find({"push_token": {"$exists": True, "$ne": ""}}, {"push_token": 1, "_id": 0})
+        users_list = await cursor.to_list(length=1000)
+        tokens = [u.get("push_token") for u in users_list if u.get("push_token")]
+        
+        sent_count = 0
+        if tokens:
+            import aiohttp
+            # Expo sends in batches (max 100 per request)
+            chunk_size = 100
+            for i in range(0, len(tokens), chunk_size):
+                chunk = tokens[i:i + chunk_size]
+                payload = [
+                    {
+                        "to": token,
+                        "sound": "default",
+                        "title": title,
+                        "body": body,
+                        "data": {"screen": "notification"}
+                    } for token in chunk
+                ]
+                
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            "https://exp.host/--/api/v2/push/send",
+                            json=payload,
+                            headers={"Content-Type": "application/json"}
+                        ) as resp:
+                            if resp.status == 200:
+                                sent_count += len(chunk)
+                except Exception as send_err:
+                    print(f"Error sending push chunk: {send_err}")
+
         await message.reply_text(
             f"✅ **Notification Broadcasted successfully from clone!**\n\n"
             f"📌 **Title:** {title}\n"
             f"📝 **Body:** {body}\n\n"
-            f"All app users will now see this notification inside their Notification tab."
+            f"🔔 **Push Alerts Sent:** To {sent_count} registered app devices!"
         )
     except Exception as e:
-        await message.reply_text(f"❌ **Error saving notification:** {e}")
+        await message.reply_text(f"❌ **Error saving/sending notification:** {e}")
 
 
 # Don't Remove Credit Tg - @viralverse0909

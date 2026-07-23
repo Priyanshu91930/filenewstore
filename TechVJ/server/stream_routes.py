@@ -1001,6 +1001,29 @@ async def register_user_handler(request: web.Request):
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
+@routes.post("/user/register-push-token")
+async def register_push_token_handler(request: web.Request):
+    """Store Expo Push Token linked to user email for push notifications."""
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        push_token = data.get("push_token", "").strip()
+
+        if not email or not push_token:
+            return web.json_response({"status": "error", "message": "email and push_token required"}, status=400)
+
+        await async_mongo_db.user.update_one(
+            {"email": email},
+            {"$set": {"push_token": push_token}},
+            upsert=True
+        )
+        return web.json_response({"status": "ok", "message": "Push token saved successfully!"})
+    except Exception as e:
+        logging.error(f"/user/register-push-token error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
 @routes.get("/user-status")
 async def user_status_handler(request: web.Request):
     """Get VIP status of a user by email."""
