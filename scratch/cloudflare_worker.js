@@ -22,25 +22,60 @@ export default {
         return new Response('Missing fileId parameter', { status: 400 });
       }
 
-      // We use Google Drive direct export download proxy bypass url
       const gdriveUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
 
+      // Forward target headers (including Range header required by ExoPlayer/Android)
+      const requestHeaders = new Headers();
+      requestHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+      const range = request.headers.get('Range');
+      if (range) {
+        requestHeaders.set('Range', range);
+      }
+
       try {
-        const driveResponse = await fetch(gdriveUrl, {
+        let driveResponse = await fetch(gdriveUrl, {
           method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          },
+          headers: requestHeaders,
           redirect: 'follow'
         });
 
-        // Set Response Headers
+        // If Google Drive returns a virus warning HTML page (common for files >100MB),
+        // extract the confirmation token and fetch the actual stream.
+        const contentType = driveResponse.headers.get('content-type') || '';
+        if (contentType.includes('text/html') && driveResponse.status === 200) {
+          const htmlText = await driveResponse.text();
+          // Match confirm token: e.g. confirm=xxxx or confirm=t
+          const tokenMatch = htmlText.match(/confirm=([a-zA-Z0-9-_]+)/);
+          if (tokenMatch && tokenMatch[1]) {
+            const confirmToken = tokenMatch[1];
+            const confirmUrl = `https://docs.google.com/uc?export=download&id=${fileId}&confirm=${confirmToken}`;
+            driveResponse = await fetch(confirmUrl, {
+              method: 'GET',
+              headers: requestHeaders,
+              redirect: 'follow'
+            });
+          }
+        }
+
+        // Setup headers to return to the Android Player
         const responseHeaders = new Headers();
         responseHeaders.set('Content-Type', 'video/mp4');
         responseHeaders.set('Content-Disposition', 'inline');
+        responseHeaders.set('Accept-Ranges', 'bytes');
         responseHeaders.set('Access-Control-Allow-Origin', '*');
         responseHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
         responseHeaders.set('Access-Control-Allow-Headers', 'Range, Content-Type');
+
+        // Pass down Content-Range and Content-Length if present for ExoPlayer seek parsing
+        const contentRange = driveResponse.headers.get('Content-Range');
+        if (contentRange) {
+          responseHeaders.set('Content-Range', contentRange);
+        }
+        const contentLength = driveResponse.headers.get('Content-Length');
+        if (contentLength) {
+          responseHeaders.set('Content-Length', contentLength);
+        }
 
         if (request.method === 'OPTIONS') {
           return new Response(null, {
@@ -49,9 +84,9 @@ export default {
           });
         }
 
-        // XOR Decrypt raw bytes 
+        // XOR Decrypt raw bytes dynamically
         let responseBody = driveResponse.body;
-        if (responseBody && (driveResponse.status === 200 || driveResponse.status === 206 || driveResponse.status === 302)) {
+        if (responseBody && (driveResponse.status === 200 || driveResponse.status === 206)) {
           const decryptor = new TransformStream(new XorTransformStream(0x5A));
           responseBody.pipeTo(decryptor.writable);
           responseBody = decryptor.readable;
