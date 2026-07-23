@@ -3080,8 +3080,11 @@ async def clone_upload_gdrive_cmd_handler(client, message):
         
     await sts.edit_text("<b>⏳ Uploading video to Google Drive with anti-ban masking...</b>")
     
+    # Load custom clone folder ID if set, otherwise defaults to main
+    clone_folder_id = bot_doc.get("gdrive_folder_id") if bot_doc else None
+    
     from gdrive_helper import upload_file_to_gdrive
-    gdrive_file_id, masked_name = upload_file_to_gdrive(downloaded_path, local_filename)
+    gdrive_file_id, masked_name = upload_file_to_gdrive(downloaded_path, local_filename, parent_folder_id=clone_folder_id)
     
     try:
         os.remove(downloaded_path)
