@@ -831,3 +831,83 @@ async def gdrive_folders_handler(request: web.Request):
         return web.json_response({"categories": categories})
     except Exception as e:
         return web.json_response({"error": str(e), "categories": []}, status=500)
+
+
+@routes.get("/payment-config")
+async def payment_config_handler(request: web.Request):
+    from config import RAZORPAY_KEY_ID
+    return web.json_response({"key_id": RAZORPAY_KEY_ID})
+
+
+@routes.post("/verify-payment")
+async def verify_payment_handler(request: web.Request):
+    import time
+    from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+    from plugins.clone import async_mongo_db
+    import aiohttp
+
+    try:
+        data = await request.json()
+        payment_id = data.get("payment_id")
+        plan_duration = data.get("plan_duration", "1 Month")
+        price_str = data.get("price", "199").replace("₹", "").strip()
+        expected_price = int(price_str)
+        user_id = int(data.get("user_id", 8494193109))
+        bot_id = int(data.get("bot_id", 7687702448))
+
+        if not payment_id:
+            return web.json_response({"status": "error", "message": "Missing payment_id"}, status=400)
+
+        # Verify payment with Razorpay
+        url = f"https://api.razorpay.com/v1/payments/{payment_id}"
+        auth = aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, auth=auth) as resp:
+                if resp.status == 200:
+                    resp_data = await resp.json()
+                    status = resp_data.get('status')
+                    amount_paid = int(resp_data.get('amount'))  # In paise
+
+                    # Direct payment check
+                    if status in ('captured', 'authorized') and amount_paid == (expected_price * 100):
+                        # Upgrade user to VIP in MongoDB
+                        now = time.time()
+                        if "day" in plan_duration.lower():
+                            expiry = now + 86400
+                        elif "week" in plan_duration.lower():
+                            expiry = now + 86400 * 7
+                        elif "month" in plan_duration.lower():
+                            if "3" in plan_duration:
+                                expiry = now + 86400 * 30 * 3
+                            elif "6" in plan_duration:
+                                expiry = now + 86400 * 30 * 6
+                            else:
+                                expiry = now + 86400 * 30
+                        elif "lifetime" in plan_duration.lower():
+                            expiry = None
+                        else:
+                            expiry = now + 86400 * 30
+
+                        await async_mongo_db.vip_users.update_one(
+                            {"bot_id": bot_id, "user_id": user_id},
+                            {"$set": {"expiry": expiry, "payment_id": payment_id, "updated_at": now}},
+                            upsert=True
+                        )
+
+                        return web.json_response({
+                            "status": "success",
+                            "message": f"Payment verified! VIP status activated for {plan_duration}."
+                        })
+                    else:
+                        return web.json_response({
+                            "status": "error",
+                            "message": f"Payment verification failed: Status is {status}, Expected: {expected_price * 100}, Paid: {amount_paid}"
+                        }, status=400)
+                else:
+                    return web.json_response({
+                        "status": "error",
+                        "message": f"Failed to connect to Razorpay. Response status: {resp.status}"
+                    }, status=400)
+    except Exception as e:
+        logging.error(f"/verify-payment error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
