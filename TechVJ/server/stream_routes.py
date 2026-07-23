@@ -1712,3 +1712,15 @@ async def get_reactions_endpoint(request: web.Request):
         return web.json_response({"status": "ok", "reactions": reactions})
     except Exception as e:
         return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/notifications")
+async def get_app_notifications(request: web.Request):
+    """Fetch all admin broadcasted notifications for the app."""
+    from plugins.clone import async_mongo_db
+    try:
+        cursor = async_mongo_db.app_notifications.find({}, {"_id": 0}).sort("created_at", -1)
+        notifications = await cursor.to_list(length=100)
+        return web.json_response({"status": "ok", "notifications": notifications})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)

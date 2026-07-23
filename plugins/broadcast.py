@@ -86,6 +86,46 @@ async def verupikkals(bot, message):
     time_taken = datetime.timedelta(seconds=int(time.time()-start_time))
     await sts.edit(f"Broadcast Completed:\nCompleted in {time_taken} seconds.\n\nTotal Users {total_users}\nCompleted: {done} / {total_users}\nSuccess: {success}\nBlocked: {blocked}\nDeleted: {deleted}")
 
+
+@Client.on_message(filters.command("broadcast_app") & filters.user(ADMINS))
+async def broadcast_app_handler(bot, message):
+    from plugins.clone import async_mongo_db
+    
+    # Extract message content
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "❌ **Usage:** `/broadcast_app Title | Body text of the notification`\n\n"
+            "Use the `|` symbol to separate Title and Description."
+        )
+        
+    full_text = message.text.split(None, 1)[1]
+    title = "Announcement 📢"
+    body = full_text
+    
+    if "|" in full_text:
+        parts = full_text.split("|", 1)
+        title = parts[0].strip()
+        body = parts[1].strip()
+        
+    # Save notification to MongoDB
+    now = time.time()
+    notification_doc = {
+        "title": title,
+        "body": body,
+        "created_at": now
+    }
+    
+    try:
+        await async_mongo_db.app_notifications.insert_one(notification_doc)
+        await message.reply_text(
+            f"✅ **Notification Broadcasted successfully!**\n\n"
+            f"📌 **Title:** {title}\n"
+            f"📝 **Body:** {body}\n\n"
+            f"All app users will now see this notification inside their Notification tab."
+        )
+    except Exception as e:
+        await message.reply_text(f"❌ **Error saving notification:** {e}")
+
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
