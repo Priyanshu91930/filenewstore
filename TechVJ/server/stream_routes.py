@@ -1289,6 +1289,99 @@ async def register_ad_watched(request: web.Request):
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
+@routes.post("/get-ad-link")
+async def get_ad_link_handler(request: web.Request):
+    """
+    Returns the correct ad shortlink for a given app user based on visit history.
+    
+    Logic:
+      - New user (never seen an ad before) → vplink.in
+      - Returning user (has seen ads before)  → arolinks.com
+    
+    Tracks total ad impressions per email in 'app_ad_views' MongoDB collection.
+    
+    Request body: { "email": "user@example.com" }
+    Response:     { "status": "ok", "ad_url": "https://...", "provider": "vplink|arolinks", "is_new_user": true|false }
+    """
+    from plugins.clone import async_mongo_db
+    import time
+
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+
+        # ── Fetch the bot's configured ad shortener API keys ──────────────────
+        from config import BOT_USERNAME
+        bot_doc = await async_mongo_db.bots.find_one({"username": BOT_USERNAME})
+
+        # Primary (vplink) config
+        primary_api   = (bot_doc.get("shortener_api") if bot_doc else None) or ""
+        primary_site  = (bot_doc.get("shortener_site") if bot_doc else None) or "vplink.in"
+
+        # Secondary (arolinks) config
+        secondary_api  = (bot_doc.get("secondary_shortener_api") if bot_doc else None) or ""
+        secondary_site = (bot_doc.get("secondary_shortener_site") if bot_doc else None) or "arolinks.com"
+
+        # ── Check if user has ever viewed an ad ───────────────────────────────
+        ad_record = await async_mongo_db.app_ad_views.find_one({"email": email})
+        is_new_user = ad_record is None
+        total_views = ad_record.get("total_views", 0) if ad_record else 0
+
+        # ── Decide which ad provider to use ───────────────────────────────────
+        # First ever visit → vplink (primary)
+        # Any subsequent visit → arolinks (secondary)
+        if is_new_user:
+            chosen_api  = primary_api
+            chosen_site = primary_site
+            provider    = "vplink"
+        else:
+            chosen_api  = secondary_api
+            chosen_site = secondary_site
+            provider    = "arolinks"
+
+        # ── Update visit count in app_ad_views ───────────────────────────────
+        await async_mongo_db.app_ad_views.update_one(
+            {"email": email},
+            {
+                "$inc":  {"total_views": 1},
+                "$set":  {"last_seen": time.time()},
+                "$setOnInsert": {"email": email, "first_seen": time.time()}
+            },
+            upsert=True
+        )
+
+        # ── Build target URL (app deep-link or fallback) ─────────────────────
+        target_url = f"https://miniapp.anihubyt.com/app-return?email={email}"
+
+        # ── Shorten the URL through the chosen provider ───────────────────────
+        ad_url = target_url  # fallback — plain URL if API key not configured
+        if chosen_api:
+            try:
+                from utils import get_verify_shorted_link
+                ad_url = await get_verify_shorted_link(
+                    target_url,
+                    api_key=chosen_api,
+                    shortener_url=chosen_site
+                )
+            except Exception as shorten_err:
+                logging.warning(f"/get-ad-link shortening failed ({chosen_site}): {shorten_err}")
+
+        return web.json_response({
+            "status":      "ok",
+            "ad_url":      str(ad_url),
+            "provider":    provider,
+            "site":        chosen_site,
+            "is_new_user": is_new_user,
+            "total_views": total_views + 1,
+        })
+
+    except Exception as e:
+        logging.error(f"/get-ad-link error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
 @routes.post("/verify/generate-link")
 async def generate_verification_shortlink(request: web.Request):
     """Generates a shortened link that redirects back to the app schema after completion."""
