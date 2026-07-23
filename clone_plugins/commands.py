@@ -3214,7 +3214,8 @@ Processed before cancellation: <code>{success_count + fail_count}/{total_posts}<
                                 channel_id = item["channel_id"]
                                 msg_id = item["msg_id"]
                                 
-                                video_msg = await client.get_messages(channel_id, msg_id)
+                                from TechVJ.bot import StreamBot
+                                video_msg = await StreamBot.get_messages(channel_id, msg_id)
                                 if video_msg and (video_msg.video or video_msg.document):
                                     media = video_msg.video or video_msg.document
                                     # Preserve original caption from first part for batch caption
@@ -3223,7 +3224,7 @@ Processed before cancellation: <code>{success_count + fail_count}/{total_posts}<
                                     local_filename = getattr(media, "file_name", f"video_{post_id}_{b_idx}.mp4")
                                     local_path = os.path.join(temp_dir, local_filename)
                                     
-                                    video_path = await client.download_media(media.file_id, file_name=local_path)
+                                    video_path = await StreamBot.download_media(media.file_id, file_name=local_path)
                                     if video_path and os.path.exists(video_path):
                                         # For the first part of a batch, extract previews
                                         if b_idx == 0:
