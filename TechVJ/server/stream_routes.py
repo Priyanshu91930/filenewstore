@@ -894,6 +894,27 @@ async def verify_payment_handler(request: web.Request):
                             upsert=True
                         )
 
+                        # If email provided (app user), also link VIP by email
+                        email = data.get("email", "").strip().lower()
+                        if email:
+                            await async_mongo_db.vip_users.update_one(
+                                {"email": email},
+                                {"$set": {
+                                    "email": email,
+                                    "expiry": expiry,
+                                    "payment_id": payment_id,
+                                    "plan_duration": plan_duration,
+                                    "activated_at": now,
+                                    "updated_at": now,
+                                }},
+                                upsert=True
+                            )
+                            # Also mark app_users as VIP
+                            await async_mongo_db.app_users.update_one(
+                                {"email": email},
+                                {"$set": {"is_vip": True, "vip_since": now}}
+                            )
+
                         return web.json_response({
                             "status": "success",
                             "message": f"Payment verified! VIP status activated for {plan_duration}."
@@ -910,4 +931,588 @@ async def verify_payment_handler(request: web.Request):
                     }, status=400)
     except Exception as e:
         logging.error(f"/verify-payment error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/register-user")
+async def register_user_handler(request: web.Request):
+    """Register or update a user in MongoDB after Google Sign-In."""
+    import time
+    from plugins.clone import async_mongo_db
+
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        name = data.get("name", "")
+        photo = data.get("photo", "")
+        google_id = data.get("google_id", "")
+
+        if not email:
+            return web.json_response({"status": "error", "message": "Email is required"}, status=400)
+
+        now = time.time()
+
+        # Upsert user record by email
+        await async_mongo_db.app_users.update_one(
+            {"email": email},
+            {"$set": {
+                "name": name,
+                "photo": photo,
+                "google_id": google_id,
+                "last_login": now,
+            }, "$setOnInsert": {
+                "email": email,
+                "created_at": now,
+                "is_vip": False,
+            }},
+            upsert=True
+        )
+
+        # Fetch updated user
+        user = await async_mongo_db.app_users.find_one({"email": email}, {"_id": 0})
+
+        # Check VIP status from vip_users collection (linked by email)
+        vip = await async_mongo_db.vip_users.find_one({"email": email})
+        is_vip = False
+        vip_expiry = None
+        if vip:
+            expiry = vip.get("expiry")
+            if expiry is None:
+                is_vip = True
+            elif time.time() < expiry:
+                is_vip = True
+                vip_expiry = expiry
+
+        return web.json_response({
+            "status": "ok",
+            "user": {
+                "email": email,
+                "name": name,
+                "photo": photo,
+                "is_vip": is_vip,
+                "vip_expiry": vip_expiry,
+            }
+        })
+
+    except Exception as e:
+        logging.error(f"/register-user error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user-status")
+async def user_status_handler(request: web.Request):
+    """Get VIP status of a user by email."""
+    import time
+    from plugins.clone import async_mongo_db
+
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email param required"}, status=400)
+
+        user = await async_mongo_db.app_users.find_one({"email": email}, {"_id": 0})
+        if not user:
+            return web.json_response({"status": "error", "message": "User not found"}, status=404)
+
+        vip = await async_mongo_db.vip_users.find_one({"email": email})
+        is_vip = False
+        vip_expiry = None
+        if vip:
+            expiry = vip.get("expiry")
+            if expiry is None:
+                is_vip = True
+            elif time.time() < expiry:
+                is_vip = True
+                vip_expiry = expiry
+
+        return web.json_response({
+            "status": "ok",
+            "email": email,
+            "name": user.get("name", ""),
+            "photo": user.get("photo", ""),
+            "is_vip": is_vip,
+            "vip_expiry": vip_expiry,
+        })
+
+    except Exception as e:
+        logging.error(f"/user-status error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+# ─── USER ACTIVITY ENDPOINTS ────────────────────────────────────────────
+
+@routes.post("/user/activity/like")
+async def toggle_like(request: web.Request):
+    """Toggle like on a video. Creates/removes document in user_liked_videos."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        video_id = data.get("video_id", "")
+        title = data.get("title", "")
+        thumbnail = data.get("thumbnail", "")
+        if not email or not video_id:
+            return web.json_response({"status": "error", "message": "email and video_id required"}, status=400)
+
+        existing = await async_mongo_db.user_liked_videos.find_one({"email": email, "video_id": video_id})
+        if existing:
+            await async_mongo_db.user_liked_videos.delete_one({"email": email, "video_id": video_id})
+            liked = False
+        else:
+            await async_mongo_db.user_liked_videos.insert_one({
+                "email": email, "video_id": video_id,
+                "title": title, "thumbnail": thumbnail,
+                "liked_at": time.time()
+            })
+            liked = True
+        count = await async_mongo_db.user_liked_videos.count_documents({"email": email})
+        return web.json_response({"status": "ok", "liked": liked, "count": count})
+    except Exception as e:
+        logging.error(f"/user/activity/like error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/likes")
+async def get_likes(request: web.Request):
+    """Get all liked videos for a user."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+        cursor = async_mongo_db.user_liked_videos.find({"email": email}, {"_id": 0}).sort("liked_at", -1)
+        videos = await cursor.to_list(length=200)
+        return web.json_response({"status": "ok", "count": len(videos), "videos": videos})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/user/activity/save")
+async def toggle_save(request: web.Request):
+    """Toggle save/watch-later on a video."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        video_id = data.get("video_id", "")
+        title = data.get("title", "")
+        thumbnail = data.get("thumbnail", "")
+        if not email or not video_id:
+            return web.json_response({"status": "error", "message": "email and video_id required"}, status=400)
+
+        existing = await async_mongo_db.user_saved_videos.find_one({"email": email, "video_id": video_id})
+        if existing:
+            await async_mongo_db.user_saved_videos.delete_one({"email": email, "video_id": video_id})
+            saved = False
+        else:
+            await async_mongo_db.user_saved_videos.insert_one({
+                "email": email, "video_id": video_id,
+                "title": title, "thumbnail": thumbnail,
+                "saved_at": time.time()
+            })
+            saved = True
+        count = await async_mongo_db.user_saved_videos.count_documents({"email": email})
+        return web.json_response({"status": "ok", "saved": saved, "count": count})
+    except Exception as e:
+        logging.error(f"/user/activity/save error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/saved")
+async def get_saved(request: web.Request):
+    """Get all saved videos for a user."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+        cursor = async_mongo_db.user_saved_videos.find({"email": email}, {"_id": 0}).sort("saved_at", -1)
+        videos = await cursor.to_list(length=200)
+        return web.json_response({"status": "ok", "count": len(videos), "videos": videos})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/user/activity/watch")
+async def add_watch_history(request: web.Request):
+    """Record a video watch event. Keeps latest 500 per user."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        video_id = data.get("video_id", "")
+        title = data.get("title", "")
+        thumbnail = data.get("thumbnail", "")
+        if not email or not video_id:
+            return web.json_response({"status": "error", "message": "email and video_id required"}, status=400)
+
+        # Update or insert (upsert), update watched_at timestamp
+        await async_mongo_db.user_watch_history.update_one(
+            {"email": email, "video_id": video_id},
+            {"$set": {"title": title, "thumbnail": thumbnail, "watched_at": time.time()}},
+            upsert=True
+        )
+        count = await async_mongo_db.user_watch_history.count_documents({"email": email})
+        return web.json_response({"status": "ok", "count": count})
+    except Exception as e:
+        logging.error(f"/user/activity/watch error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/history")
+async def get_watch_history(request: web.Request):
+    """Get watch history for a user."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+        cursor = async_mongo_db.user_watch_history.find({"email": email}, {"_id": 0}).sort("watched_at", -1)
+        videos = await cursor.to_list(length=100)
+        return web.json_response({"status": "ok", "count": len(videos), "videos": videos})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/stats")
+async def get_user_stats(request: web.Request):
+    """Get all activity counts + VIP status + expiry for a user."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+
+        liked_count, saved_count, history_count, download_count = await asyncio.gather(
+            async_mongo_db.user_liked_videos.count_documents({"email": email}),
+            async_mongo_db.user_saved_videos.count_documents({"email": email}),
+            async_mongo_db.user_watch_history.count_documents({"email": email}),
+            async_mongo_db.user_downloads.count_documents({"email": email}),
+        )
+
+        # VIP check
+        vip = await async_mongo_db.vip_users.find_one({"email": email})
+        is_vip = False
+        vip_expiry_ts = None
+        vip_expiry_str = None
+        if vip:
+            expiry = vip.get("expiry")
+            if expiry is None:
+                is_vip = True
+                vip_expiry_str = "Lifetime"
+            elif time.time() < expiry:
+                is_vip = True
+                vip_expiry_ts = expiry
+                from datetime import datetime
+                dt = datetime.fromtimestamp(expiry)
+                vip_expiry_str = dt.strftime("%d %b %Y, %I:%M %p")
+
+        return web.json_response({
+            "status": "ok",
+            "liked_count": liked_count,
+            "saved_count": saved_count,
+            "history_count": history_count,
+            "download_count": download_count,
+            "downloads_enabled": is_vip,
+            "is_vip": is_vip,
+            "vip_expiry": vip_expiry_str,
+        })
+    except Exception as e:
+        logging.error(f"/user/stats error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/user/activity/download")
+async def add_download(request: web.Request):
+    """Record a downloaded video in user_downloads (VIP only). Auto-rejects if not VIP."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        video_id = data.get("video_id", "")
+        title = data.get("title", "")
+        thumbnail = data.get("thumbnail", "")
+        file_url = data.get("file_url", "")
+
+        if not email or not video_id:
+            return web.json_response({"status": "error", "message": "email and video_id required"}, status=400)
+
+        # VIP check — only VIP users can download
+        vip = await async_mongo_db.vip_users.find_one({"email": email})
+        is_vip = False
+        if vip:
+            expiry = vip.get("expiry")
+            is_vip = expiry is None or time.time() < expiry
+
+        if not is_vip:
+            return web.json_response({
+                "status": "error",
+                "message": "VIP subscription required for offline downloads."
+            }, status=403)
+
+        # Upsert download record (no duplicate entries for same video)
+        now = time.time()
+        await async_mongo_db.user_downloads.update_one(
+            {"email": email, "video_id": video_id},
+            {"$set": {
+                "title": title,
+                "thumbnail": thumbnail,
+                "file_url": file_url,
+                "downloaded_at": now,
+            }},
+            upsert=True
+        )
+        count = await async_mongo_db.user_downloads.count_documents({"email": email})
+        return web.json_response({"status": "ok", "count": count})
+    except Exception as e:
+        logging.error(f"/user/activity/download error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/downloads")
+async def get_downloads(request: web.Request):
+    """Get all downloaded videos for a user."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+        cursor = async_mongo_db.user_downloads.find({"email": email}, {"_id": 0}).sort("downloaded_at", -1)
+        videos = await cursor.to_list(length=200)
+        return web.json_response({"status": "ok", "count": len(videos), "videos": videos})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.delete("/user/activity/download")
+async def remove_download(request: web.Request):
+    """Remove a downloaded video from user_downloads."""
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        existing = await async_mongo_db.user_saved_videos.find_one({"email": email, "video_id": video_id})
+        if existing:
+            await async_mongo_db.user_saved_videos.delete_one({"email": email, "video_id": video_id})
+            saved = False
+        else:
+            await async_mongo_db.user_saved_videos.insert_one({
+                "email": email, "video_id": video_id,
+                "title": title, "thumbnail": thumbnail,
+                "saved_at": time.time()
+            })
+            saved = True
+        count = await async_mongo_db.user_saved_videos.count_documents({"email": email})
+        return web.json_response({"status": "ok", "saved": saved, "count": count})
+    except Exception as e:
+        logging.error(f"/user/activity/save error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/saved")
+async def get_saved(request: web.Request):
+    """Get all saved videos for a user."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+        cursor = async_mongo_db.user_saved_videos.find({"email": email}, {"_id": 0}).sort("saved_at", -1)
+        videos = await cursor.to_list(length=200)
+        return web.json_response({"status": "ok", "count": len(videos), "videos": videos})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/user/activity/watch")
+async def add_watch_history(request: web.Request):
+    """Record a video watch event. Keeps latest 500 per user."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        video_id = data.get("video_id", "")
+        title = data.get("title", "")
+        thumbnail = data.get("thumbnail", "")
+        if not email or not video_id:
+            return web.json_response({"status": "error", "message": "email and video_id required"}, status=400)
+
+        # Update or insert (upsert), update watched_at timestamp
+        await async_mongo_db.user_watch_history.update_one(
+            {"email": email, "video_id": video_id},
+            {"$set": {"title": title, "thumbnail": thumbnail, "watched_at": time.time()}},
+            upsert=True
+        )
+        count = await async_mongo_db.user_watch_history.count_documents({"email": email})
+        return web.json_response({"status": "ok", "count": count})
+    except Exception as e:
+        logging.error(f"/user/activity/watch error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/history")
+async def get_watch_history(request: web.Request):
+    """Get watch history for a user."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+        cursor = async_mongo_db.user_watch_history.find({"email": email}, {"_id": 0}).sort("watched_at", -1)
+        videos = await cursor.to_list(length=100)
+        return web.json_response({"status": "ok", "count": len(videos), "videos": videos})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+
+@routes.post("/user/activity/download")
+async def add_download(request: web.Request):
+    """Record a downloaded video in user_downloads (VIP only). Auto-rejects if not VIP."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        video_id = data.get("video_id", "")
+        title = data.get("title", "")
+        thumbnail = data.get("thumbnail", "")
+        file_url = data.get("file_url", "")
+
+        if not email or not video_id:
+            return web.json_response({"status": "error", "message": "email and video_id required"}, status=400)
+
+        # VIP check — only VIP users can download
+        vip = await async_mongo_db.vip_users.find_one({"email": email})
+        is_vip = False
+        if vip:
+            expiry = vip.get("expiry")
+            is_vip = expiry is None or time.time() < expiry
+
+        if not is_vip:
+            return web.json_response({
+                "status": "error",
+                "message": "VIP subscription required for offline downloads."
+            }, status=403)
+
+        # Upsert download record (no duplicate entries for same video)
+        now = time.time()
+        await async_mongo_db.user_downloads.update_one(
+            {"email": email, "video_id": video_id},
+            {"$set": {
+                "title": title,
+                "thumbnail": thumbnail,
+                "file_url": file_url,
+                "downloaded_at": now,
+            }},
+            upsert=True
+        )
+        count = await async_mongo_db.user_downloads.count_documents({"email": email})
+        return web.json_response({"status": "ok", "count": count})
+    except Exception as e:
+        logging.error(f"/user/activity/download error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/downloads")
+async def get_downloads(request: web.Request):
+    """Get all downloaded videos for a user."""
+    from plugins.clone import async_mongo_db
+    try:
+        email = request.rel_url.query.get("email", "").strip().lower()
+        if not email:
+            return web.json_response({"status": "error", "message": "email required"}, status=400)
+        cursor = async_mongo_db.user_downloads.find({"email": email}, {"_id": 0}).sort("downloaded_at", -1)
+        videos = await cursor.to_list(length=200)
+        return web.json_response({"status": "ok", "count": len(videos), "videos": videos})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.delete("/user/activity/download")
+async def remove_download(request: web.Request):
+    """Remove a downloaded video from user_downloads."""
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        video_id = data.get("video_id", "")
+        if not email or not video_id:
+            return web.json_response({"status": "error", "message": "email and video_id required"}, status=400)
+        await async_mongo_db.user_downloads.delete_one({"email": email, "video_id": video_id})
+        count = await async_mongo_db.user_downloads.count_documents({"email": email})
+        return web.json_response({"status": "ok", "count": count})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/user/activity/comment")
+async def post_comment_endpoint(request: web.Request):
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        user_name = data.get("user_name", "Anonymous")
+        user_avatar = data.get("user_avatar", "")
+        video_id = data.get("video_id", "")
+        text = data.get("text", "").strip()
+        reaction = data.get("reaction", "")
+        if not video_id or not text:
+            return web.json_response({"status": "error", "message": "video_id and text required"}, status=400)
+        await async_mongo_db.user_comments.insert_one({
+            "email": email, "user_name": user_name, "user_avatar": user_avatar,
+            "video_id": video_id, "text": text, "reaction": reaction, "created_at": time.time()
+        })
+        return web.json_response({"status": "ok"})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/user/activity/comments")
+async def get_comments_endpoint(request: web.Request):
+    from plugins.clone import async_mongo_db
+    try:
+        video_id = request.rel_url.query.get("video_id", "")
+        cursor = async_mongo_db.user_comments.find({"video_id": video_id}, {"_id": 0}).sort("created_at", -1)
+        comments = await cursor.to_list(length=100)
+        return web.json_response({"status": "ok", "comments": comments})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/video/react")
+async def post_reaction_endpoint(request: web.Request):
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        video_id = data.get("video_id", "")
+        emoji_id = data.get("emoji_id", "")
+        field = f"reactions.{emoji_id}"
+        await async_mongo_db.video_reactions.update_one(
+            {"video_id": video_id},
+            {"$inc": {field: 1}},
+            upsert=True
+        )
+        doc = await async_mongo_db.video_reactions.find_one({"video_id": video_id}, {"_id": 0})
+        return web.json_response({"status": "ok", "reactions": doc.get("reactions", {}) if doc else {}})
+    except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/video/reactions")
+async def get_reactions_endpoint(request: web.Request):
+    from plugins.clone import async_mongo_db
+    try:
+        video_id = request.rel_url.query.get("video_id", "")
+        doc = await async_mongo_db.video_reactions.find_one({"video_id": video_id}, {"_id": 0})
+        reactions = doc.get("reactions", {}) if doc else {}
+        return web.json_response({"status": "ok", "reactions": reactions})
+    except Exception as e:
         return web.json_response({"status": "error", "message": str(e)}, status=500)
