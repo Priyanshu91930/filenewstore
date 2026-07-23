@@ -1425,8 +1425,10 @@ async def get_ad_link_handler(request: web.Request):
 
 @routes.post("/verify/generate-link")
 async def generate_verification_shortlink(request: web.Request):
-    """Generates a shortened link that redirects back to the app schema after completion."""
-    from utils import get_verify_shorted_link
+    """Generates a shortened link that redirects back to the app schema after completion.
+    Uses the exact same daily round-robin rotation (vplink -> arolinks -> alpha-links -> nowshort -> liteshort)
+    tracked by app_ad_views so daily reset and provider matches /get-ad-link.
+    """
     from plugins.clone import async_mongo_db
     import time
     try:
@@ -1442,15 +1444,64 @@ async def generate_verification_shortlink(request: web.Request):
         # Target redirect URL (backend verify endpoint that registers view and redirects to app deep link)
         target_url = f"https://miniapp.anihubyt.com/verify/complete?email={email}&token={token}"
         
-        # Get rotated shortlink based on user's daily verification count
-        from utils import get_tma_shortlink
-        from config import BOT_USERNAME
-        
-        # Get numeric user_id if exists in database or fall back to hash
-        user_rec = await async_mongo_db.user.find_one({"email": email})
-        user_id = user_rec.get("user_id", 999999) if user_rec else 999999
-        
-        short_link = await get_tma_shortlink(user_id=user_id, token=token, file_data="", bot_username=BOT_USERNAME, custom_link=target_url)
+        # ── Load all 5 provider keys (from config.py defaults) ────────────────
+        from config import (
+            BOT_USERNAME,
+            SHORTLINK_API,            SHORTLINK_URL,
+            SECONDARY_SHORTLINK_API,  SECONDARY_SHORTLINK_URL,
+            TERTIARY_SHORTLINK_API,   TERTIARY_SHORTLINK_URL,
+            FOURTH_SHORTLINK_API,     FOURTH_SHORTLINK_URL,
+            FIFTH_SHORTLINK_API,      FIFTH_SHORTLINK_URL,
+        )
+
+        bot_doc = await async_mongo_db.bots.find_one({"username": BOT_USERNAME})
+
+        def _b(key, fallback):
+            return (bot_doc.get(key) if bot_doc else None) or fallback
+
+        ALL_PROVIDERS = [
+            ("vplink",      _b("shortener_api",           SHORTLINK_API),         _b("shortener_site",           SHORTLINK_URL or "vplink.in")),
+            ("arolinks",    _b("secondary_shortener_api",  SECONDARY_SHORTLINK_API), _b("secondary_shortener_site", SECONDARY_SHORTLINK_URL or "arolinks.com")),
+            ("alpha-links", _b("tertiary_shortener_api",   TERTIARY_SHORTLINK_API),  _b("tertiary_shortener_site",  TERTIARY_SHORTLINK_URL or "alpha-links.in")),
+            ("nowshort",    _b("fourth_shortener_api",     FOURTH_SHORTLINK_API),    _b("fourth_shortener_site",    FOURTH_SHORTLINK_URL or "nowshort.com")),
+            ("liteshort",   _b("fifth_shortener_api",      FIFTH_SHORTLINK_API),     _b("fifth_shortener_site",     FIFTH_SHORTLINK_URL or "liteshort.com")),
+        ]
+        PROVIDERS = [(label, api, site) for label, api, site in ALL_PROVIDERS if api and api != "None"]
+        if not PROVIDERS:
+            PROVIDERS = [("vplink", SHORTLINK_API, SHORTLINK_URL or "vplink.in")]
+
+        # ── Check user's daily ad view count ──────────────────────────────
+        import pytz
+        from datetime import datetime
+        today = datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')
+
+        ad_record = await async_mongo_db.app_ad_views.find_one({"email": email, "date": today})
+        daily_views = ad_record.get("daily_views", 0) if ad_record else 0
+
+        # Ensure today's record exists in app_ad_views
+        await async_mongo_db.app_ad_views.update_one(
+            {"email": email, "date": today},
+            {"$setOnInsert": {"email": email, "date": today, "daily_views": 0, "first_seen": time.time()}},
+            upsert=True,
+        )
+
+        # ── Round-robin calculation ──────────────────────────────────────────
+        idx = daily_views % len(PROVIDERS)
+        provider, chosen_api, chosen_site = PROVIDERS[idx]
+
+        logging.info(f"[verify-link-generation] email={email} date={today} daily_views={daily_views} idx={idx} provider={provider}")
+
+        # ── Shorten verify link ──────────────────────────────────────────────
+        short_link = target_url  # fallback
+        try:
+            from utils import get_verify_shorted_link
+            short_link = await get_verify_shorted_link(
+                target_url,
+                api_key=chosen_api,
+                shortener_url=chosen_site,
+            )
+        except Exception as shorten_err:
+            logging.warning(f"/verify/generate-link shortening failed ({chosen_site}): {shorten_err}")
         
         # Save token in DB for validation on redirection
         await async_mongo_db.user_verifications.update_one(
@@ -1459,7 +1510,7 @@ async def generate_verification_shortlink(request: web.Request):
             upsert=True
         )
         
-        return web.json_response({"status": "ok", "shortlink": short_link})
+        return web.json_response({"status": "ok", "shortlink": str(short_link)})
     except Exception as e:
         logging.error(f"/verify/generate-link error: {e}")
         return web.json_response({"status": "error", "message": str(e)}, status=500)
