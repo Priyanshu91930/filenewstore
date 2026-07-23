@@ -494,7 +494,7 @@ async def portal_data_route_handler(request: web.Request):
     page = max(1, min(page, total_pages))
     skip = (page - 1) * limit
 
-    posts_cursor = async_mongo_db.posts.find(query).sort([('is_paid', -1), ('created_at', -1)]).skip(skip).limit(limit)
+    posts_cursor = async_mongo_db.posts.find(query).sort([('created_at', -1)]).skip(skip).limit(limit)
     posts = []
     async for doc in posts_cursor:
         posts.append({
@@ -731,6 +731,7 @@ def _gdrive_file_to_post(gfile, category_name="All"):
         "bot_username": props.get('bot_username', 'ViralVideosBot'),
         "reactions": {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0},
         "thumbnails": [thumbnail],
+        "created_at": float(props.get('created_at', 0)),
     }
 
 
@@ -792,12 +793,14 @@ async def gdrive_portal_data_handler(request: web.Request):
                     p['thumbnails'] = [_normalize_image_url(t) for t in match.get('thumbnails', [])] if match.get('thumbnails') else [p['image_url']]
                     if match.get('duration'):
                         p['duration'] = match.get('duration')
+                    if match.get('created_at'):
+                        p['created_at'] = float(match.get('created_at'))
                 else:
                     p['image_url'] = _normalize_image_url(p['image_url'])
                     p['thumbnails'] = [p['image_url']]
 
-            # Sort all fetched posts by views count descending (highest views first)
-            posts.sort(key=lambda x: x.get('views', 0), reverse=True)
+    # Sort all fetched posts by creation timestamp descending (newest first)
+            posts.sort(key=lambda x: x.get('created_at', 0), reverse=True)
 
         # Fetch unique categories dynamically from GDrive subfolders
         subfolders = await loop.run_in_executor(None, lambda: _list_gdrive_subfolders_sync(GDRIVE_FOLDER_ID))
