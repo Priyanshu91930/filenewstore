@@ -3143,7 +3143,9 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
         total_posts = await mongo_db.posts.count_documents(query)
         
         await status_msg.edit_text(
-            text=f"<b>🚀 Starting GDrive Migration!</b>\n🔍 Found <b>{total_posts}</b> posts to process for @{bot_username}.\n<i>I will update this dashboard live.</i>",
+            text=f"<b>🚀 Starting GDrive Migration!</b>
+🔍 Found <b>{total_posts}</b> posts to process for @{bot_username}.
+<i>I will update this dashboard live.</i>",
             reply_markup=markup
         )
         
@@ -3160,9 +3162,13 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
             # Check for cancellation
             if CLONE_MIGRATION_CANCELLED:
                 await status_msg.edit_text(
-                    text=f"<b>🛑 GDrive Migration has been Cancelled!</b>\n\n"
-                         f"Processed before cancellation: <code>{success_count + fail_count}/{total_posts}</code>\n"
-                         f"✅ Success: <code>{success_count}</code>\n"
+                    text=f"<b>🛑 GDrive Migration has been Cancelled!</b>
+
+"
+                         f"Processed before cancellation: <code>{success_count + fail_count}/{total_posts}</code>
+"
+                         f"✅ Success: <code>{success_count}</code>
+"
                          f"❌ Failed: <code>{fail_count}</code>"
                 )
                 break
@@ -3175,6 +3181,7 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
             gdrive_ids = []
             gdrive_folder_id = None
             is_batch = False
+            thumbnail_gdrive_ids = []
             
             if not deeplink:
                 continue
@@ -3221,6 +3228,36 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                                     
                                     video_path = await client.download_media(media.file_id, file_name=local_path)
                                     if video_path and os.path.exists(video_path):
+                                        # For the first part of a batch, extract previews
+                                        if b_idx == 0:
+                                            import subprocess
+                                            duration = getattr(media, "duration", 0) or 10
+                                            offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
+                                            for idx, offset in enumerate(offsets):
+                                                thumb_name = f"thumb_{post_id}_{idx}.jpg"
+                                                thumb_path = os.path.join(temp_dir, thumb_name)
+                                                try:
+                                                    cmd = [
+                                                        'ffmpeg', '-y',
+                                                        '-ss', str(offset),
+                                                        '-i', video_path,
+                                                        '-vframes', '1',
+                                                        '-q:v', '3',
+                                                        thumb_path
+                                                    ]
+                                                    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                                                    if os.path.exists(thumb_path):
+                                                        # Upload frame to Google Drive inside the batch folder
+                                                        t_gdrive_id, _ = upload_file_to_gdrive(thumb_path, thumb_name, parent_folder_id=gdrive_folder_id)
+                                                        if t_gdrive_id:
+                                                            thumbnail_gdrive_ids.append(t_gdrive_id)
+                                                        try:
+                                                            os.remove(thumb_path)
+                                                        except:
+                                                            pass
+                                                except Exception as fe:
+                                                    logger.error(f"Failed to extract frame at {offset}s for batch: {fe}")
+
                                         # Upload into the batch's dedicated folder
                                         gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename, parent_folder_id=gdrive_folder_id)
                                         try:
@@ -3240,13 +3277,14 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                         decode_file_id = decoded
 
                     file_id = None
+                    media_obj = None
                     if decode_file_id.isdigit():
                         from TechVJ.bot import StreamBot
                         msg = await StreamBot.get_messages(LOG_CHANNEL, int(decode_file_id))
                         if msg and msg.media:
-                            media = getattr(msg, msg.media.value)
-                            file_id = media.file_id
-                            local_filename = getattr(media, "file_name", f"video_{post_id}.mp4")
+                            media_obj = getattr(msg, msg.media.value)
+                            file_id = media_obj.file_id
+                            local_filename = getattr(media_obj, "file_name", f"video_{post_id}.mp4")
                     else:
                         file_doc = await mongo_db.clone_files.find_one({"_id": decode_file_id})
                         if file_doc:
@@ -3257,6 +3295,36 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                         local_path = os.path.join(temp_dir, local_filename)
                         video_path = await client.download_media(file_id, file_name=local_path)
                         if video_path and os.path.exists(video_path):
+                            # Extract previews for single video
+                            import subprocess
+                            duration = getattr(media_obj, "duration", 0) if media_obj else 10
+                            if not duration:
+                                duration = 10
+                            offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
+                            for idx, offset in enumerate(offsets):
+                                thumb_name = f"thumb_{post_id}_{idx}.jpg"
+                                thumb_path = os.path.join(temp_dir, thumb_name)
+                                try:
+                                    cmd = [
+                                        'ffmpeg', '-y',
+                                        '-ss', str(offset),
+                                        '-i', video_path,
+                                        '-vframes', '1',
+                                        '-q:v', '3',
+                                        thumb_path
+                                    ]
+                                    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                                    if os.path.exists(thumb_path):
+                                        t_gdrive_id, _ = upload_file_to_gdrive(thumb_path, thumb_name)
+                                        if t_gdrive_id:
+                                            thumbnail_gdrive_ids.append(t_gdrive_id)
+                                        try:
+                                            os.remove(thumb_path)
+                                        except:
+                                            pass
+                                except Exception as fe:
+                                    logger.error(f"Failed to extract frame at {offset}s for single: {fe}")
+
                             gdrive_id, masked_name = upload_file_to_gdrive(video_path, local_filename)
                             try:
                                 os.remove(video_path)
@@ -3268,6 +3336,9 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                     logger.error(f"Error migrating single file {post_id}: {e}")
 
             if gdrive_ids:
+                # Map GDrive ID URLs for frames preview
+                thumbnails_urls = [f"https://miniapp.anihubyt.com/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
+                
                 update_fields = {
                     "is_gdrive": True,
                     "is_batch": is_batch,
@@ -3275,6 +3346,9 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                     "gdrive_file_ids": gdrive_ids,
                     "caption": caption  # Save original caption for app display
                 }
+                if thumbnails_urls:
+                    update_fields["thumbnails"] = thumbnails_urls
+                    update_fields["image_url"] = thumbnails_urls[0]  # First screenshot as cover
                 if gdrive_folder_id:
                     update_fields["gdrive_folder_id"] = gdrive_folder_id  # Batch collection folder
                 await mongo_db.posts.update_one(
@@ -3289,9 +3363,12 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
             if processed % 10 == 0 or processed == total_posts:
                 try:
                     await status_msg.edit_text(
-                        text=f"<b>📊 GDrive Migration Progress:</b>\n"
-                             f"Processed: <code>{processed}/{total_posts}</code>\n"
-                             f"✅ Success: <code>{success_count}</code>\n"
+                        text=f"<b>📊 GDrive Migration Progress:</b>
+"
+                             f"Processed: <code>{processed}/{total_posts}</code>
+"
+                             f"✅ Success: <code>{success_count}</code>
+"
                              f"❌ Failed: <code>{fail_count}</code>",
                         reply_markup=markup
                     )
@@ -3300,16 +3377,23 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                         
         if not CLONE_MIGRATION_CANCELLED:
             await status_msg.edit_text(
-                text=f"<b>🎉 GDrive Migration Task Finished!</b>\n\n"
-                     f"Total Processed: <code>{success_count + fail_count}/{total_posts}</code>\n"
-                     f"✅ Successfully Migrated: <code>{success_count}</code>\n"
-                     f"❌ Failed: <code>{fail_count}</code>\n\n"
+                text=f"<b>🎉 GDrive Migration Task Finished!</b>
+
+"
+                     f"Total Processed: <code>{success_count + fail_count}/{total_posts}</code>
+"
+                     f"✅ Successfully Migrated: <code>{success_count}</code>
+"
+                     f"❌ Failed: <code>{fail_count}</code>
+
+"
                      f"All GDrive videos are now playable in your React Native app."
             )
     except Exception as e:
         logger.error(f"Migration background worker error: {e}")
         try:
-            await status_msg.edit_text(text=f"<b>❌ GDrive Migration crashed with error:</b>\n<code>{e}</code>")
+            await status_msg.edit_text(text=f"<b>❌ GDrive Migration crashed with error:</b>
+<code>{e}</code>")
         except:
             pass
     finally:
