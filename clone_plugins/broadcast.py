@@ -85,6 +85,58 @@ async def broadcast_messages(bot_id, user_id, message):
         await clonedb.delete_user(bot_id, user_id)
         return False, "Error"
 
+
+@Client.on_message(filters.command("broadcast_app"))
+async def clone_broadcast_app_handler(bot, message):
+    me = await bot.get_me()
+    owner = mongo_db.bots.find_one({'bot_id': me.id})
+    owner_id = int(owner.get("user_id", 0)) if owner else 0
+    mods = owner.get("moderators", []) if owner else []
+    
+    if message.from_user.id != owner_id and message.from_user.id not in mods:
+        await message.reply_text("❌ ᴏɴʟʏ ᴏᴡɴᴇʀ ᴀɴᴅ ᴍᴏᴅᴇʀᴀᴛᴏʀs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ❗")
+        return
+
+    if owner and owner.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    # Extract message content
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "❌ **Usage:** `/broadcast_app Title | Body text of the notification`\n\n"
+            "Use the `|` symbol to separate Title and Description."
+        )
+        
+    full_text = message.text.split(None, 1)[1]
+    title = "Announcement 📢"
+    body = full_text
+    
+    if "|" in full_text:
+        parts = full_text.split("|", 1)
+        title = parts[0].strip()
+        body = parts[1].strip()
+        
+    # Save notification to MongoDB
+    now = time.time()
+    notification_doc = {
+        "title": title,
+        "body": body,
+        "created_at": now
+    }
+    
+    try:
+        from plugins.clone import async_mongo_db
+        await async_mongo_db.app_notifications.insert_one(notification_doc)
+        await message.reply_text(
+            f"✅ **Notification Broadcasted successfully from clone!**\n\n"
+            f"📌 **Title:** {title}\n"
+            f"📝 **Body:** {body}\n\n"
+            f"All app users will now see this notification inside their Notification tab."
+        )
+    except Exception as e:
+        await message.reply_text(f"❌ **Error saving notification:** {e}")
+
+
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
