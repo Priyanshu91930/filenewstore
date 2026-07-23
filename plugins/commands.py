@@ -3820,8 +3820,8 @@ async def upload_gdrive_cmd_handler(client, message):
     thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
     default_thumb = thumbnails_urls[0] if thumbnails_urls else image_url
 
-    # Determine category based on duration override
-    final_category = "Viral Shorts" if (duration and duration < 20) else category
+    # Keep chosen category
+    final_category = category
 
     # Format duration for the database (e.g. 12 -> "00:12")
     formatted_duration = "03:15"
