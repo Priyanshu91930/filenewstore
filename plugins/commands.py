@@ -3821,12 +3821,20 @@ async def upload_gdrive_cmd_handler(client, message):
     # Determine category based on duration override
     final_category = "Viral Shorts" if (duration and duration < 20) else category
 
+    # Format duration for the database (e.g. 12 -> "00:12")
+    formatted_duration = "03:15"
+    if duration:
+        mins = int(duration // 60)
+        secs = int(duration % 60)
+        formatted_duration = f"{mins:02d}:{secs:02d}"
+
     await clone_mongo_db.posts.insert_one({
         "_id": post_id,
         "title": title,
         "image_url": default_thumb,
         "thumbnails": thumbnails_urls,
         "category": final_category,
+        "duration": formatted_duration,
         "gdrive_file_id": gdrive_file_id,
         "is_gdrive": True,
         "bot_username": client.me.username,

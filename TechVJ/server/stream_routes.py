@@ -788,6 +788,8 @@ async def gdrive_portal_data_handler(request: web.Request):
                     p['views'] = int(match.get('views', 0)) or p['views']
                     p['is_paid'] = bool(match.get('is_paid', False))
                     p['thumbnails'] = [_normalize_image_url(t) for t in match.get('thumbnails', [])] if match.get('thumbnails') else [p['image_url']]
+                    if match.get('duration'):
+                        p['duration'] = match.get('duration')
                 else:
                     p['image_url'] = _normalize_image_url(p['image_url'])
                     p['thumbnails'] = [p['image_url']]
