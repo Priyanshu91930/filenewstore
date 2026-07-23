@@ -513,6 +513,7 @@ async def portal_data_route_handler(request: web.Request):
             'caption': doc.get('caption', doc.get('title', '')),
             'is_gdrive': bool(doc.get('is_gdrive', False)),
             'duration': doc.get('duration', '03:15'),
+            'stream_url': f"https://appvideo.solankipriyanshu94.workers.dev/video.mp4?fileId={doc.get('gdrive_file_id', '')}" if doc.get('gdrive_file_id') else '',
             'thumbnails': [_normalize_image_url(t) for t in doc.get('thumbnails', [])] if doc.get('thumbnails') else [_normalize_image_url(doc.get('image_url', ''))]
         })
 

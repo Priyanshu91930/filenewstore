@@ -3120,6 +3120,8 @@ async def clone_upload_gdrive_cmd_handler(client, message):
         if now - state.last_update < 4:
             return
         state.last_update = now
+        if not total:
+            return
         pct = (current / total) * 100
         try:
             await sts.edit_text(f"<b>⏳ Downloading video from Telegram...</b>\n<code>[{'●' * int(pct // 10)}{'○' * (10 - int(pct // 10))}] {pct:.1f}%</code>")
@@ -3170,22 +3172,22 @@ async def clone_upload_gdrive_cmd_handler(client, message):
     thumbnail_gdrive_ids = []
 
     import subprocess
+    abs_temp_dir = os.path.abspath(temp_dir)
     for idx, offset in enumerate(offsets):
         thumb_name = f"thumb_{post_id}_{idx}.jpg"
-        thumb_path = os.path.join(temp_dir, thumb_name)
+        thumb_path = os.path.join(abs_temp_dir, thumb_name)
 
         try:
             cmd = [
                 'ffmpeg', '-y',
                 '-ss', str(offset),
-                '-i', downloaded_path,
+                '-i', os.path.abspath(downloaded_path),
                 '-vframes', '1',
                 '-q:v', '3',
                 thumb_path
             ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-
-            if os.path.exists(thumb_path):
+            result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            if result.returncode == 0 and os.path.exists(thumb_path):
                 t_gdrive_id, _ = upload_file_to_gdrive(thumb_path, thumb_name, parent_folder_id=clone_folder_id)
                 if t_gdrive_id:
                     thumbnail_gdrive_ids.append(t_gdrive_id)
