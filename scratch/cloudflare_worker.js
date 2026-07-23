@@ -60,7 +60,11 @@ export default {
 
         // Setup headers to return to the Android Player
         const responseHeaders = new Headers();
-        responseHeaders.set('Content-Type', 'video/mp4');
+        let contentTypeHeader = driveResponse.headers.get('Content-Type') || driveResponse.headers.get('content-type') || 'video/mp4';
+        if (contentTypeHeader.includes('text/html')) {
+          contentTypeHeader = 'video/mp4';
+        }
+        responseHeaders.set('Content-Type', contentTypeHeader);
         responseHeaders.set('Content-Disposition', 'inline');
         responseHeaders.set('Accept-Ranges', 'bytes');
         responseHeaders.set('Access-Control-Allow-Origin', '*');
