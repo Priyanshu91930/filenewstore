@@ -1415,7 +1415,7 @@ async def get_ad_link_handler(request: web.Request):
             "provider":    provider,
             "site":        chosen_site,
             "is_new_user": is_new_user,
-            "total_views": total_views + 1,
+            "daily_views": daily_views + 1,
         })
 
     except Exception as e:
