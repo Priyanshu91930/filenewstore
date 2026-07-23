@@ -484,8 +484,8 @@ async def portal_data_route_handler(request: web.Request):
     limit = int(request.rel_url.query.get('limit', 100))
 
     query = {"is_gdrive": True}
-    if category != 'All':
-        query['category'] = category
+    if category and category != 'All':
+        query['category'] = {'$regex': f'^{category}$', '$options': 'i'}
     if search:
         query['title'] = {'$regex': search, '$options': 'i'}
 
