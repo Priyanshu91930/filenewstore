@@ -1280,13 +1280,16 @@ async def register_ad_watched(request: web.Request):
             upsert=True
         )
 
-        # Increment ad rotation counter (so next /get-ad-link uses next provider)
+        # Increment DAILY ad rotation counter (resets automatically at midnight IST)
+        import pytz
+        from datetime import datetime
+        today = datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')
         await async_mongo_db.app_ad_views.update_one(
-            {"email": email},
+            {"email": email, "date": today},
             {
-                "$inc": {"total_views": 1},
+                "$inc": {"daily_views": 1},
                 "$set": {"last_seen": time.time()},
-                "$setOnInsert": {"email": email, "first_seen": time.time()},
+                "$setOnInsert": {"email": email, "date": today, "first_seen": time.time()},
             },
             upsert=True,
         )
@@ -1368,24 +1371,29 @@ async def get_ad_link_handler(request: web.Request):
         if not PROVIDERS:
             PROVIDERS = [("vplink", SHORTLINK_API, SHORTLINK_URL or "vplink.in")]
 
-        # ── Check user's existing ad view count (READ ONLY - do NOT increment here) ──
-        # Counter is incremented only in /user/ad-watched when ad is actually completed
-        ad_record   = await async_mongo_db.app_ad_views.find_one({"email": email})
-        is_new_user = ad_record is None
-        total_views = ad_record.get("total_views", 0) if ad_record else 0
+        # ── Daily ad counter (auto-resets at midnight IST — no scheduler needed) ──
+        # Each day creates a new {email, date} document → counter starts at 0
+        import pytz
+        from datetime import datetime
+        today = datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')
 
-        # Ensure the user document exists (upsert with no-op if already there)
+        ad_record   = await async_mongo_db.app_ad_views.find_one({"email": email, "date": today})
+        is_new_user = ad_record is None          # True if no ad seen TODAY
+        daily_views = ad_record.get("daily_views", 0) if ad_record else 0
+
+        # Ensure today's record exists
         await async_mongo_db.app_ad_views.update_one(
-            {"email": email},
-            {"$setOnInsert": {"email": email, "total_views": 0, "first_seen": time.time()}},
+            {"email": email, "date": today},
+            {"$setOnInsert": {"email": email, "date": today, "daily_views": 0, "first_seen": time.time()}},
             upsert=True,
         )
 
-        # ── Round-robin: index = total_views % number_of_providers ───────────
-        idx                              = total_views % len(PROVIDERS)
+        # ── Round-robin: index = daily_views % number_of_providers ───────────
+        # At midnight IST → daily_views resets to 0 → everyone gets vplink again
+        idx                              = daily_views % len(PROVIDERS)
         provider, chosen_api, chosen_site = PROVIDERS[idx]
 
-        logging.info(f"[get-ad-link] email={email} views={total_views} idx={idx} provider={provider} ({chosen_site})")
+        logging.info(f"[get-ad-link] email={email} date={today} daily_views={daily_views} idx={idx} provider={provider}")
 
         # ── Build target URL & shorten ────────────────────────────────────────
         target_url = f"https://miniapp.anihubyt.com/app-return?email={email}"
