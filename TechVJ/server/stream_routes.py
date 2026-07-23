@@ -1296,15 +1296,21 @@ async def generate_verification_shortlink(request: web.Request):
 
 @routes.get("/verify/complete")
 async def verification_complete_redirect(request: web.Request):
-    """Processes verification completion and redirects back to the app via deep link scheme."""
+    """Processes verification completion, credits views, deletes the token, and redirects back to the app."""
     from plugins.clone import async_mongo_db
     try:
         email = request.rel_url.query.get("email", "").strip().lower()
         token = request.rel_url.query.get("token", "")
         
         record = await async_mongo_db.user_verifications.find_one({"email": email})
+        
+        # Security Check: Only allow if token matches and token hasn't already been consumed/marked verified
         if record and record.get("token") == token:
-            # Mark verified
+            if record.get("verified") is True:
+                # Token already consumed
+                return web.Response(text="Verification link already consumed/expired. Please generate a new one.", status=400)
+            
+            # Consume token by marking verified (this is retrieved once by polling check-status)
             await async_mongo_db.user_verifications.update_one(
                 {"email": email},
                 {"$set": {"verified": True}}
@@ -1316,8 +1322,11 @@ async def verification_complete_redirect(request: web.Request):
                 upsert=True
             )
             
-        # Redirect back to the app using custom URI scheme (viralverse://)
-        raise web.HTTPFound("viralverse://home?verified=true")
+            # Redirect back to the app using custom URI scheme (viralverse://)
+            raise web.HTTPFound("viralverse://home?verified=true")
+        else:
+            return web.Response(text="Invalid or expired verification token.", status=400)
+            
     except web.HTTPFound as redirect:
         raise redirect
     except Exception as e:
