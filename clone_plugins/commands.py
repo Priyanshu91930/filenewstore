@@ -3143,9 +3143,9 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
         total_posts = await mongo_db.posts.count_documents(query)
         
         await status_msg.edit_text(
-            text=f"<b>🚀 Starting GDrive Migration!</b>
+            text=f"""<b>🚀 Starting GDrive Migration!</b>
 🔍 Found <b>{total_posts}</b> posts to process for @{bot_username}.
-<i>I will update this dashboard live.</i>",
+<i>I will update this dashboard live.</i>""",
             reply_markup=markup
         )
         
@@ -3162,14 +3162,11 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
             # Check for cancellation
             if CLONE_MIGRATION_CANCELLED:
                 await status_msg.edit_text(
-                    text=f"<b>🛑 GDrive Migration has been Cancelled!</b>
+                    text=f"""<b>🛑 GDrive Migration has been Cancelled!</b>
 
-"
-                         f"Processed before cancellation: <code>{success_count + fail_count}/{total_posts}</code>
-"
-                         f"✅ Success: <code>{success_count}</code>
-"
-                         f"❌ Failed: <code>{fail_count}</code>"
+Processed before cancellation: <code>{success_count + fail_count}/{total_posts}</code>
+✅ Success: <code>{success_count}</code>
+❌ Failed: <code>{fail_count}</code>"""
                 )
                 break
 
@@ -3363,13 +3360,10 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
             if processed % 10 == 0 or processed == total_posts:
                 try:
                     await status_msg.edit_text(
-                        text=f"<b>📊 GDrive Migration Progress:</b>
-"
-                             f"Processed: <code>{processed}/{total_posts}</code>
-"
-                             f"✅ Success: <code>{success_count}</code>
-"
-                             f"❌ Failed: <code>{fail_count}</code>",
+                        text=f"""<b>📊 GDrive Migration Progress:</b>
+Processed: <code>{processed}/{total_posts}</code>
+✅ Success: <code>{success_count}</code>
+❌ Failed: <code>{fail_count}</code>""",
                         reply_markup=markup
                     )
                 except Exception as ex:
@@ -3377,23 +3371,19 @@ async def clone_migration_background_worker(client, status_msg, admin_chat_id, b
                         
         if not CLONE_MIGRATION_CANCELLED:
             await status_msg.edit_text(
-                text=f"<b>🎉 GDrive Migration Task Finished!</b>
+                text=f"""<b>🎉 GDrive Migration Task Finished!</b>
 
-"
-                     f"Total Processed: <code>{success_count + fail_count}/{total_posts}</code>
-"
-                     f"✅ Successfully Migrated: <code>{success_count}</code>
-"
-                     f"❌ Failed: <code>{fail_count}</code>
+Total Processed: <code>{success_count + fail_count}/{total_posts}</code>
+✅ Successfully Migrated: <code>{success_count}</code>
+❌ Failed: <code>{fail_count}</code>
 
-"
-                     f"All GDrive videos are now playable in your React Native app."
+All GDrive videos are now playable in your React Native app."""
             )
     except Exception as e:
         logger.error(f"Migration background worker error: {e}")
         try:
-            await status_msg.edit_text(text=f"<b>❌ GDrive Migration crashed with error:</b>
-<code>{e}</code>")
+            await status_msg.edit_text(text=f"""<b>❌ GDrive Migration crashed with error:</b>
+<code>{e}</code>""")
         except:
             pass
     finally:
