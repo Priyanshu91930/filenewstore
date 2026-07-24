@@ -2319,6 +2319,22 @@ async def cb_handler(client: Client, query: CallbackQuery):
         query.data = "settings"
         return await cb_handler(client, query)
 
+    elif query.data == "toggle_global_ads":
+        from config import ADMINS
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ Only admins can configure global ads!", show_alert=True)
+        config_doc = await clone_mongo_db.ads_toggle.find_one({"_id": "global_status"})
+        current_status = config_doc.get("enabled", True) if config_doc else True
+        new_status = not current_status
+        await clone_mongo_db.ads_toggle.update_one(
+            {"_id": "global_status"},
+            {"$set": {"enabled": new_status}},
+            upsert=True
+        )
+        await query.answer(f"Global Ads {'Enabled 🟢' if new_status else 'Disabled 🔴'}", show_alert=True)
+        query.data = "settings"
+        return await cb_handler(client, query)
+
     elif query.data == "settings":
         from config import ADMINS
         user_id = query.from_user.id
@@ -2337,9 +2353,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         # Only render and allow the global TMA/Stream toggle buttons for bot owners/admins
         if user_id in ADMINS:
+            ads_config = await clone_mongo_db.ads_toggle.find_one({"_id": "global_status"})
+            ads_enabled = ads_config.get("enabled", True) if ads_config else True
             buttons.append([
                 InlineKeyboardButton(f"TMA Ads: {'ON 🟢' if config.TMA_MODE else 'OFF 🔴'}", callback_data="toggle_tma"),
                 InlineKeyboardButton(f"Stream: {'ON 🟢' if config.STREAM_MODE else 'OFF 🔴'}", callback_data="toggle_stream")
+            ])
+            buttons.append([
+                InlineKeyboardButton(f"Global Ads: {'ON 🟢' if ads_enabled else 'OFF 🔴'}", callback_data="toggle_global_ads")
             ])
             buttons.append([
                 InlineKeyboardButton("💳 Configure Plan", callback_data="setplan")
@@ -2353,8 +2374,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
         ]])
         
         reply_markup = InlineKeyboardMarkup(buttons)
+        ads_config = await clone_mongo_db.ads_toggle.find_one({"_id": "global_status"})
+        ads_enabled = ads_config.get("enabled", True) if ads_config else True
+        ads_global_status = "Enabled 🟢" if ads_enabled else "Disabled 🔴"
+        
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code></b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴄᴜʀʀᴇɴᴛ ʙᴀsᴇ sɪᴛᴇ: {user['base_site']}\nᴄᴜʀʀᴇɴᴛ ᴀᴘɪ: <code>{user['shortener_api']}</code>\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nɢʟᴏʙᴀʟ ᴀᴅs: <code>{ads_global_status}</code></b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
