@@ -161,6 +161,88 @@ async def broadcast_app_handler(bot, message):
     except Exception as e:
         await message.reply_text(f"❌ **Error saving/sending notification:** {e}")
 
+
+@Client.on_message(filters.command("broadcast_reqs") & filters.user(ADMINS) & filters.reply)
+async def broadcast_join_reqs_handler(bot, message):
+    """
+    Broadcasts a replied message to all unique user_ids present in the 'join_reqs' collection.
+    
+    Usage: Reply to any message (text, photo, video, document) with /broadcast_reqs
+    """
+    from plugins.clone import async_mongo_db
+    
+    b_msg = message.reply_to_message
+    sts = await message.reply_text(text='**Analyzing join requests data and initializing broadcast...**')
+    
+    try:
+        # Extract unique user_ids from join_reqs collection
+        user_ids = await async_mongo_db.join_reqs.distinct("user_id")
+        total_users = len(user_ids)
+        
+        if total_users == 0:
+            return await sts.edit("<b>❌ No users found in 'join_reqs' collection to broadcast.</b>")
+            
+        await sts.edit(f"<b>📢 Found {total_users} unique users in join_reqs. Starting broadcast...</b>")
+        
+        start_time = time.time()
+        done = 0
+        blocked = 0
+        deleted = 0
+        failed = 0
+        success = 0
+
+        for user_id in user_ids:
+            try:
+                # Handle potential string IDs in database safely
+                uid = int(user_id)
+            except (ValueError, TypeError):
+                done += 1
+                failed += 1
+                continue
+                
+            pti, sh = await broadcast_messages(uid, b_msg)
+            if pti:
+                success += 1
+            elif pti == False:
+                if sh == "Blocked":
+                    blocked += 1
+                elif sh == "Deleted":
+                    deleted += 1
+                elif sh == "Error":
+                    failed += 1
+            done += 1
+            
+            # Anti-flood delay: 100ms between messages to keep API safe
+            await asyncio.sleep(0.1)
+            
+            if not done % 20:
+                try:
+                    await sts.edit(
+                        f"<b>📢 Broadcast (Join Reqs) in progress:</b>\n\n"
+                        f"➜ Total Target: {total_users}\n"
+                        f"➜ Completed: {done} / {total_users}\n"
+                        f"➜ Success: {success} ✅\n"
+                        f"➜ Blocked: {blocked} 🚫\n"
+                        f"➜ Deleted: {deleted} ❌\n"
+                        f"➜ Failed: {failed} ⚠️"
+                    )
+                except:
+                    pass
+        
+        time_taken = datetime.timedelta(seconds=int(time.time() - start_time))
+        await sts.edit(
+            f"<b>✅ Broadcast (Join Reqs) Completed!</b>\n"
+            f"Completed in {time_taken}.\n\n"
+            f"➜ Total Target: {total_users}\n"
+            f"➜ Success: {success} ✅\n"
+            f"➜ Blocked: {blocked} 🚫\n"
+            f"➜ Deleted: {deleted} ❌\n"
+            f"➜ Failed: {failed} ⚠️"
+        )
+    except Exception as e:
+        await sts.edit(f"<b>❌ Error in join reqs broadcast:</b> <code>{str(e)}</code>")
+
+
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @Brainaxe190
