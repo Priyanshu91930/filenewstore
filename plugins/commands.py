@@ -3306,6 +3306,28 @@ async def msg_user_handler(client, message):
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
 
+
+@Client.on_message(filters.command("toggle_ads") & filters.private & filters.user(ADMINS))
+async def toggle_ads_command(client, message):
+    """Admin command to toggle all ads ON or OFF globally for all users."""
+    try:
+        config_doc = await clone_mongo_db.ads_toggle.find_one({"_id": "global_status"})
+        current_status = config_doc.get("enabled", True) if config_doc else True
+        
+        new_status = not current_status
+        await clone_mongo_db.ads_toggle.update_one(
+            {"_id": "global_status"},
+            {"$set": {"enabled": new_status}},
+            upsert=True
+        )
+        
+        status_text = "🟢 **ON (Enabled)**" if new_status else "🔴 **OFF (Disabled - Free playback for all)**"
+        await message.reply_text(f"<b>📢 Global Ads Toggle updated!</b>\n\n➜ All Ads are now: {status_text}")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error toggling ads: {e}</b>")
+
+
+
 @Client.on_message(filters.command("listvip") & filters.private & filters.user(ADMINS))
 async def list_vip_handler(client, message):
     try:

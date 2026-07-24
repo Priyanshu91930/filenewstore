@@ -1241,8 +1241,16 @@ async def get_user_stats(request: web.Request):
                 dt = datetime.fromtimestamp(expiry)
                 vip_expiry_str = dt.strftime("%d %b %Y, %I:%M %p")
 
+        # Check if ads are disabled globally
+        ads_config = await async_mongo_db.ads_toggle.find_one({"_id": "global_status"})
+        ads_enabled = ads_config.get("enabled", True) if ads_config else True
+
         user_record = await async_mongo_db.user.find_one({"email": email})
         allowed_views = user_record.get("allowed_views", 0) if user_record else 0
+
+        # If ads are disabled globally, bypass by giving high view count to let all users play instantly
+        if not ads_enabled:
+            allowed_views = 99999
 
         return web.json_response({
             "status": "ok",
@@ -1251,8 +1259,8 @@ async def get_user_stats(request: web.Request):
             "history_count": history_count,
             "download_count": download_count,
             "downloads_enabled": is_vip,
-            "is_vip": is_vip,
-            "vip_expiry": vip_expiry_str,
+            "is_vip": is_vip or (not ads_enabled), # Mark as VIP/ad-free if ads disabled
+            "vip_expiry": "Ad-Free Mode" if not ads_enabled else vip_expiry_str,
             "allowed_views": allowed_views,
         })
     except Exception as e:
@@ -1607,14 +1615,19 @@ async def consume_user_view(request: web.Request):
         if not email:
             return web.json_response({"status": "error", "message": "email required"}, status=400)
 
+        # Check if ads are disabled globally
+        ads_config = await async_mongo_db.ads_toggle.find_one({"_id": "global_status"})
+        ads_enabled = ads_config.get("enabled", True) if ads_config else True
+
+        # VIP check
         vip = await async_mongo_db.vip_users.find_one({"email": email})
         is_vip = False
         if vip:
             expiry = vip.get("expiry")
             is_vip = expiry is None or time.time() < expiry
 
-        if is_vip:
-            return web.json_response({"status": "ok", "is_vip": True})
+        if is_vip or not ads_enabled:
+            return web.json_response({"status": "ok", "is_vip": True, "allowed_views": 99999})
 
         user_record = await async_mongo_db.user.find_one({"email": email})
         current_views = user_record.get("allowed_views", 0) if user_record else 0
