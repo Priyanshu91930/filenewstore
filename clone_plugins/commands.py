@@ -3538,3 +3538,68 @@ async def clone_migrate_gdrive_cmd_handler(client, message):
     asyncio.create_task(clone_migration_background_worker(client, sts, message.chat.id, me.username))
 
 
+@Client.on_message(filters.command("poll") & filters.private)
+async def send_poll_handler(client, message):
+    """
+    Send a poll to a channel or group.
+    Usage: /poll [channel_id] | [question] | [option1] | [option2] | ...
+    """
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+
+    # Command parsing
+    if len(message.command) < 2 or "|" not in message.text:
+        return await message.reply_text(
+            "<b>Usage format:</b>\n"
+            "<code>/poll channel_id/username | Question | Option 1 | Option 2 | Option 3</code>\n\n"
+            "<b>Example:</b>\n"
+            "<code>/poll -1004423517320 | Which content do you want next? | Web Series 🎬 | Movies 🎥 | Anime ⛩️</code>"
+        )
+
+    try:
+        parts = [p.strip() for p in message.text.split(None, 1)[1].split("|")]
+        if len(parts) < 4:
+            return await message.reply_text("<b>❌ Error: You must specify a channel ID, a question, and at least 2 options!</b>")
+
+        chat_id_raw = parts[0]
+        question = parts[1]
+        options = parts[2:]
+
+        # Validate options count (Telegram limit is 10 options max)
+        if len(options) > 10:
+            return await message.reply_text("<b>❌ Error: Telegram polls only support a maximum of 10 options!</b>")
+
+        # Parse chat_id (convert to int if numeric/standard channel format)
+        try:
+            chat_id = int(chat_id_raw)
+        except ValueError:
+            chat_id = chat_id_raw  # string username like @mychannel
+
+        # Send the poll
+        poll_msg = await client.send_poll(
+            chat_id=chat_id,
+            question=question,
+            options=options,
+            is_anonymous=False # Let admin see voter names if desired
+        )
+        
+        await message.reply_text(
+            f"<b>✅ Poll successfully sent!</b>\n\n"
+            f"🎯 <b>Target:</b> <code>{chat_id_raw}</code>\n"
+            f"❓ <b>Question:</b> {question}\n"
+            f"🗳️ <b>Options:</b> {len(options)} total."
+        )
+
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Failed to send poll:</b>\n<code>{e}</code>")
+
+
+
+
