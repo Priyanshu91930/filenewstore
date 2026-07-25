@@ -128,8 +128,8 @@ async def clone_broadcast_app_handler(bot, message):
         from plugins.clone import async_mongo_db
         await async_mongo_db.app_notifications.insert_one(notification_doc)
         
-        # Fetch all registered user push tokens from database
-        cursor = async_mongo_db.user.find({"push_token": {"$exists": True, "$ne": ""}}, {"push_token": 1, "_id": 0})
+        # Fetch all registered user push tokens from app_users collection
+        cursor = async_mongo_db.app_users.find({"push_token": {"$exists": True, "$ne": ""}}, {"push_token": 1, "_id": 0})
         users_list = await cursor.to_list(length=1000)
         tokens = [u.get("push_token") for u in users_list if u.get("push_token")]
         

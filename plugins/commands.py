@@ -3316,9 +3316,10 @@ async def decline_vip_handler(client, message):
 @Client.on_message(filters.command("update_apk") & filters.private & filters.user(ADMINS))
 async def update_apk_command_handler(client, message):
     """
-    Command to upload and update the official APK directly on the EC2 server.
-    Admin must reply to a document (.apk file) with /update_apk [version] [version_code].
-    Example: /update_apk 1.0.2 3
+    Command to upload and update the official APK.
+    Usage: Reply to .apk file with /update_apk version_name
+    Example: /update_apk 1.0.1
+    Saves to both static/viralverse.apk (backward compat) and apk_updates/ with version metadata.
     """
     if not message.reply_to_message or not message.reply_to_message.document:
         return await message.reply_text("<b>❌ Error: Please reply to the APK file (.apk document) with `/update_apk` command!</b>")
@@ -3326,60 +3327,75 @@ async def update_apk_command_handler(client, message):
     doc = message.reply_to_message.document
     if not doc.file_name.lower().endswith(".apk"):
         return await message.reply_text("<b>❌ Error: The replied document is not an APK file!</b>")
+
+    # Parse version name from command
+    parsed_version = "1.0.0"
+    cmd_text = message.text.strip()
+    parts = cmd_text.split(maxsplit=1)
+    if len(parts) > 1:
+        arg_str = parts[1]
+        if "|" in arg_str:
+            parsed_version = arg_str.split("|", 1)[0].strip()
+        else:
+            parsed_version = arg_str.strip()
         
-    # Parse version and version_code arguments
-    version = "1.0.0"
-    version_code = 1
-    if len(message.command) >= 3:
-        version = message.command[1].strip()
-        try:
-            version_code = int(message.command[2].strip())
-        except ValueError:
-            pass
-    elif len(message.command) == 2:
-        version = message.command[1].strip()
-        # Default increment placeholder
-        version_code = 2
-        
-    status_msg = await message.reply_text(f"<b>⏳ Downloading and updating APK to Version {version} (Code: {version_code})... Please wait.</b>")
+    status_msg = await message.reply_text("<b>⏳ Downloading and updating APK on server... Please wait.</b>")
     
     try:
-        # Define path: static/viralverse.apk
-        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+        # Save to static/viralverse.apk (backward compat)
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        static_dir = os.path.join(root_dir, "static")
         os.makedirs(static_dir, exist_ok=True)
-        apk_path = os.path.join(static_dir, "viralverse.apk")
-        
-        # Download the replied document to the static path (overwriting old apk)
-        await client.download_media(message=doc, file_name=apk_path)
-        
-        # Verify if downloaded successfully
-        if os.path.exists(apk_path):
-            file_size = os.path.getsize(apk_path)
-            size_readable = get_size(file_size)
-            download_url = f"https://miniapp.anihubyt.com/static/viralverse.apk"
-            
-            # Update app_metadata details in MongoDB
-            await clone_mongo_db.app_metadata.update_one(
-                {"_id": "latest_version"},
-                {"$set": {
-                    "version": version,
-                    "version_code": version_code,
-                    "download_url": download_url,
-                    "updated_at": time.time()
-                }},
-                upsert=True
-            )
-            
-            await status_msg.edit_text(
-                f"<b>✅ APK updated and metadata saved!</b>\n\n"
-                f"📁 <b>Filename:</b> <code>{doc.file_name}</code>\n"
-                f"🏷️ <b>Version:</b> <code>{version}</code> (Code: <code>{version_code}</code>)\n"
-                f"⚖️ <b>Size:</b> <code>{size_readable}</code>\n"
-                f"🔗 <b>Download URL:</b> {download_url}"
-            )
-        else:
-            await status_msg.edit_text("<b>❌ Error: Failed to save the downloaded file on server.</b>")
-            
+        apk_path_static = os.path.join(static_dir, "viralverse.apk")
+        await client.download_media(message=doc, file_name=apk_path_static)
+
+        # Also save to apk_updates/ with version name
+        apk_updates_dir = os.path.join(root_dir, "apk_updates")
+        os.makedirs(apk_updates_dir, exist_ok=True)
+
+        # Get next version code from DB
+        from plugins.clone import async_mongo_db
+        apk_coll = async_mongo_db.apk_updates
+        current_doc = await apk_coll.find_one({"_id": "latest"})
+        version_code = (current_doc.get("version_code", 0) if current_doc else 0) + 1
+
+        safe_name = f"app_v{version_code}_{parsed_version.replace(' ', '_')}.apk"
+        apk_path_versioned = os.path.join(apk_updates_dir, safe_name)
+        await client.download_media(message=doc, file_name=apk_path_versioned)
+
+        file_size = os.path.getsize(apk_path_versioned)
+        size_readable = get_size(file_size)
+
+        # Save metadata in MongoDB
+        from datetime import datetime
+        now = datetime.utcnow().isoformat()
+        await apk_coll.update_one(
+            {"_id": "latest"},
+            {"$set": {
+                "version_code": version_code,
+                "version_name": parsed_version,
+                "changelog": "New update available",
+                "file_name": safe_name,
+                "file_path": apk_path_versioned,
+                "file_size": file_size,
+                "original_file_name": doc.file_name,
+                "uploaded_at": now,
+                "uploaded_by": message.from_user.id
+            }},
+            upsert=True
+        )
+
+        static_url = f"https://miniapp.anihubyt.com/static/viralverse.apk"
+        api_url = f"https://miniapp.anihubyt.com/api/download-apk/{version_code}"
+        await status_msg.edit_text(
+            f"<b>✅ APK Updated & Metadata Saved!</b>\n\n"
+            f"📁 <b>Filename:</b> <code>{doc.file_name}</code>\n"
+            f"🏷️ <b>Version:</b> <code>{parsed_version}</code> (Code: {version_code})\n"
+            f"⚖️ <b>Size:</b> <code>{size_readable}</code>\n"
+            f"🔗 <b>API Download:</b> <code>{api_url}</code>\n\n"
+            f"Users will now see update notification in app if their version is older."
+        )
+
     except Exception as e:
         logger.error(f"Error in /update_apk: {e}")
         await status_msg.edit_text(f"<b>❌ Error updating APK:</b>\n<code>{e}</code>")
@@ -3937,7 +3953,19 @@ async def upload_gdrive_cmd_handler(client, message):
         safe_msg = html.escape(str(masked_name))
         return await sts.edit_text(f"<b>❌ GDrive Upload Failed:</b>\n<code>{safe_msg}</code>")
         
-    # 5. Insert into MongoDB collection
+    # 5. Generate file_deeplink for mini app (forward to LOG_CHANNEL for bot link delivery)
+    file_deeplink = ""
+    try:
+        log_msg = await client.copy_message(
+            chat_id=LOG_CHANNEL,
+            from_chat_id=message.chat.id,
+            message_id=replied.id
+        )
+        file_deeplink = base64.urlsafe_b64encode(f"file_{log_msg.id}".encode()).decode().rstrip("=")
+    except Exception as e:
+        logger.error(f"Failed to forward to LOG_CHANNEL for deeplink: {e}")
+
+    # 6. Insert into MongoDB collection
     thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
     default_thumb = thumbnails_urls[0] if thumbnails_urls else image_url
 
@@ -3959,6 +3987,7 @@ async def upload_gdrive_cmd_handler(client, message):
         "category": final_category,
         "duration": formatted_duration,
         "gdrive_file_id": gdrive_file_id,
+        "file_deeplink": file_deeplink,
         "is_gdrive": True,
         "bot_username": client.me.username,
         "created_at": time.time(),

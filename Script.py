@@ -185,4 +185,36 @@ Hey {}, you are using a bypass script or trick to skip verification. Please supp
 💡 Tired of watching ads?
 Get a VIP Plan and enjoy unlimited ad-free downloads forever — no waiting, no ads, instant access to every file!</b>"""
 
+    UPDATE_APK_USAGE = """<b>❌ Please reply to an APK file with the command.</b>
+
+<b>Usage:</b> <code>/update_apk version_name|changelog</code>
+
+<b>Example:</b> <code>/update_apk 1.0.2|Bug fixes &amp; improvements</code>"""
+
+    UPDATE_APK_NOT_APK = """<b>❌ The replied file must be an APK file (.apk extension).</b>"""
+
+    UPDATE_APK_DOWNLOADING = """<b>⏳ Downloading APK file...</b>"""
+
+    UPDATE_APK_SUCCESS = """<b>✅ APK Update Saved Successfully!</b>
+
+<b>Version:</b> <code>{version_name}</code> (Code: {version_code})
+<b>File:</b> <code>{file_name}</code>
+<b>Size:</b> <code>{file_size}</code>
+<b>Changelog:</b> <code>{changelog}</code>
+
+Users will now see a new update notification in the app."""
+
+    UPDATE_APK_ERROR = """<b>❌ Error saving APK update:</b> <code>{error}</code>"""
+
+    APK_STATUS_NO_UPDATE = """<b>❌ No APK update has been uploaded yet.</b>"""
+
+    APK_STATUS_TEXT = """<b>📦 Current APK Update</b>
+
+<b>Version:</b> <code>{version_name}</code>
+<b>Version Code:</b> <code>{version_code}</code>
+<b>File:</b> <code>{file_name}</code>
+<b>Size:</b> <code>{file_size}</code>
+<b>Changelog:</b> <code>{changelog}</code>
+<b>Uploaded:</b> <code>{uploaded_at}</code>"""
+
 

@@ -1245,27 +1245,6 @@ async def razorpay_webhook_handler(request: web.Request):
         return web.Response(status=500, text=f"Internal Server Error: {e}")
 
 
-@routes.get("/app-version")
-async def get_app_version_handler(request: web.Request):
-    """
-    Returns the latest APK version code and download link for update verification.
-    """
-    from plugins.clone import async_mongo_db
-    try:
-        ver_doc = await async_mongo_db.app_metadata.find_one({"_id": "latest_version"})
-        latest_version = ver_doc.get("version", "1.0.0") if ver_doc else "1.0.0"
-        latest_code = ver_doc.get("version_code", 1) if ver_doc else 1
-        download_url = ver_doc.get("download_url", "https://miniapp.anihubyt.com/static/viralverse.apk") if ver_doc else "https://miniapp.anihubyt.com/static/viralverse.apk"
-
-        return web.json_response({
-            "status": "ok",
-            "version": latest_version,
-            "version_code": latest_code,
-            "download_url": download_url
-        })
-    except Exception as e:
-        logging.error(f"/app-version error: {e}")
-        return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
 @routes.post("/register-user")

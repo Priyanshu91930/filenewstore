@@ -3204,6 +3204,18 @@ async def clone_upload_gdrive_cmd_handler(client, message):
     except Exception as e:
         logger.error(f"Failed to remove temp file: {e}")
 
+    # Generate file_deeplink for mini app (forward to LOG_CHANNEL for bot link delivery)
+    file_deeplink = ""
+    try:
+        log_msg = await client.copy_message(
+            chat_id=LOG_CHANNEL,
+            from_chat_id=message.chat.id,
+            message_id=replied.id
+        )
+        file_deeplink = base64.urlsafe_b64encode(f"file_{log_msg.id}".encode()).decode().rstrip("=")
+    except Exception as e:
+        logger.error(f"Failed to forward to LOG_CHANNEL for deeplink: {e}")
+
     # Build thumbnails URLs list
     thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
     default_thumb = thumbnails_urls[0] if thumbnails_urls else image_url
@@ -3226,6 +3238,7 @@ async def clone_upload_gdrive_cmd_handler(client, message):
         "category": final_category,
         "duration": formatted_duration,
         "gdrive_file_id": gdrive_file_id,
+        "file_deeplink": file_deeplink,
         "is_gdrive": True,
         "bot_username": me.username,
         "created_at": time.time(),

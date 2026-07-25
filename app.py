@@ -451,5 +451,160 @@ def gdrive_folders_app():
         return jsonify({"error": str(e), "categories": []}), 500
 
 
+# ─── APK Update System (Backend) ─────────────────────────────────────────────
+# No app changes needed. The app calls these endpoints to check & download updates.
+
+APK_UPDATES_DIR = os.path.join(os.path.dirname(__file__), "apk_updates")
+os.makedirs(APK_UPDATES_DIR, exist_ok=True)
+
+def _human_size(bytes_val):
+    units = ["Bytes", "KB", "MB", "GB", "TB"]
+    size = float(bytes_val)
+    i = 0
+    while size >= 1024.0 and i < len(units) - 1:
+        i += 1
+        size /= 1024.0
+    return f"{size:.2f} {units[i]}"
+
+@app.route('/api/check-apk-update')
+def check_apk_update():
+    """
+    Returns the latest APK update info if available.
+    Sirf purane version walo ko update dikhega.
+    The app sends its current_version, server compares and returns has_update.
+    """
+    from pymongo import MongoClient
+    from config import DB_URI
+
+    uid = request.args.get('uid', '')
+    current_version = int(request.args.get('current_version', '0'))
+
+    try:
+        db_client = MongoClient(DB_URI)
+        db = db_client["cloned_vjbotz"]
+        doc = db.apk_updates.find_one({"_id": "latest"})
+
+        if not doc:
+            return jsonify({
+                "has_update": False,
+                "message": "No updates available"
+            })
+
+        latest_code = doc.get("version_code", 0)
+
+        if current_version >= latest_code:
+            return jsonify({
+                "has_update": False,
+                "message": "You are on the latest version",
+                "version_code": latest_code,
+                "version_name": doc.get("version_name", "1.0.0"),
+            })
+
+        file_size = doc.get("file_size", 0)
+        base_url = request.url_root.rstrip('/')
+        download_url = f"{base_url}/api/download-apk/{latest_code}"
+
+        return jsonify({
+            "has_update": True,
+            "version_code": latest_code,
+            "version_name": doc.get("version_name", "1.0.0"),
+            "file_size": file_size,
+            "file_size_display": _human_size(file_size),
+            "changelog": doc.get("changelog", "New update available"),
+            "file_name": doc.get("file_name", "app-update.apk"),
+            "download_url": download_url,
+        })
+
+    except Exception as e:
+        print(f"/api/check-apk-update error: {e}")
+        return jsonify({"has_update": False, "error": str(e)}), 500
+
+
+@app.route('/api/download-apk/<int:version_code>')
+def download_apk(version_code):
+    """
+    Streams the APK file for download.
+    The app downloads from this URL and shows a progress bar.
+    """
+    from pymongo import MongoClient
+    from config import DB_URI
+    from flask import send_file
+
+    uid = request.args.get('uid', '')
+
+    try:
+        db_client = MongoClient(DB_URI)
+        db = db_client["cloned_vjbotz"]
+        doc = db.apk_updates.find_one({"_id": "latest"})
+
+        if not doc or doc.get("version_code") != version_code:
+            return jsonify({"error": "Update not found"}), 404
+
+        file_path = doc.get("file_path", "")
+        if not file_path or not os.path.exists(file_path):
+            file_name = doc.get("file_name", "")
+            file_path = os.path.join(APK_UPDATES_DIR, file_name)
+            if not os.path.exists(file_path):
+                return jsonify({"error": "APK file not found on server"}), 404
+
+        file_name = doc.get("file_name", "app-update.apk")
+
+        if uid:
+            try:
+                db.apk_downloads.insert_one({
+                    "user_id": int(uid),
+                    "version_code": version_code,
+                    "version_name": doc.get("version_name", ""),
+                    "status": "downloading",
+                    "started_at": __import__('datetime').datetime.utcnow().isoformat(),
+                    "ip": request.remote_addr
+                })
+            except Exception as log_err:
+                print(f"Download log error: {log_err}")
+
+        return send_file(
+            file_path,
+            as_attachment=True,
+            attachment_filename=file_name,
+            mimetype="application/vnd.android.package-archive"
+        )
+
+    except Exception as e:
+        print(f"/api/download-apk error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/apk-download-complete', methods=['POST'])
+def apk_download_complete():
+    """
+    Called by the app after download completes to log completion.
+    """
+    from pymongo import MongoClient
+    from config import DB_URI
+
+    try:
+        data = request.get_json(silent=True) or {}
+        uid = data.get('uid', '')
+        version_code = data.get('version_code', 0)
+        status = data.get('status', 'completed')
+
+        if uid:
+            db_client = MongoClient(DB_URI)
+            db = db_client["cloned_vjbotz"]
+            db.apk_downloads.update_one(
+                {"user_id": int(uid), "version_code": int(version_code), "status": "downloading"},
+                {"$set": {
+                    "status": status,
+                    "completed_at": __import__('datetime').datetime.utcnow().isoformat()
+                }}
+            )
+
+        return jsonify({"ok": True})
+
+    except Exception as e:
+        print(f"/api/apk-download-complete error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run()
