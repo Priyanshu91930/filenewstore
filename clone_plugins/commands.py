@@ -3266,7 +3266,8 @@ async def clone_upload_gdrive_cmd_handler(client, message):
         f"🎬 <b>Title:</b> {title}\n"
         f"📂 <b>Category:</b> {category}\n"
         f"🔑 <b>GDrive File ID:</b> <code>{gdrive_file_id}</code>\n"
-        f"🎭 <b>Masked Name:</b> <code>{masked_name}</code>"
+        f"🎭 <b>Masked Name:</b> <code>{masked_name}</code>\n"
+        f"🤖 <b>Bot Deeplink:</b> <code>{file_deeplink}</code>"
     )
 
 
