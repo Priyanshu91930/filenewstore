@@ -3312,6 +3312,52 @@ async def decline_vip_handler(client, message):
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
 
+
+@Client.on_message(filters.command("update_apk") & filters.private & filters.user(ADMINS))
+async def update_apk_command_handler(client, message):
+    """
+    Command to upload and update the official APK directly on the EC2 server.
+    Admin must reply to a document (.apk file) with /update_apk.
+    """
+    if not message.reply_to_message or not message.reply_to_message.document:
+        return await message.reply_text("<b>❌ Error: Please reply to the APK file (.apk document) with `/update_apk` command!</b>")
+        
+    doc = message.reply_to_message.document
+    if not doc.file_name.lower().endswith(".apk"):
+        return await message.reply_text("<b>❌ Error: The replied document is not an APK file!</b>")
+        
+    status_msg = await message.reply_text("<b>⏳ Downloading and updating APK on server... Please wait.</b>")
+    
+    try:
+        # Define path: static/viralverse.apk
+        static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+        os.makedirs(static_dir, exist_ok=True)
+        apk_path = os.path.join(static_dir, "viralverse.apk")
+        
+        # Download the replied document to the static path (overwriting old apk)
+        await client.download_media(message=doc, file_name=apk_path)
+        
+        # Verify if downloaded successfully
+        if os.path.exists(apk_path):
+            file_size = os.path.getsize(apk_path)
+            size_readable = get_size(file_size)
+            
+            download_url = f"https://miniapp.anihubyt.com/static/viralverse.apk"
+            await status_msg.edit_text(
+                f"<b>✅ APK updated successfully!</b>\n\n"
+                f"📁 <b>Filename:</b> <code>{doc.file_name}</code>\n"
+                f"⚖️ <b>Size:</b> <code>{size_readable}</code>\n"
+                f"🔗 <b>Download URL:</b> {download_url}"
+            )
+        else:
+            await status_msg.edit_text("<b>❌ Error: Failed to save the downloaded file on server.</b>")
+            
+    except Exception as e:
+        logger.error(f"Error in /update_apk: {e}")
+        await status_msg.edit_text(f"<b>❌ Error updating APK:</b>\n<code>{e}</code>")
+
+
+
 @Client.on_message(filters.command("msg") & filters.private & filters.user(ADMINS))
 async def msg_user_handler(client, message):
     if len(message.command) < 3:
