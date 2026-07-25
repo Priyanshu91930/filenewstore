@@ -808,6 +808,20 @@ async def start(client, message):
     if file_doc:
         file_id = file_doc["file_id"]
         logger.info(f"Found file in DB. file_id exists.")
+    elif decoded_id.isdigit():
+        # Look up in LOG_CHANNEL (for GDrive upload deeplinks)
+        try:
+            from TechVJ.bot import StreamBot
+            log_msg = await StreamBot.get_messages(LOG_CHANNEL, int(decoded_id))
+            if log_msg and log_msg.media:
+                media = getattr(log_msg, log_msg.media.value)
+                file_id = media.file_id
+                logger.info(f"Got file_id from LOG_CHANNEL msg {decoded_id}")
+            else:
+                file_id = decoded_id
+        except Exception as e:
+            logger.error(f"Failed to get LOG_CHANNEL msg {decoded_id}: {e}")
+            file_id = decoded_id
     else:
         # Fallback to older links where raw file_id was encoded
         file_id = decoded_id
