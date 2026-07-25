@@ -941,6 +941,312 @@ async def verify_payment_handler(request: web.Request):
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
+@routes.post("/create-subscription")
+async def create_subscription_handler(request: web.Request):
+    """Creates a Razorpay Subscription (Mandate) for UPI Autopay recurring payments."""
+    import time
+    import aiohttp
+    from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        plan_duration = data.get("plan_duration", "1 Month")
+        price = int(data.get("price", 199))
+
+        if not email:
+            return web.json_response({"status": "error", "message": "Email is required"}, status=400)
+
+        # 1. Map subscription periods to Razorpay Plan interval and period parameters
+        # Razorpay accepts 'daily', 'weekly', 'monthly', 'yearly'
+        period = "monthly"
+        interval = 1
+        
+        if "day" in plan_duration.lower():
+            period = "daily"
+            interval = 1
+        elif "week" in plan_duration.lower():
+            period = "weekly"
+            interval = 1
+        elif "month" in plan_duration.lower():
+            period = "monthly"
+            if "3" in plan_duration:
+                interval = 3
+            elif "6" in plan_duration:
+                interval = 6
+            else:
+                interval = 1
+
+        # 2. Check if a Razorpay Plan ID already exists in DB for this price/interval combination, or create one
+        plan_query = {"period": period, "interval": interval, "amount": price * 100}
+        existing_plan = await async_mongo_db.razorpay_plans.find_one(plan_query)
+        
+        plan_id = None
+        auth = aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+
+        if existing_plan:
+            plan_id = existing_plan.get("plan_id")
+        else:
+            # Create Plan on Razorpay
+            plan_payload = {
+                "period": period,
+                "interval": interval,
+                "item": {
+                    "name": f"VIP {plan_duration} Plan",
+                    "amount": price * 100, # in paise
+                    "currency": "INR",
+                    "description": f"Autopay VIP Subscription for {plan_duration}"
+                }
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post("https://api.razorpay.com/v1/plans", json=plan_payload, auth=auth) as resp:
+                    if resp.status == 200:
+                        res_data = await resp.json()
+                        plan_id = res_data.get("id")
+                        # Cache it in DB
+                        await async_mongo_db.razorpay_plans.insert_one({
+                            "plan_id": plan_id,
+                            "period": period,
+                            "interval": interval,
+                            "amount": price * 100,
+                            "created_at": time.time()
+                        })
+                    else:
+                        resp_txt = await resp.text()
+                        return web.json_response({"status": "error", "message": f"Razorpay Plan Creation Failed: {resp_txt}"}, status=400)
+
+        # 3. Create Subscription on Razorpay
+        subscription_payload = {
+            "plan_id": plan_id,
+            "total_count": 12, # auto-renew up to 12 times max
+            "quantity": 1,
+            "customer_notify": 1
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://api.razorpay.com/v1/subscriptions", json=subscription_payload, auth=auth) as resp:
+                if resp.status == 200:
+                    res_data = await resp.json()
+                    return web.json_response({
+                        "status": "ok",
+                        "subscription_id": res_data.get("id"),
+                        "plan_id": plan_id
+                    })
+                else:
+                    resp_txt = await resp.text()
+                    return web.json_response({"status": "error", "message": f"Razorpay Subscription Creation Failed: {resp_txt}"}, status=400)
+
+    except Exception as e:
+        logging.error(f"/create-subscription error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/verify-subscription")
+async def verify_subscription_handler(request: web.Request):
+    """Verifies the Razorpay subscription signature and updates the VIP status in DB."""
+    import time
+    import hmac
+    import hashlib
+    from config import RAZORPAY_KEY_SECRET
+    from plugins.clone import async_mongo_db
+
+    try:
+        data = await request.json()
+        payment_id = data.get("razorpay_payment_id")
+        subscription_id = data.get("razorpay_subscription_id")
+        signature = data.get("razorpay_signature")
+        plan_duration = data.get("plan_duration", "1 Month")
+        user_id = int(data.get("user_id", 8494193109))
+        bot_id = int(data.get("bot_id", 7687702448))
+        email = data.get("email", "").strip().lower()
+
+        if not payment_id or not subscription_id or not signature:
+            return web.json_response({"status": "error", "message": "Missing payment details or signature"}, status=400)
+
+        # 1. Verify Razorpay signature authenticity
+        expected_signature_data = f"{payment_id}|{subscription_id}"
+        generated_signature = hmac.new(
+            bytes(RAZORPAY_KEY_SECRET, "utf-8"),
+            msg=bytes(expected_signature_data, "utf-8"),
+            digestmod=hashlib.sha256
+        ).hexdigest()
+
+        if generated_signature != signature:
+            return web.json_response({"status": "error", "message": "Invalid Razorpay payment signature verification failed"}, status=400)
+
+        # 2. Upgrade user status to VIP
+        now = time.time()
+        if "day" in plan_duration.lower():
+            expiry = now + 86400
+        elif "week" in plan_duration.lower():
+            expiry = now + 86400 * 7
+        elif "month" in plan_duration.lower():
+            if "3" in plan_duration:
+                expiry = now + 86400 * 30 * 3
+            elif "6" in plan_duration:
+                expiry = now + 86400 * 30 * 6
+            else:
+                expiry = now + 86400 * 30
+        else:
+            expiry = now + 86400 * 30
+
+        # Update both VIP collections
+        await async_mongo_db.vip_users.update_one(
+            {"bot_id": bot_id, "user_id": user_id},
+            {"$set": {"expiry": expiry, "payment_id": payment_id, "subscription_id": subscription_id, "updated_at": now}},
+            upsert=True
+        )
+
+        if email:
+            await async_mongo_db.vip_users.update_one(
+                {"email": email},
+                {"$set": {
+                    "email": email,
+                    "expiry": expiry,
+                    "payment_id": payment_id,
+                    "subscription_id": subscription_id,
+                    "plan_duration": plan_duration,
+                    "activated_at": now,
+                    "updated_at": now,
+                }},
+                upsert=True
+            )
+            # Mark app_users as VIP
+            await async_mongo_db.app_users.update_one(
+                {"email": email},
+                {"$set": {"is_vip": True, "vip_since": now}}
+            )
+
+        return web.json_response({
+            "status": "success",
+            "message": f"Autopay Subscribed! VIP status activated for {plan_duration}."
+        })
+
+    except Exception as e:
+        logging.error(f"/verify-subscription error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/razorpay-webhook")
+async def razorpay_webhook_handler(request: web.Request):
+    """
+    Receives automated billing notification events from Razorpay.
+    Specifically handles 'subscription.charged' to renew and extend the user's VIP subscription on automatic debit.
+    """
+    import hmac
+    import hashlib
+    import time
+    from config import RAZORPAY_KEY_SECRET
+    from plugins.clone import async_mongo_db
+
+    try:
+        # Validate Webhook Signature
+        signature = request.headers.get("X-Razorpay-Signature")
+        if not signature:
+            logging.warning("Razorpay Webhook: Missing X-Razorpay-Signature header")
+            return web.Response(status=401, text="Unauthorized: Signature missing")
+
+        raw_body = await request.read()
+        
+        # Verify body payload signature integrity
+        expected_sig = hmac.new(
+            bytes(RAZORPAY_KEY_SECRET, "utf-8"),
+            msg=raw_body,
+            digestmod=hashlib.sha256
+        ).hexdigest()
+
+        if expected_sig != signature:
+            logging.warning("Razorpay Webhook: Invalid Signature verification failed")
+            return web.Response(status=401, text="Unauthorized: Signature mismatch")
+
+        # Parse Webhook payload data
+        import json
+        event_data = json.loads(raw_body.decode('utf-8'))
+        event = event_data.get("event")
+
+        # We only care when a subscription gets successfully auto-charged
+        if event == "subscription.charged":
+            payload = event_data.get("payload", {})
+            sub_entity = payload.get("subscription", {}).get("entity", {})
+            payment_entity = payload.get("payment", {}).get("entity", {})
+
+            subscription_id = sub_entity.get("id")
+            payment_id = payment_entity.get("id")
+            email = payment_entity.get("email", "").strip().lower()
+
+            if not subscription_id:
+                return web.Response(status=200, text="No subscription ID found in payload")
+
+            # Determine subscription details based on plan_id or current configuration
+            # Fetch user details matching subscription_id from DB
+            vip_user = await async_mongo_db.vip_users.find_one({"subscription_id": subscription_id})
+            
+            # Default fallback search by email if subscription_id match fails
+            if not vip_user and email:
+                vip_user = await async_mongo_db.vip_users.find_one({"email": email})
+
+            if not vip_user:
+                logging.warning(f"Razorpay Webhook: User not found in DB for subscription {subscription_id} (email: {email})")
+                return web.Response(status=200, text="User not found")
+
+            # Dynamic extension logic
+            plan_duration = vip_user.get("plan_duration", "1 Month")
+            user_id = vip_user.get("user_id")
+            bot_id = vip_user.get("bot_id")
+            db_email = vip_user.get("email")
+
+            now = time.time()
+            if "day" in plan_duration.lower():
+                expiry = now + 86400
+            elif "week" in plan_duration.lower():
+                expiry = now + 86400 * 7
+            elif "month" in plan_duration.lower():
+                if "3" in plan_duration:
+                    expiry = now + 86400 * 30 * 3
+                elif "6" in plan_duration:
+                    expiry = now + 86400 * 30 * 6
+                else:
+                    expiry = now + 86400 * 30
+            else:
+                expiry = now + 86400 * 30
+
+            # Update database status (extend expiration date)
+            if bot_id and user_id:
+                await async_mongo_db.vip_users.update_one(
+                    {"bot_id": bot_id, "user_id": user_id},
+                    {"$set": {"expiry": expiry, "payment_id": payment_id, "subscription_id": subscription_id, "updated_at": now}},
+                    upsert=True
+                )
+
+            if db_email:
+                await async_mongo_db.vip_users.update_one(
+                    {"email": db_email},
+                    {"$set": {
+                        "expiry": expiry,
+                        "payment_id": payment_id,
+                        "subscription_id": subscription_id,
+                        "updated_at": now,
+                    }},
+                    upsert=True
+                )
+                # Keep active VIP status alive
+                await async_mongo_db.app_users.update_one(
+                    {"email": db_email},
+                    {"$set": {"is_vip": True, "vip_since": now}}
+                )
+
+            logging.info(f"Razorpay Webhook: VIP extended successfully for {db_email} (Expiry: {expiry})")
+            return web.Response(status=200, text="VIP Extended Successfully")
+
+        return web.Response(status=200, text="Event Ignored")
+
+    except Exception as e:
+        logging.error(f"Razorpay Webhook handler failed: {e}")
+        return web.Response(status=500, text=f"Internal Server Error: {e}")
+
+
+
+
 @routes.post("/register-user")
 async def register_user_handler(request: web.Request):
     """Register or update a user in MongoDB after Google Sign-In."""
