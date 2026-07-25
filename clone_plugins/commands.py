@@ -3218,17 +3218,22 @@ async def clone_upload_gdrive_cmd_handler(client, message):
     except Exception as e:
         logger.error(f"Failed to remove temp file: {e}")
 
-    # Generate file_deeplink for mini app (forward to LOG_CHANNEL for bot link delivery)
+    # Generate file_deeplink for mini app (store in clone_files for bot link delivery)
     file_deeplink = ""
     try:
-        log_msg = await client.copy_message(
-            chat_id=LOG_CHANNEL,
-            from_chat_id=message.chat.id,
-            message_id=replied.id
-        )
-        file_deeplink = base64.urlsafe_b64encode(f"file_{log_msg.id}".encode()).decode().rstrip("=")
+        short_id = str(uuid.uuid4())[:8]
+        file_id = media.file_id
+        await mongo_db.clone_files.insert_one({
+            "_id": short_id,
+            "bot_username": me.username,
+            "file_id": file_id,
+            "file_size": getattr(media, "file_size", 0),
+            "chat_id": message.chat.id,
+            "message_id": replied.id
+        })
+        file_deeplink = base64.urlsafe_b64encode(f"file_{short_id}".encode()).decode().rstrip("=")
     except Exception as e:
-        logger.error(f"Failed to forward to LOG_CHANNEL for deeplink: {e}")
+        logger.error(f"Failed to create clone_files entry for deeplink: {e}")
 
     # Build thumbnails URLs list
     thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
