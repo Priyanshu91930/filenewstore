@@ -3317,7 +3317,8 @@ async def decline_vip_handler(client, message):
 async def update_apk_command_handler(client, message):
     """
     Command to upload and update the official APK directly on the EC2 server.
-    Admin must reply to a document (.apk file) with /update_apk.
+    Admin must reply to a document (.apk file) with /update_apk [version] [version_code].
+    Example: /update_apk 1.0.2 3
     """
     if not message.reply_to_message or not message.reply_to_message.document:
         return await message.reply_text("<b>❌ Error: Please reply to the APK file (.apk document) with `/update_apk` command!</b>")
@@ -3326,7 +3327,21 @@ async def update_apk_command_handler(client, message):
     if not doc.file_name.lower().endswith(".apk"):
         return await message.reply_text("<b>❌ Error: The replied document is not an APK file!</b>")
         
-    status_msg = await message.reply_text("<b>⏳ Downloading and updating APK on server... Please wait.</b>")
+    # Parse version and version_code arguments
+    version = "1.0.0"
+    version_code = 1
+    if len(message.command) >= 3:
+        version = message.command[1].strip()
+        try:
+            version_code = int(message.command[2].strip())
+        except ValueError:
+            pass
+    elif len(message.command) == 2:
+        version = message.command[1].strip()
+        # Default increment placeholder
+        version_code = 2
+        
+    status_msg = await message.reply_text(f"<b>⏳ Downloading and updating APK to Version {version} (Code: {version_code})... Please wait.</b>")
     
     try:
         # Define path: static/viralverse.apk
@@ -3341,11 +3356,24 @@ async def update_apk_command_handler(client, message):
         if os.path.exists(apk_path):
             file_size = os.path.getsize(apk_path)
             size_readable = get_size(file_size)
-            
             download_url = f"https://miniapp.anihubyt.com/static/viralverse.apk"
+            
+            # Update app_metadata details in MongoDB
+            await clone_mongo_db.app_metadata.update_one(
+                {"_id": "latest_version"},
+                {"$set": {
+                    "version": version,
+                    "version_code": version_code,
+                    "download_url": download_url,
+                    "updated_at": time.time()
+                }},
+                upsert=True
+            )
+            
             await status_msg.edit_text(
-                f"<b>✅ APK updated successfully!</b>\n\n"
+                f"<b>✅ APK updated and metadata saved!</b>\n\n"
                 f"📁 <b>Filename:</b> <code>{doc.file_name}</code>\n"
+                f"🏷️ <b>Version:</b> <code>{version}</code> (Code: <code>{version_code}</code>)\n"
                 f"⚖️ <b>Size:</b> <code>{size_readable}</code>\n"
                 f"🔗 <b>Download URL:</b> {download_url}"
             )
