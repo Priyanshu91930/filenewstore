@@ -3341,6 +3341,11 @@ async def del_vip_handler(client, message):
         
         res = await clone_mongo_db.vip_users.delete_one({"bot_id": me.id, "user_id": user_id})
         if res.deleted_count > 0:
+            # Also remove VIP status from linked app_users
+            await clone_mongo_db.app_users.update_one(
+                {"telegram_id": str(user_id)},
+                {"$set": {"is_vip": False}}
+            )
             await message.reply_text(f"<b>✅ VIP access removed for User <code>{user_id}</code>.</b>")
             try:
                 await client.send_message(
