@@ -1729,10 +1729,26 @@ async def get_user_stats(request: web.Request):
 
         # VIP check - by app_users.is_vip directly (set by /addvip sync or linking)
         if not is_vip:
-            app_vip_user = await async_mongo_db.app_users.find_one({"email": email}, {"is_vip": 1})
+            app_vip_user = await async_mongo_db.app_users.find_one({"email": email}, {"is_vip": 1, "telegram_id": 1})
             if app_vip_user and app_vip_user.get("is_vip"):
                 is_vip = True
-                vip_expiry_str = "Active"
+                # Try to get actual expiry from vip_users by telegram_id
+                tgid = app_vip_user.get("telegram_id")
+                if tgid:
+                    vip_by_tg = await async_mongo_db.vip_users.find_one({"user_id": int(tgid)}, {"expiry": 1})
+                    if vip_by_tg and vip_by_tg.get("expiry"):
+                        exp = vip_by_tg["expiry"]
+                        if exp is None:
+                            vip_expiry_str = "Lifetime"
+                            vip_expiry_ts = None
+                        else:
+                            from datetime import datetime
+                            vip_expiry_ts = exp
+                            vip_expiry_str = datetime.fromtimestamp(exp).strftime("%d %b %Y, %I:%M %p")
+                    else:
+                        vip_expiry_str = "Active"
+                else:
+                    vip_expiry_str = "Active"
 
         # Check if ads are disabled globally
         ads_config = await async_mongo_db.ads_toggle.find_one({"_id": "global_status"})
