@@ -3262,14 +3262,18 @@ async def add_vip_handler(client, message):
             days_label = f"{days} Days"
             
         me = client.me or await client.get_me()
+        
+        # Find linked app_user to get email
+        app_user = await clone_mongo_db.app_users.find_one({"telegram_id": str(user_id)})
+        linked_email = app_user.get("email", "") if app_user else ""
+        
         await clone_mongo_db.vip_users.update_one(
             {"bot_id": me.id, "user_id": user_id},
-            {"$set": {"expiry": expiry}},
+            {"$set": {"expiry": expiry, "email": linked_email}},
             upsert=True
         )
         
         # Sync with app_users if this telegram_id is linked to an app account
-        app_user = await clone_mongo_db.app_users.find_one({"telegram_id": str(user_id)})
         if app_user:
             await clone_mongo_db.app_users.update_one(
                 {"telegram_id": str(user_id)},
