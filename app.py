@@ -522,20 +522,24 @@ def check_apk_update():
 def _stream_from_telegram(file_id, file_name="app-update.apk"):
     """Download a file from Telegram using file_id and stream it to the client."""
     from config import BOT_TOKEN
-    import requests
+    import urllib.request
+    import json
     try:
-        resp = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}", timeout=10)
-        data = resp.json()
+        api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+        with urllib.request.urlopen(api_url, timeout=10) as resp:
+            data = json.loads(resp.read())
         if not data.get("ok"):
+            print(f"Telegram API error: {data}")
             return None
         tg_file_path = data["result"]["file_path"]
         file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{tg_file_path}"
         def generate():
-            with requests.get(file_url, stream=True, timeout=30) as r:
-                r.raise_for_status()
-                for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:
-                        yield chunk
+            with urllib.request.urlopen(file_url, timeout=30) as r:
+                while True:
+                    chunk = r.read(8192)
+                    if not chunk:
+                        break
+                    yield chunk
         return Response(generate(), mimetype="application/vnd.android.package-archive",
                         headers={"Content-Disposition": f"attachment; filename={file_name}"})
     except Exception as e:
@@ -558,7 +562,7 @@ def download_apk_latest():
             if result:
                 return result
         # Fallback to local file
-        static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "viralverse.apk")
+        static_path = os.path.join(os.path.dirname(__file__), "static", "viralverse.apk")
         if os.path.exists(static_path):
             return send_file(static_path, as_attachment=True, download_name="viralverse.apk")
         if doc and doc.get("file_path") and os.path.exists(doc.get("file_path", "")):
