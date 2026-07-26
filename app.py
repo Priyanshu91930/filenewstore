@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_from_directory, send_file, Response, redirect
 from urllib.parse import unquote
 import os, sys
 
@@ -561,13 +561,8 @@ def download_apk_latest():
             result = _stream_from_telegram(doc["tg_file_id"], file_name)
             if result:
                 return result
-        # Fallback to local file
-        static_path = os.path.join(os.path.dirname(__file__), "static", "viralverse.apk")
-        if os.path.exists(static_path):
-            return send_file(static_path, as_attachment=True, download_name="viralverse.apk")
-        if doc and doc.get("file_path") and os.path.exists(doc.get("file_path", "")):
-            return send_file(doc["file_path"], as_attachment=True, download_name=doc.get("file_name", "app-update.apk"))
-        return jsonify({"error": "No APK available"}), 404
+        # Fallback to redirect to static file
+        return redirect("/static/viralverse.apk")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
