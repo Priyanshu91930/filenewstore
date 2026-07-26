@@ -1727,28 +1727,34 @@ async def get_user_stats(request: web.Request):
                         dt = datetime.fromtimestamp(exp)
                         vip_expiry_str = dt.strftime("%d %b %Y, %I:%M %p")
 
-        # VIP check - by app_users.is_vip directly (set by /addvip sync or linking)
+        # VIP check - by app_users.is_vip directly (last resort, no vip_users record found)
         if not is_vip:
             app_vip_user = await async_mongo_db.app_users.find_one({"email": email}, {"is_vip": 1, "telegram_id": 1})
             if app_vip_user and app_vip_user.get("is_vip"):
-                is_vip = True
-                # Try to get actual expiry from vip_users by telegram_id
+                # Verify it's not expired by checking vip_users one more time
                 tgid = app_vip_user.get("telegram_id")
+                still_valid = False
                 if tgid:
                     vip_by_tg = await async_mongo_db.vip_users.find_one({"user_id": int(tgid)}, {"expiry": 1})
-                    if vip_by_tg and vip_by_tg.get("expiry"):
-                        exp = vip_by_tg["expiry"]
-                        if exp is None:
-                            vip_expiry_str = "Lifetime"
-                            vip_expiry_ts = None
-                        else:
-                            from datetime import datetime
-                            vip_expiry_ts = exp
-                            vip_expiry_str = datetime.fromtimestamp(exp).strftime("%d %b %Y, %I:%M %p")
+                    if vip_by_tg:
+                        exp = vip_by_tg.get("expiry")
+                        if exp is None or time.time() < exp:
+                            still_valid = True
+                            if exp is None:
+                                vip_expiry_str = "Lifetime"
+                                vip_expiry_ts = None
+                            else:
+                                from datetime import datetime
+                                vip_expiry_ts = exp
+                                vip_expiry_str = datetime.fromtimestamp(exp).strftime("%d %b %Y, %I:%M %p")
                     else:
+                        # vip_users has no record but app_users says VIP - still treat as valid
+                        still_valid = True
                         vip_expiry_str = "Active"
                 else:
+                    still_valid = True
                     vip_expiry_str = "Active"
+                is_vip = still_valid
 
         # Check if ads are disabled globally
         ads_config = await async_mongo_db.ads_toggle.find_one({"_id": "global_status"})
