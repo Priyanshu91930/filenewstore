@@ -3410,28 +3410,35 @@ async def update_apk_command_handler(client, message):
     status_msg = await message.reply_text("<b>⏳ Downloading and updating APK on server... Please wait.</b>")
     
     try:
-        # Save to static/viralverse.apk (backward compat)
         root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        static_dir = os.path.join(root_dir, "static")
-        os.makedirs(static_dir, exist_ok=True)
-        apk_path_static = os.path.join(static_dir, "viralverse.apk")
-        await client.download_media(message=doc, file_name=apk_path_static)
-
-        # Also save to apk_updates/ with version name
-        apk_updates_dir = os.path.join(root_dir, "apk_updates")
-        os.makedirs(apk_updates_dir, exist_ok=True)
-
-        # Get next version code from DB
         from plugins.clone import async_mongo_db
         apk_coll = async_mongo_db.apk_updates
+
+        # Download APK to temp location
+        temp_dir = os.path.join(root_dir, "apk_updates")
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_path = os.path.join(temp_dir, "temp_upload.apk")
+        await client.download_media(message=doc, file_name=temp_path)
+
+        # Upload to Telegram for permanent storage (LOG_CHANNEL)
+        from config import LOG_CHANNEL
+        sent = await client.send_document(chat_id=LOG_CHANNEL, document=temp_path, caption=f"APK v{parsed_version}")
+        tg_file_id = sent.document.file_id
+        tg_file_unique_id = sent.document.file_unique_id
+
+        # Also upload fallback to 'static/viralverse.apk' for backward compat
+        static_dir = os.path.join(root_dir, "static")
+        os.makedirs(static_dir, exist_ok=True)
+        static_path = os.path.join(static_dir, "viralverse.apk")
+        import shutil
+        shutil.copy2(temp_path, static_path)
+
+        # Get next version code from DB
         current_doc = await apk_coll.find_one({"_id": "latest"})
+        old_file_unique_id = current_doc.get("tg_file_unique_id", "") if current_doc else ""
         version_code = (current_doc.get("version_code", 0) if current_doc else 0) + 1
 
-        safe_name = f"app_v{version_code}_{parsed_version.replace(' ', '_')}.apk"
-        apk_path_versioned = os.path.join(apk_updates_dir, safe_name)
-        await client.download_media(message=doc, file_name=apk_path_versioned)
-
-        file_size = os.path.getsize(apk_path_versioned)
+        file_size = os.path.getsize(temp_path)
         size_readable = get_size(file_size)
 
         # Save metadata in MongoDB
@@ -3443,8 +3450,9 @@ async def update_apk_command_handler(client, message):
                 "version_code": version_code,
                 "version_name": parsed_version,
                 "changelog": "New update available",
-                "file_name": safe_name,
-                "file_path": apk_path_versioned,
+                "file_name": doc.file_name,
+                "tg_file_id": tg_file_id,
+                "tg_file_unique_id": tg_file_unique_id,
                 "file_size": file_size,
                 "original_file_name": doc.file_name,
                 "uploaded_at": now,
@@ -3453,15 +3461,25 @@ async def update_apk_command_handler(client, message):
             upsert=True
         )
 
-        static_url = f"https://miniapp.anihubyt.com/static/viralverse.apk"
-        api_url = f"https://miniapp.anihubyt.com/api/download-apk/{version_code}"
+        # Clean up temp file
+        os.remove(temp_path)
+
+        # Try to delete old Telegram message (optional, ignores failure)
+        if old_file_unique_id:
+            try:
+                # We can't easily delete by file_id, but we just overwrite ref
+                pass
+            except:
+                pass
+
+        api_url = f"https://miniapp.anihubyt.com/api/download-apk/latest"
         await status_msg.edit_text(
-            f"<b>✅ APK Updated & Metadata Saved!</b>\n\n"
+            f"<b>✅ APK Updated & Stored in Telegram!</b>\n\n"
             f"📁 <b>Filename:</b> <code>{doc.file_name}</code>\n"
             f"🏷️ <b>Version:</b> <code>{parsed_version}</code> (Code: {version_code})\n"
             f"⚖️ <b>Size:</b> <code>{size_readable}</code>\n"
-            f"🔗 <b>API Download:</b> <code>{api_url}</code>\n\n"
-            f"Users will now see update notification in app if their version is older."
+            f"🔗 <b>Download:</b> <code>{api_url}</code>\n\n"
+            f"APK stored in Telegram - no data loss on server restart."
         )
 
     except Exception as e:

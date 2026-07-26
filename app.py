@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory, send_file
+from flask import Flask, render_template, request, jsonify, send_from_directory, send_file, Response
 from urllib.parse import unquote
 import os, sys
 
@@ -501,8 +501,7 @@ def check_apk_update():
             })
 
         file_size = doc.get("file_size", 0)
-        base_url = request.url_root.rstrip('/')
-        download_url = f"{base_url}/api/download-apk/{latest_code}"
+        download_url = f"https://miniapp.anihubyt.com/api/download-apk/latest"
 
         return jsonify({
             "has_update": True,
@@ -520,23 +519,50 @@ def check_apk_update():
         return jsonify({"has_update": False, "error": str(e)}), 500
 
 
+def _stream_from_telegram(file_id, file_name="app-update.apk"):
+    """Download a file from Telegram using file_id and stream it to the client."""
+    from config import BOT_TOKEN
+    import requests
+    try:
+        resp = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}", timeout=10)
+        data = resp.json()
+        if not data.get("ok"):
+            return None
+        tg_file_path = data["result"]["file_path"]
+        file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{tg_file_path}"
+        def generate():
+            with requests.get(file_url, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                for chunk in r.iter_content(chunk_size=8192):
+                    if chunk:
+                        yield chunk
+        return Response(generate(), mimetype="application/vnd.android.package-archive",
+                        headers={"Content-Disposition": f"attachment; filename={file_name}"})
+    except Exception as e:
+        print(f"Telegram stream error: {e}")
+        return None
+
+
 @app.route('/api/download-apk/latest')
 def download_apk_latest():
-    """Redirect to the latest APK file."""
+    """Serve the latest APK from Telegram storage, with local fallback."""
     from pymongo import MongoClient
     from config import DB_URI
     try:
         db_client = MongoClient(DB_URI)
         db = db_client["cloned_vjbotz"]
         doc = db.apk_updates.find_one({"_id": "latest"})
-        if doc and doc.get("file_path") and os.path.exists(doc.get("file_path", "")):
-            file_path = doc["file_path"]
+        if doc and doc.get("tg_file_id"):
             file_name = doc.get("file_name", "app-update.apk")
-            return send_file(file_path, as_attachment=True, download_name=file_name)
-        # Fallback to static APK
+            result = _stream_from_telegram(doc["tg_file_id"], file_name)
+            if result:
+                return result
+        # Fallback to local file
         static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "viralverse.apk")
         if os.path.exists(static_path):
             return send_file(static_path, as_attachment=True, download_name="viralverse.apk")
+        if doc and doc.get("file_path") and os.path.exists(doc.get("file_path", "")):
+            return send_file(doc["file_path"], as_attachment=True, download_name=doc.get("file_name", "app-update.apk"))
         return jsonify({"error": "No APK available"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -550,7 +576,6 @@ def download_apk(version_code):
     """
     from pymongo import MongoClient
     from config import DB_URI
-    from flask import send_file
 
     uid = request.args.get('uid', '')
 
@@ -562,14 +587,20 @@ def download_apk(version_code):
         if not doc or doc.get("version_code") != version_code:
             return jsonify({"error": "Update not found"}), 404
 
+        file_name = doc.get("file_name", "app-update.apk")
+
+        # Serve from Telegram if available
+        if doc.get("tg_file_id"):
+            result = _stream_from_telegram(doc["tg_file_id"], file_name)
+            if result:
+                return result
+
+        # Fallback to local file
         file_path = doc.get("file_path", "")
         if not file_path or not os.path.exists(file_path):
-            file_name = doc.get("file_name", "")
             file_path = os.path.join(APK_UPDATES_DIR, file_name)
             if not os.path.exists(file_path):
                 return jsonify({"error": "APK file not found on server"}), 404
-
-        file_name = doc.get("file_name", "app-update.apk")
 
         if uid:
             try:
@@ -587,7 +618,7 @@ def download_apk(version_code):
         return send_file(
             file_path,
             as_attachment=True,
-            attachment_filename=file_name,
+            download_name=file_name,
             mimetype="application/vnd.android.package-archive"
         )
 
