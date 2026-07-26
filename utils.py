@@ -574,8 +574,12 @@ async def is_vip(bot_id: int, user_id: int) -> bool:
             return True
         if time.time() < expiry:
             return True
-        # Expired - remove from DB
+        # Expired - remove from DB and clear app_user VIP flag
         await async_mongo_db.vip_users.delete_one({"bot_id": bot_id, "user_id": user_id})
+        await async_mongo_db.app_users.update_one(
+            {"telegram_id": str(user_id)},
+            {"$set": {"is_vip": False}}
+        )
         return False
     except Exception as e:
         logger.error(f"Error checking VIP status: {e}")
