@@ -191,8 +191,12 @@ async def purge_other_clones(client, message):
 async def restart_bots():
     cursor = async_mongo_db.bots.find()
     async for bot in cursor:
-        bot_token = bot['token']
-        bot_id = bot['bot_id']
+        bot_token = bot.get('token')
+        if not bot_token:
+            continue
+        bot_id = bot.get('bot_id')
+        if not bot_id:
+            continue
         # Stop and remove any stale running instance first to avoid duplicate handlers
         if bot_id in running_clones:
             await stop_clone(bot_id)
