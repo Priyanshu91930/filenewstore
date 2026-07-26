@@ -5,6 +5,7 @@
 import re
 import time
 import math
+import os
 import logging
 import secrets
 import mimetypes
@@ -2621,3 +2622,160 @@ async def delete_chat_message(request: web.Request):
     except Exception as e:
         logging.error(f"/chat/delete error: {e}")
         return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+# ─── APK Update System ─────────────────────────────────────────────────────────
+
+def _human_size(bytes_val):
+    units = ["Bytes", "KB", "MB", "GB", "TB"]
+    size = float(bytes_val)
+    i = 0
+    while size >= 1024.0 and i < len(units) - 1:
+        i += 1
+        size /= 1024.0
+    return f"{size:.2f} {units[i]}"
+
+
+@routes.get("/api/check-apk-update")
+async def check_apk_update(request):
+    current_version = int(request.query.get("current_version", "0"))
+    try:
+        doc = await async_mongo_db.apk_updates.find_one({"_id": "latest"})
+        if not doc:
+            return web.json_response({"has_update": False, "message": "No updates available"})
+        latest_code = doc.get("version_code", 0)
+        if current_version >= latest_code:
+            return web.json_response({
+                "has_update": False,
+                "message": "You are on the latest version",
+                "version_code": latest_code,
+                "version_name": doc.get("version_name", "1.0.0"),
+            })
+        return web.json_response({
+            "has_update": True,
+            "version_code": latest_code,
+            "version_name": doc.get("version_name", "1.0.0"),
+            "file_size": doc.get("file_size", 0),
+            "file_size_display": _human_size(doc.get("file_size", 0)),
+            "changelog": doc.get("changelog", "New update available"),
+            "file_name": doc.get("file_name", "app-update.apk"),
+            "download_url": f"https://miniapp.anihubyt.com/api/download-apk/latest",
+        })
+    except Exception as e:
+        logging.error(f"/api/check-apk-update error: {e}")
+        return web.json_response({"has_update": False, "error": str(e)}, status=500)
+
+
+@routes.get("/api/download-apk/latest")
+async def download_apk_latest(request):
+    from config import BOT_TOKEN
+    import aiohttp
+    try:
+        doc = await async_mongo_db.apk_updates.find_one({"_id": "latest"})
+        if doc and doc.get("tg_file_id"):
+            file_id = doc["tg_file_id"]
+            file_name = doc.get("file_name", "app-update.apk")
+            api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    data = await resp.json()
+                if data.get("ok"):
+                    tg_file_path = data["result"]["file_path"]
+                    file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{tg_file_path}"
+                    stream_resp = web.StreamResponse()
+                    stream_resp.content_type = "application/vnd.android.package-archive"
+                    stream_resp.headers["Content-Disposition"] = f"attachment; filename={file_name}"
+                    await stream_resp.prepare(request)
+                    async with session.get(file_url, timeout=aiohttp.ClientTimeout(total=120)) as file_resp:
+                        while True:
+                            chunk = await file_resp.content.read(8192)
+                            if not chunk:
+                                break
+                            await stream_resp.write(chunk)
+                    return stream_resp
+        raise web.HTTPFound("/static/viralverse.apk")
+    except Exception as e:
+        logging.error(f"/api/download-apk/latest error: {e}")
+        raise web.HTTPFound("/static/viralverse.apk")
+
+
+@routes.get(r"/api/download-apk/{version_code:\d+}")
+async def download_apk(request):
+    version_code = int(request.match_info["version_code"])
+    uid = request.query.get("uid", "")
+    try:
+        doc = await async_mongo_db.apk_updates.find_one({"_id": "latest"})
+        if not doc or doc.get("version_code") != version_code:
+            return web.json_response({"error": "Update not found"}, status=404)
+
+        file_name = doc.get("file_name", "app-update.apk")
+
+        if doc.get("tg_file_id"):
+            from config import BOT_TOKEN
+            import aiohttp
+            file_id = doc["tg_file_id"]
+            api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    data = await resp.json()
+                if data.get("ok"):
+                    tg_file_path = data["result"]["file_path"]
+                    file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{tg_file_path}"
+                    stream_resp = web.StreamResponse()
+                    stream_resp.content_type = "application/vnd.android.package-archive"
+                    stream_resp.headers["Content-Disposition"] = f"attachment; filename={file_name}"
+                    await stream_resp.prepare(request)
+                    async with session.get(file_url, timeout=aiohttp.ClientTimeout(total=120)) as file_resp:
+                        while True:
+                            chunk = await file_resp.content.read(8192)
+                            if not chunk:
+                                break
+                            await stream_resp.write(chunk)
+                    return stream_resp
+
+        file_path = doc.get("file_path", "")
+        static_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", file_name)
+        if not file_path or not os.path.exists(file_path):
+            file_path = static_path
+            if not os.path.exists(file_path):
+                return web.json_response({"error": "APK file not found on server"}, status=404)
+
+        if uid:
+            try:
+                await async_mongo_db.apk_downloads.insert_one({
+                    "user_id": int(uid),
+                    "version_code": version_code,
+                    "version_name": doc.get("version_name", ""),
+                    "status": "downloading",
+                    "started_at": __import__('datetime').datetime.utcnow().isoformat(),
+                })
+            except Exception as log_err:
+                logging.error(f"Download log error: {log_err}")
+
+        return web.FileResponse(file_path)
+    except web.HTTPFound:
+        raise
+    except Exception as e:
+        logging.error(f"/api/download-apk error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@routes.post("/api/apk-download-complete")
+async def apk_download_complete(request):
+    try:
+        data = await request.json()
+        uid = data.get("uid", "")
+        version_code = data.get("version_code", 0)
+        status = data.get("status", "completed")
+        if uid:
+            await async_mongo_db.apk_downloads.update_one(
+                {"user_id": int(uid), "version_code": int(version_code), "status": "downloading"},
+                {"$set": {
+                    "status": status,
+                    "completed_at": __import__('datetime').datetime.utcnow().isoformat()
+                }}
+            )
+        return web.json_response({"ok": True})
+    except Exception as e:
+        logging.error(f"/api/apk-download-complete error: {e}")
+        return web.json_response({"ok": False, "error": str(e)}, status=500)
