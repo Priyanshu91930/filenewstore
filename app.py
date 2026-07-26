@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, send_file
 from urllib.parse import unquote
 import os, sys
 
@@ -518,6 +518,28 @@ def check_apk_update():
     except Exception as e:
         print(f"/api/check-apk-update error: {e}")
         return jsonify({"has_update": False, "error": str(e)}), 500
+
+
+@app.route('/api/download-apk/latest')
+def download_apk_latest():
+    """Redirect to the latest APK file."""
+    from pymongo import MongoClient
+    from config import DB_URI
+    try:
+        db_client = MongoClient(DB_URI)
+        db = db_client["cloned_vjbotz"]
+        doc = db.apk_updates.find_one({"_id": "latest"})
+        if doc and doc.get("file_path") and os.path.exists(doc.get("file_path", "")):
+            file_path = doc["file_path"]
+            file_name = doc.get("file_name", "app-update.apk")
+            return send_file(file_path, as_attachment=True, download_name=file_name)
+        # Fallback to static APK
+        static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "viralverse.apk")
+        if os.path.exists(static_path):
+            return send_file(static_path, as_attachment=True, download_name="viralverse.apk")
+        return jsonify({"error": "No APK available"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/download-apk/<int:version_code>')
