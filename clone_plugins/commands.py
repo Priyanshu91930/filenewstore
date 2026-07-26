@@ -305,6 +305,32 @@ async def start(client, message):
     data = message.command[1]
     logger.info(f"Processing payload data: {data}")
 
+    # Handle Telegram linking from app
+    if data.startswith("link_"):
+        link_code = data.split("_", 1)[1]
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"{URL.rstrip('/')}/complete-telegram-link", json={
+                    "code": link_code,
+                    "telegram_id": str(message.from_user.id)
+                }) as resp:
+                    result = await resp.json()
+                    if result.get("status") == "success":
+                        await message.reply_text(
+                            "<b>✅ Telegram account linked successfully!</b>\n\n"
+                            "Your VIP subscription is now synced with the app. "
+                            "You can now enjoy VIP benefits in the Viral Videos app."
+                        )
+                    else:
+                        await message.reply_text(
+                            f"<b>❌ Linking failed.</b>\n\n{result.get('message', 'Invalid or expired code. Please try again from the app.')}"
+                        )
+        except Exception as e:
+            logger.error(f"Telegram link error: {e}")
+            await message.reply_text("<b>❌ Something went wrong. Please try again from the app.</b>")
+        return
+
     # Check Paid Link
     if data not in ["joinref", "clone"] and not data.startswith("ref_") and not data.startswith("verifyclone_"):
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
@@ -2561,6 +2587,14 @@ async def add_vip_handler(client, message):
             {"$set": {"expiry": expiry}},
             upsert=True
         )
+        
+        # Sync with app_users if this telegram_id is linked to an app account
+        app_user = await mongo_db.app_users.find_one({"telegram_id": str(user_id)})
+        if app_user:
+            await mongo_db.app_users.update_one(
+                {"telegram_id": str(user_id)},
+                {"$set": {"is_vip": expiry is None or time.time() < expiry}}
+            )
         
         await message.reply_text(f"<b>✅ User <code>{user_id}</code> is now a VIP member ({days_label})!</b>")
         

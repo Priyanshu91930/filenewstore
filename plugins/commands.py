@@ -319,6 +319,32 @@ async def start(client, message):
             from plugins.clone import clone
             return await clone(client, message)
             
+        # Handle Telegram linking from app
+        if data.startswith("link_"):
+            link_code = data.split("_", 1)[1]
+            try:
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(f"{URL.rstrip('/')}/complete-telegram-link", json={
+                        "code": link_code,
+                        "telegram_id": str(message.from_user.id)
+                    }) as resp:
+                        result = await resp.json()
+                        if result.get("status") == "success":
+                            await message.reply_text(
+                                "<b>✅ Telegram account linked successfully!</b>\n\n"
+                                "Your VIP subscription is now synced with the app. "
+                                "You can now enjoy VIP benefits in the Viral Videos app."
+                            )
+                        else:
+                            await message.reply_text(
+                                f"<b>❌ Linking failed.</b>\n\n{result.get('message', 'Invalid or expired code. Please try again from the app.')}"
+                            )
+            except Exception as e:
+                logger.error(f"Telegram link error: {e}")
+                await message.reply_text("<b>❌ Something went wrong. Please try again from the app.</b>")
+            return
+
         if data.startswith("verifyclone_"):
             bot_id = int(data.split("_")[-1])
             bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
@@ -3242,6 +3268,14 @@ async def add_vip_handler(client, message):
             upsert=True
         )
         
+        # Sync with app_users if this telegram_id is linked to an app account
+        app_user = await clone_mongo_db.app_users.find_one({"telegram_id": str(user_id)})
+        if app_user:
+            await clone_mongo_db.app_users.update_one(
+                {"telegram_id": str(user_id)},
+                {"$set": {"is_vip": expiry is None or time.time() < expiry}}
+            )
+        
         await message.reply_text(f"<b>✅ User <code>{user_id}</code> is now a VIP member ({days_label})!</b>")
         
         try:
@@ -4658,4 +4692,55 @@ async def bulk_add_post_cmd_handler(client, message):
         f"📥 Imported: <code>{imported_count}</code> posts\n"
         f"🚫 Skipped: <code>{skipped_count}</code> messages"
     )
+
+
+@Client.on_message(filters.command("setappbot") & filters.private & filters.user(ADMINS))
+async def set_app_bot_handler(client, message):
+    """Set the bot username used for app Telegram linking."""
+    if len(message.command) < 2:
+        return await message.reply_text(
+            "<b>Usage:</b> `/setappbot [bot_username]`\n\n"
+            "Set the Telegram bot username that the app will use for linking.\n"
+            "Example: <code>/setappbot my_new_bot</code>"
+        )
+
+    new_username = message.command[1].strip().replace("@", "").replace("https://t.me/", "")
+    if not new_username:
+        return await message.reply_text("<b>❌ Invalid bot username.</b>")
+
+    bot_id = 7687702448
+    await clone_mongo_db.bots.update_one(
+        {"bot_id": bot_id},
+        {"$set": {"username": new_username}},
+        upsert=True
+    )
+
+    await message.reply_text(
+        f"<b>✅ App bot updated!</b>\n\n"
+        f"New bot username: @{new_username}\n"
+        f"App will now use this bot for Telegram linking."
+    )
+
+
+@Client.on_message(filters.command("sendchat") & filters.private & filters.user(ADMINS))
+async def send_chat_handler(client, message):
+    """Send a message to the app group chat from admin."""
+    if len(message.command) < 2:
+        return await message.reply_text("<b>Usage:</b> `/sendchat [message]`\n\nSend a message to the app group chat as admin.")
+    text = message.text.split(" ", 1)[1].strip()
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{URL.rstrip('/')}/chat/send-admin", json={
+                "text": text,
+                "sender_id": message.from_user.id,
+                "name": message.from_user.first_name or "Admin",
+            }) as resp:
+                result = await resp.json()
+                if result.get("status") == "ok":
+                    await message.reply_text(f"<b>✅ Message sent to group chat!</b>\n\n{text}")
+                else:
+                    await message.reply_text(f"<b>❌ Failed:</b> {result.get('message', 'Unknown error')}")
+    except Exception as e:
+        await message.reply_text(f"<b>❌ Error:</b> {e}")
 

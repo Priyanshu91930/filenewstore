@@ -846,6 +846,23 @@ async def payment_config_handler(request: web.Request):
     return web.json_response({"key_id": RAZORPAY_KEY_ID})
 
 
+@routes.get("/app-config")
+async def app_config_handler(request: web.Request):
+    from config import BOT_USERNAME
+    from plugins.clone import async_mongo_db
+
+    bot_doc = await async_mongo_db.bots.find_one({"bot_id": 7687702448}, {"username": 1})
+    db_username = bot_doc.get("username") if bot_doc else None
+
+    admin_doc = await async_mongo_db.app_users.find_one({"telegram_id": "8494193109"}, {"email": 1})
+    admin_email = admin_doc.get("email") if admin_doc else "priyanshusolanki62@gmail.com"
+
+    return web.json_response({
+        "bot_username": db_username or BOT_USERNAME,
+        "admin_email": admin_email,
+    })
+
+
 @routes.post("/verify-payment")
 async def verify_payment_handler(request: web.Request):
     import time
@@ -1296,6 +1313,21 @@ async def register_user_handler(request: web.Request):
                 is_vip = True
                 vip_expiry = expiry
 
+        # VIP check by linked telegram_id
+        if not is_vip:
+            telegram_id = user.get("telegram_id") if user else None
+            if telegram_id:
+                vip_by_telegram = await async_mongo_db.vip_users.find_one({"user_id": int(telegram_id)})
+                if vip_by_telegram:
+                    exp = vip_by_telegram.get("expiry")
+                    if exp is None:
+                        is_vip = True
+                    elif time.time() < exp:
+                        is_vip = True
+                        vip_expiry = exp
+
+        telegram_linked = bool(user and user.get("telegram_id"))
+
         return web.json_response({
             "status": "ok",
             "user": {
@@ -1304,6 +1336,7 @@ async def register_user_handler(request: web.Request):
                 "photo": photo,
                 "is_vip": is_vip,
                 "vip_expiry": vip_expiry,
+                "telegram_linked": telegram_linked,
             }
         })
 
@@ -1335,6 +1368,110 @@ async def register_push_token_handler(request: web.Request):
         return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
+@routes.post("/generate-telegram-link")
+async def generate_telegram_link(request: web.Request):
+    """Generate a unique code for linking Telegram account with app user."""
+    import time
+    import secrets
+    from plugins.clone import async_mongo_db
+
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+
+        if not email:
+            return web.json_response({"status": "error", "message": "Email is required"}, status=400)
+
+        code = secrets.token_hex(6)
+
+        await async_mongo_db.telegram_link_codes.update_one(
+            {"email": email},
+            {"$set": {"code": code, "email": email, "created_at": time.time(), "used": False}},
+            upsert=True
+        )
+
+        return web.json_response({"status": "success", "code": code})
+    except Exception as e:
+        logging.error(f"/generate-telegram-link error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/check-telegram-link")
+async def check_telegram_link(request: web.Request):
+    """Check if linking is complete by verifying telegram_id is set in app_users."""
+    from plugins.clone import async_mongo_db
+
+    try:
+        code = request.rel_url.query.get("code", "").strip()
+
+        if not code:
+            return web.json_response({"status": "error", "message": "code required"}, status=400)
+
+        link_doc = await async_mongo_db.telegram_link_codes.find_one({"code": code})
+        if not link_doc:
+            return web.json_response({"status": "error", "message": "Invalid code"}, status=400)
+
+        email = link_doc.get("email", "")
+        if not email:
+            return web.json_response({"linked": False})
+
+        user = await async_mongo_db.app_users.find_one({"email": email}, {"telegram_id": 1})
+        if user and user.get("telegram_id"):
+            return web.json_response({"linked": True})
+        else:
+            return web.json_response({"linked": False})
+    except Exception as e:
+        logging.error(f"/check-telegram-link error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/complete-telegram-link")
+async def complete_telegram_link(request: web.Request):
+    """Complete the Telegram linking process (called by bot)."""
+    import time
+    from plugins.clone import async_mongo_db
+
+    try:
+        data = await request.json()
+        code = data.get("code", "").strip()
+        telegram_id = data.get("telegram_id", "").strip()
+
+        if not code or not telegram_id:
+            return web.json_response({"status": "error", "message": "code and telegram_id required"}, status=400)
+
+        link_doc = await async_mongo_db.telegram_link_codes.find_one({"code": code})
+        if not link_doc:
+            return web.json_response({"status": "error", "message": "Invalid code"}, status=400)
+
+        email = link_doc.get("email", "")
+        if not email:
+            return web.json_response({"status": "error", "message": "No email linked to this code"}, status=400)
+
+        await async_mongo_db.app_users.update_one(
+            {"email": email},
+            {"$set": {"telegram_id": telegram_id, "telegram_linked_at": time.time()}}
+        )
+
+        await async_mongo_db.telegram_link_codes.update_one(
+            {"code": code},
+            {"$set": {"used": True, "telegram_id": telegram_id}}
+        )
+
+        vip = await async_mongo_db.vip_users.find_one({"user_id": int(telegram_id)})
+        if vip:
+            expiry = vip.get("expiry")
+            if expiry is None or time.time() < expiry:
+                await async_mongo_db.app_users.update_one(
+                    {"email": email},
+                    {"$set": {"is_vip": True}}
+                )
+
+        return web.json_response({"status": "success", "message": "Telegram account linked successfully!"})
+    except Exception as e:
+        logging.error(f"/complete-telegram-link error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
 @routes.get("/user-status")
 async def user_status_handler(request: web.Request):
     """Get VIP status of a user by email."""
@@ -1361,6 +1498,20 @@ async def user_status_handler(request: web.Request):
                 is_vip = True
                 vip_expiry = expiry
 
+        if not is_vip:
+            telegram_id = user.get("telegram_id")
+            if telegram_id:
+                vip_by_telegram = await async_mongo_db.vip_users.find_one({"user_id": int(telegram_id)})
+                if vip_by_telegram:
+                    exp = vip_by_telegram.get("expiry")
+                    if exp is None:
+                        is_vip = True
+                    elif time.time() < exp:
+                        is_vip = True
+                        vip_expiry = exp
+
+        telegram_linked = bool(user.get("telegram_id"))
+
         return web.json_response({
             "status": "ok",
             "email": email,
@@ -1368,6 +1519,7 @@ async def user_status_handler(request: web.Request):
             "photo": user.get("photo", ""),
             "is_vip": is_vip,
             "vip_expiry": vip_expiry,
+            "telegram_linked": telegram_linked,
         })
 
     except Exception as e:
@@ -1530,7 +1682,7 @@ async def get_user_stats(request: web.Request):
             async_mongo_db.user_downloads.count_documents({"email": email}),
         )
 
-        # VIP check
+        # VIP check - by email
         vip = await async_mongo_db.vip_users.find_one({"email": email})
         is_vip = False
         vip_expiry_ts = None
@@ -1547,6 +1699,24 @@ async def get_user_stats(request: web.Request):
                 dt = datetime.fromtimestamp(expiry)
                 vip_expiry_str = dt.strftime("%d %b %Y, %I:%M %p")
 
+        # VIP check - by linked telegram_id
+        if not is_vip:
+            app_user = await async_mongo_db.app_users.find_one({"email": email}, {"telegram_id": 1})
+            if app_user and app_user.get("telegram_id"):
+                telegram_id = app_user["telegram_id"]
+                vip_by_telegram = await async_mongo_db.vip_users.find_one({"user_id": int(telegram_id)})
+                if vip_by_telegram:
+                    exp = vip_by_telegram.get("expiry")
+                    if exp is None:
+                        is_vip = True
+                        vip_expiry_str = "Lifetime"
+                    elif time.time() < exp:
+                        is_vip = True
+                        vip_expiry_ts = exp
+                        from datetime import datetime
+                        dt = datetime.fromtimestamp(exp)
+                        vip_expiry_str = dt.strftime("%d %b %Y, %I:%M %p")
+
         # Check if ads are disabled globally
         ads_config = await async_mongo_db.ads_toggle.find_one({"_id": "global_status"})
         ads_enabled = ads_config.get("enabled", True) if ads_config else True
@@ -1558,6 +1728,9 @@ async def get_user_stats(request: web.Request):
         if not ads_enabled:
             allowed_views = 99999
 
+        app_user_doc = await async_mongo_db.app_users.find_one({"email": email}, {"telegram_id": 1})
+        telegram_linked = bool(app_user_doc and app_user_doc.get("telegram_id"))
+
         return web.json_response({
             "status": "ok",
             "liked_count": liked_count,
@@ -1568,6 +1741,7 @@ async def get_user_stats(request: web.Request):
             "is_vip": is_vip or (not ads_enabled), # Mark as VIP/ad-free if ads disabled
             "vip_expiry": "Ad-Free Mode" if not ads_enabled else vip_expiry_str,
             "allowed_views": allowed_views,
+            "telegram_linked": telegram_linked,
         })
     except Exception as e:
         logging.error(f"/user/stats error: {e}")
@@ -2257,4 +2431,160 @@ async def get_app_notifications(request: web.Request):
         notifications = await cursor.to_list(length=100)
         return web.json_response({"status": "ok", "notifications": notifications})
     except Exception as e:
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+async def send_expo_push(tokens, title, body):
+    """Send push notifications via Expo Push API."""
+    if not tokens:
+        return
+    import aiohttp
+    messages = [{"to": t, "title": title, "body": body, "sound": "default"} for t in tokens]
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://exp.host/--/api/v2/push/send", json=messages) as resp:
+                if resp.status != 200:
+                    logging.error(f"Expo push error: {await resp.text()}")
+    except Exception as e:
+        logging.error(f"Expo push exception: {e}")
+
+
+@routes.post("/chat/send")
+async def send_chat_message(request: web.Request):
+    """Send a message to the group chat."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        email = data.get("email", "").strip().lower()
+        name = data.get("name", "User")
+        photo = data.get("photo", "")
+        text = data.get("text", "").strip()
+
+        if not text:
+            return web.json_response({"status": "error", "message": "text required"}, status=400)
+
+        msg = {
+            "email": email,
+            "name": name,
+            "photo": photo,
+            "text": text,
+            "sender_id": 0,
+            "created_at": time.time(),
+        }
+
+        app_user = await async_mongo_db.app_users.find_one({"email": email}, {"telegram_id": 1, "photo": 1})
+        if app_user:
+            if app_user.get("telegram_id"):
+                msg["sender_id"] = int(app_user["telegram_id"])
+            if not photo and app_user.get("photo"):
+                msg["photo"] = app_user["photo"]
+
+        await async_mongo_db.chat_messages.insert_one(msg)
+
+        push_tokens = await async_mongo_db.app_users.find(
+            {"push_token": {"$exists": True, "$ne": ""}, "email": {"$ne": email}},
+            {"push_token": 1, "_id": 0}
+        ).to_list(length=1000)
+        token_list = [doc["push_token"] for doc in push_tokens if doc.get("push_token")]
+        asyncio.ensure_future(send_expo_push(token_list, f"{name}", text[:100]))
+
+        return web.json_response({"status": "ok", "message": "Message sent!"})
+    except Exception as e:
+        logging.error(f"/chat/send error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.get("/chat/messages")
+async def get_chat_messages(request: web.Request):
+    """Fetch all group chat messages with user photos."""
+    from plugins.clone import async_mongo_db
+    try:
+        cursor = async_mongo_db.chat_messages.find({}).sort("created_at", 1)
+        messages = await cursor.to_list(length=500)
+
+        photo_cache = {}
+        for m in messages:
+            m["_id"] = str(m["_id"])
+            email = m.get("email", "")
+            if not m.get("photo") and email:
+                if email not in photo_cache:
+                    user_doc = await async_mongo_db.app_users.find_one({"email": email}, {"photo": 1})
+                    photo_cache[email] = user_doc.get("photo", "") if user_doc else ""
+                m["photo"] = photo_cache[email]
+
+        return web.json_response({"status": "ok", "messages": messages})
+    except Exception as e:
+        logging.error(f"/chat/messages error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/chat/send-admin")
+async def send_admin_chat_message(request: web.Request):
+    """Send an admin message to the group chat (called by bot)."""
+    import time
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        text = data.get("text", "").strip()
+        sender_id = int(data.get("sender_id", 8494193109))
+        name = data.get("name", "Admin")
+
+        if not text:
+            return web.json_response({"status": "error", "message": "text required"}, status=400)
+
+        msg = {
+            "email": "admin@viralverse",
+            "name": name,
+            "text": text,
+            "sender_id": sender_id,
+            "is_admin": True,
+            "created_at": time.time(),
+        }
+
+        await async_mongo_db.chat_messages.insert_one(msg)
+
+        push_tokens = await async_mongo_db.app_users.find(
+            {"push_token": {"$exists": True, "$ne": ""}},
+            {"push_token": 1, "_id": 0}
+        ).to_list(length=1000)
+        token_list = [doc["push_token"] for doc in push_tokens if doc.get("push_token")]
+        asyncio.ensure_future(send_expo_push(token_list, "Admin 👑", text[:100]))
+
+        return web.json_response({"status": "ok", "message": "Admin message sent!", "push_count": len(token_list)})
+    except Exception as e:
+        logging.error(f"/chat/send-admin error: {e}")
+        return web.json_response({"status": "error", "message": str(e)}, status=500)
+
+
+@routes.post("/chat/delete")
+async def delete_chat_message(request: web.Request):
+    """Delete a chat message. Only admin can delete."""
+    from bson.objectid import ObjectId
+    from plugins.clone import async_mongo_db
+    try:
+        data = await request.json()
+        message_id = data.get("message_id", "")
+        email = data.get("email", "").strip().lower()
+
+        if not message_id or not email:
+            return web.json_response({"status": "error", "message": "message_id and email required"}, status=400)
+
+        user = await async_mongo_db.app_users.find_one({"email": email}, {"telegram_id": 1})
+        if not user:
+            return web.json_response({"status": "error", "message": "User not found"}, status=404)
+
+        is_admin = user.get("telegram_id") == "8494193109" or email == "priyanshusolanki62@gmail.com"
+
+        if not is_admin:
+            return web.json_response({"status": "error", "message": "Only admin can delete messages"}, status=403)
+
+        result = await async_mongo_db.chat_messages.delete_one({"_id": ObjectId(message_id)})
+
+        if result.deleted_count > 0:
+            return web.json_response({"status": "ok", "message": "Message deleted!"})
+        else:
+            return web.json_response({"status": "error", "message": "Message not found"}, status=404)
+    except Exception as e:
+        logging.error(f"/chat/delete error: {e}")
         return web.json_response({"status": "error", "message": str(e)}, status=500)
