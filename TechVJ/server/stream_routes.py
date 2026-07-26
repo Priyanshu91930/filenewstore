@@ -1465,6 +1465,12 @@ async def complete_telegram_link(request: web.Request):
                     {"email": email},
                     {"$set": {"is_vip": True}}
                 )
+            # Store email in vip_users so app can find VIP by email directly
+            if not vip.get("email"):
+                await async_mongo_db.vip_users.update_one(
+                    {"_id": vip["_id"]},
+                    {"$set": {"email": email}}
+                )
 
         return web.json_response({"status": "success", "message": "Telegram account linked successfully!"})
     except Exception as e:
