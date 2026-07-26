@@ -3300,6 +3300,36 @@ async def add_vip_handler(client, message):
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
 
+@Client.on_message(filters.command("fixvip") & filters.private & filters.user(ADMINS))
+async def fix_vip_handler(client, message):
+    """Backfill email into existing vip_users records from linked app_users."""
+    status_msg = await message.reply_text("<b>⏳ Scanning and fixing VIP records...</b>")
+    try:
+        fixed = 0
+        skipped = 0
+        cursor = clone_mongo_db.vip_users.find({"$or": [{"email": {"$exists": False}}, {"email": ""}]})
+        async for vip_doc in cursor:
+            uid = vip_doc.get("user_id")
+            if uid:
+                app_user = await clone_mongo_db.app_users.find_one({"telegram_id": str(uid)}, {"email": 1})
+                if app_user and app_user.get("email"):
+                    await clone_mongo_db.vip_users.update_one(
+                        {"_id": vip_doc["_id"]},
+                        {"$set": {"email": app_user["email"]}}
+                    )
+                    fixed += 1
+                else:
+                    skipped += 1
+            else:
+                skipped += 1
+        await status_msg.edit_text(
+            f"<b>✅ VIP Fix Complete!</b>\n\n"
+            f"📧 Email added: <code>{fixed}</code>\n"
+            f"⏭️ Skipped (no linked account): <code>{skipped}</code>"
+        )
+    except Exception as e:
+        await status_msg.edit_text(f"<b>❌ Error: {e}</b>")
+
 @Client.on_message(filters.command("delvip") & filters.private & filters.user(ADMINS))
 async def del_vip_handler(client, message):
     if len(message.command) < 2:

@@ -2619,6 +2619,42 @@ async def add_vip_handler(client, message):
     except Exception as e:
         await message.reply_text(f"<b>❌ Error: {e}</b>")
 
+@Client.on_message(filters.command("fixvip") & filters.private)
+async def fix_vip_handler(client, message):
+    """Backfill email into existing vip_users records from linked app_users."""
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+    status_msg = await message.reply_text("<b>⏳ Scanning and fixing VIP records...</b>")
+    try:
+        fixed = 0
+        skipped = 0
+        cursor = mongo_db.vip_users.find({"$or": [{"email": {"$exists": False}}, {"email": ""}]})
+        async for vip_doc in cursor:
+            uid = vip_doc.get("user_id")
+            if uid:
+                app_user = await mongo_db.app_users.find_one({"telegram_id": str(uid)}, {"email": 1})
+                if app_user and app_user.get("email"):
+                    await mongo_db.vip_users.update_one(
+                        {"_id": vip_doc["_id"]},
+                        {"$set": {"email": app_user["email"]}}
+                    )
+                    fixed += 1
+                else:
+                    skipped += 1
+            else:
+                skipped += 1
+        await status_msg.edit_text(
+            f"<b>✅ VIP Fix Complete!</b>\n\n"
+            f"📧 Email added: <code>{fixed}</code>\n"
+            f"⏭️ Skipped (no linked account): <code>{skipped}</code>"
+        )
+    except Exception as e:
+        await status_msg.edit_text(f"<b>❌ Error: {e}</b>")
+
 @Client.on_message(filters.command("delvip") & filters.private)
 async def del_vip_handler(client, message):
     me = client.me or await client.get_me()
