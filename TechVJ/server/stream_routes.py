@@ -1706,7 +1706,8 @@ async def get_user_stats(request: web.Request):
                 is_vip = True
                 vip_expiry_ts = expiry
                 from datetime import datetime
-                dt = datetime.fromtimestamp(expiry)
+                import pytz
+                dt = datetime.fromtimestamp(expiry, pytz.timezone('Asia/Kolkata'))
                 vip_expiry_str = dt.strftime("%d %b %Y, %I:%M %p")
 
         # VIP check - by linked telegram_id
@@ -1724,7 +1725,8 @@ async def get_user_stats(request: web.Request):
                         is_vip = True
                         vip_expiry_ts = exp
                         from datetime import datetime
-                        dt = datetime.fromtimestamp(exp)
+                        import pytz
+                        dt = datetime.fromtimestamp(exp, pytz.timezone('Asia/Kolkata'))
                         vip_expiry_str = dt.strftime("%d %b %Y, %I:%M %p")
 
         # VIP check - by app_users.is_vip directly (last resort, no vip_users record found)
@@ -1744,7 +1746,9 @@ async def get_user_stats(request: web.Request):
                             is_vip = True
                             from datetime import datetime
                             vip_expiry_ts = exp
-                            vip_expiry_str = datetime.fromtimestamp(exp).strftime("%d %b %Y, %I:%M %p")
+                            from datetime import datetime
+                            import pytz
+                            vip_expiry_str = datetime.fromtimestamp(exp, pytz.timezone('Asia/Kolkata')).strftime("%d %b %Y, %I:%M %p")
 
         # Check if ads are disabled globally
         ads_config = await async_mongo_db.ads_toggle.find_one({"_id": "global_status"})
