@@ -3578,7 +3578,7 @@ async def clone_upload_gdrive_cmd_handler(client, message):
     caption = replied.caption or ""
     lines = [l.strip() for l in caption.split('\n') if l.strip()]
     
-    title = lines[0] if lines else getattr(media, "file_name", f"Video_{int(time.time())}")
+    title = lines[0] if lines else (media.file_name or f"Video_{int(time.time())}")
     title = re.sub(r'<[^>]+>', '', title)
     title = re.sub(r'[*_`~]', '', title).strip()
     
@@ -3636,7 +3636,7 @@ async def clone_upload_gdrive_cmd_handler(client, message):
         except:
             pass
 
-    local_filename = getattr(media, "file_name", f"video_{int(time.time())}.mp4")
+    local_filename = media.file_name or f"{title}.mp4"
     local_path = os.path.join(temp_dir, local_filename)
     
     try:
@@ -3874,7 +3874,7 @@ Processed before cancellation: <code>{success_count + fail_count}/{total_posts}<
                                     # Preserve original caption from first part for batch caption
                                     if b_idx == 0 and not caption:
                                         caption = video_msg.caption or ""
-                                    local_filename = getattr(media, "file_name", f"video_{post_id}_{b_idx}.mp4")
+                                    local_filename = media.file_name or f"video_{post_id}_{b_idx}.mp4"
                                     local_path = os.path.join(temp_dir, local_filename)
                                     
                                     video_path = await StreamBot.download_media(media.file_id, file_name=local_path)
@@ -3935,7 +3935,7 @@ Processed before cancellation: <code>{success_count + fail_count}/{total_posts}<
                         if msg and msg.media:
                             media_obj = getattr(msg, msg.media.value)
                             file_id = media_obj.file_id
-                            local_filename = getattr(media_obj, "file_name", f"video_{post_id}.mp4")
+                            local_filename = media_obj.file_name or f"video_{post_id}.mp4"
                     else:
                         file_doc = await mongo_db.clone_files.find_one({"_id": decode_file_id})
                         if file_doc:
