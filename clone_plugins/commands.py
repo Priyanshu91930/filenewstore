@@ -2655,7 +2655,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         await client.send_message(
             chat_id=query.message.chat.id,
-            text=f"<b>🔄 Complete Payment</b>\n\nClick below to pay ₹{amount} via UPI Autopay:",
+            text=f"<b>🔄 Complete Payment</b>\n\nClick below to pay ₹{amount}:",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(f"💳 Pay ₹{amount}", url=short_url)],
                 [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]

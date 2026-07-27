@@ -2906,7 +2906,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await clone_mongo_db.user_states.update_one({"bot_id": me.id, "user_id": query.from_user.id}, {"$set": {"state": "waiting_autopay", "subscription_id": sub_id, "autopay_days": days, "autopay_amount": amount, "autopay_plan": title, "bot_username": me.username}}, upsert=True)
         try: await query.message.delete()
         except: pass
-        await client.send_message(chat_id=query.message.chat.id, text=f"<b>🔄 Complete Payment</b>\n\nClick below to pay ₹{amount} via UPI Autopay:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"💳 Pay ₹{amount}", url=short_url)], [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]]))
+        await client.send_message(chat_id=query.message.chat.id, text=f"<b>🔄 Complete Payment</b>\n\nClick below to pay ₹{amount}:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"💳 Pay ₹{amount}", url=short_url)], [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]]))
         await query.answer()
 
     elif query.data == "check_pending_razorpay":
