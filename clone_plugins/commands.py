@@ -2583,8 +2583,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         prices = parse_razorpay_prices(autopay_plans_text)
         
         text = (
-            "<b>🔄 <u>Recurring Plans</u>\n\n"
-            "Set up recurring payment for VIP access.</b>\n\n"
+            "<b>🔄 <u>VIP Plans</u></b>\n\n"
             f"{autopay_plans_text}"
         )
         
@@ -2610,13 +2609,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
         prices = parse_razorpay_prices(plan_cfg.get("razorpay_plans_text", "") if plan_cfg else "")
         
         if days == 7:
-            title = "Weekly VIP"; amount = prices.get("1w"); pd = "1 Week"
+            title = "Weekly"; amount = prices.get("1w"); pd = "1 Week"
         elif days == 30:
-            title = "Monthly VIP"; amount = prices.get("1m"); pd = "1 Month"
+            title = "Monthly"; amount = prices.get("1m"); pd = "1 Month"
         elif days == 90:
-            title = "Quarterly VIP"; amount = prices.get("3m"); pd = "3 Months"
+            title = "Quarterly"; amount = prices.get("3m"); pd = "3 Months"
         elif days == 180:
-            title = "Half-Yearly VIP"; amount = prices.get("6m"); pd = "6 Months"
+            title = "Half-Yearly"; amount = prices.get("6m"); pd = "6 Months"
         else:
             return await query.answer("Invalid plan", show_alert=True)
         if not amount:
