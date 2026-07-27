@@ -2293,8 +2293,31 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
         
+        plans_text = plan_cfg.get("razorpay_plans_text", "Plans not configured")
+        prices = parse_razorpay_prices(plans_text)
+        
+        text = (
+            f"<b>🛒 VIP Plans & Pricing</b>\n\n"
+            f"<b>📌 How to Buy:</b>\n"
+            f"1️⃣ Click on your preferred plan below.\n"
+            f"2️⃣ Complete payment on Razorpay page.\n"
+            f"3️⃣ VIP activates automatically!"
+        )
+        
         btn = []
-        btn.append([InlineKeyboardButton("💰 Razorpay Payment", callback_data="buy_razorpay")])
+        if prices.get("1d"):
+            btn.append([InlineKeyboardButton(f"📅 1 Day — ₹{prices['1d']}", callback_data="pay_razorpay_1")])
+        if prices.get("1w"):
+            btn.append([InlineKeyboardButton(f"📅 1 Week — ₹{prices['1w']}", callback_data="pay_autopay_7")])
+        if prices.get("1m"):
+            btn.append([InlineKeyboardButton(f"📅 1 Month — ₹{prices['1m']}", callback_data="pay_autopay_30")])
+        if prices.get("3m"):
+            btn.append([InlineKeyboardButton(f"📅 3 Months — ₹{prices['3m']}", callback_data="pay_autopay_90")])
+        if prices.get("6m"):
+            btn.append([InlineKeyboardButton(f"📅 6 Months — ₹{prices['6m']}", callback_data="pay_autopay_180")])
+        if prices.get("lifetime"):
+            btn.append([InlineKeyboardButton(f"♾️ Lifetime — ₹{prices['lifetime']}", callback_data="pay_razorpay_0")])
+            
         btn.append([InlineKeyboardButton("« Back", callback_data="plan_status_back")])
         
         try:
@@ -2304,8 +2327,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         await client.send_message(
             chat_id=query.message.chat.id,
-            text="<b>🌟 <u>Choose Payment Method</u>\n\nSelect How You Would Like To Pay For Premium Access</b>",
-            reply_markup=InlineKeyboardMarkup(btn)
+            text=text,
+            reply_markup=InlineKeyboardMarkup(btn),
+            parse_mode=enums.ParseMode.HTML
         )
         await query.answer()
 
