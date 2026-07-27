@@ -2570,14 +2570,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         await client.send_message(
             chat_id=query.message.chat.id,
-            text=(
-                f"<b>🛒 <u>Razorpay Payment</u></b>\n\n"
-                f"<b>Plan:</b> {title}\n"
-                f"<b>Amount:</b> ₹{amount}\n\n"
-                f"👇 <b>Click below to pay. VIP auto-activates after payment!</b>"
-            ),
+            text=f"<b>🛒 Complete Payment</b>\n\nClick below to pay ₹{amount}:",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Pay ₹" + str(amount), url=short_url)],
+                [InlineKeyboardButton(f"💳 Pay ₹{amount}", url=short_url)],
                 [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]
             ])
         )
@@ -2660,16 +2655,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
         
         await client.send_message(
             chat_id=query.message.chat.id,
-            text=(
-                f"<b>🔄 <u>UPI Autopay Setup</u></b>\n\n"
-                f"<b>Plan:</b> {title}\n"
-                f"<b>Amount:</b> ₹{amount}/billing cycle\n\n"
-                f"👇 <b>Click below to set up UPI AutoPay mandate.</b>\n"
-                f"After mandate setup, come back and check status!"
-            ),
+            text=f"<b>🔄 Complete Payment</b>\n\nClick below to pay ₹{amount} via UPI Autopay:",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 Set Up Autopay", url=short_url)],
-                [InlineKeyboardButton("✅ Check Subscription Status", callback_data="check_autopay_status")],
+                [InlineKeyboardButton(f"💳 Pay ₹{amount}", url=short_url)],
                 [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]
             ])
         )

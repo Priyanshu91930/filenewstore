@@ -2877,7 +2877,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await clone_mongo_db.user_states.update_one({"bot_id": me.id, "user_id": query.from_user.id}, {"$set": {"state": "waiting_razorpay", "razorpay_link_id": link_id, "razorpay_days": days, "razorpay_amount": amount, "razorpay_plan": title}}, upsert=True)
         try: await query.message.delete()
         except: pass
-        await client.send_message(chat_id=query.message.chat.id, text=f"<b>🛒 Razorpay Payment</b>\n\n<b>Plan:</b> {title}\n<b>Amount:</b> ₹{amount}\n\n👇 Click below to pay. VIP auto-activates!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💳 Pay ₹" + str(amount), url=short_url)], [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]]))
+        await client.send_message(chat_id=query.message.chat.id, text=f"<b>🛒 Complete Payment</b>\n\nClick below to pay ₹{amount}:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"💳 Pay ₹{amount}", url=short_url)], [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]]))
         await query.answer()
 
     elif query.data.startswith("pay_autopay_"):
@@ -2906,7 +2906,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await clone_mongo_db.user_states.update_one({"bot_id": me.id, "user_id": query.from_user.id}, {"$set": {"state": "waiting_autopay", "subscription_id": sub_id, "autopay_days": days, "autopay_amount": amount, "autopay_plan": title, "bot_username": me.username}}, upsert=True)
         try: await query.message.delete()
         except: pass
-        await client.send_message(chat_id=query.message.chat.id, text=f"<b>🔄 UPI Autopay Setup</b>\n\n<b>Plan:</b> {title}\n<b>Amount:</b> ₹{amount}/cycle\n\n👇 Click to set up UPI AutoPay mandate!\nAfter mandate setup, check subscription status!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Set Up Autopay", url=short_url)], [InlineKeyboardButton("✅ Check Subscription Status", callback_data="check_autopay_status")], [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]]))
+        await client.send_message(chat_id=query.message.chat.id, text=f"<b>🔄 Complete Payment</b>\n\nClick below to pay ₹{amount} via UPI Autopay:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"💳 Pay ₹{amount}", url=short_url)], [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]]))
         await query.answer()
 
     elif query.data == "check_pending_razorpay":
