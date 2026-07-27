@@ -1263,6 +1263,225 @@ async def razorpay_webhook_handler(request: web.Request):
         return web.Response(status=500, text=f"Internal Server Error: {e}")
 
 
+async def check_razorpay_payment_link_status(link_id: str) -> str:
+    from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+    import aiohttp
+    auth = aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.razorpay.com/v1/payment_links/{link_id}", auth=auth, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get("status", "")
+    except Exception:
+        pass
+    return ""
+
+@routes.get("/razorpay_callback")
+async def razorpay_callback_handler(request: web.Request):
+    import time
+    from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+    from plugins.clone import async_mongo_db
+
+    try:
+        user_id = request.rel_url.query.get("user_id", "")
+        bot_id = request.rel_url.query.get("bot_id", "")
+        link_id = request.rel_url.query.get("link_id", "")
+        status = request.rel_url.query.get("razorpay_payment_link_status", "")
+
+        if not user_id or not bot_id or not link_id:
+            return web.Response(text="Missing params", status=400)
+
+        if status != "paid":
+            status = await check_razorpay_payment_link_status(link_id)
+
+        if status == "paid":
+            user_id_int = int(user_id)
+            bot_id_int = int(bot_id)
+            state = await async_mongo_db.user_states.find_one(
+                {"bot_id": bot_id_int, "user_id": user_id_int, "state": "waiting_razorpay"}
+            )
+            if state:
+                days = state.get("razorpay_days", 30)
+                plan_title = state.get("razorpay_plan", "VIP Plan")
+                amount_paid = state.get("razorpay_amount", 0)
+
+                if days == 0:
+                    expiry = None
+                else:
+                    expiry = time.time() + days * 86400
+
+                await async_mongo_db.vip_users.update_one(
+                    {"bot_id": bot_id_int, "user_id": user_id_int},
+                    {"$set": {"expiry": expiry, "payment_method": "razorpay", "plan": plan_title, "updated_at": time.time()}},
+                    upsert=True
+                )
+
+                app_user = await async_mongo_db.app_users.find_one({"telegram_id": str(user_id_int)})
+                if app_user:
+                    linked_email = app_user.get("email", "")
+                    if linked_email:
+                        await async_mongo_db.vip_users.update_one(
+                            {"email": linked_email},
+                            {"$set": {"expiry": expiry, "plan": plan_title}},
+                            upsert=True
+                        )
+                    await async_mongo_db.app_users.update_one(
+                        {"telegram_id": str(user_id_int)},
+                        {"$set": {"is_vip": True}}
+                    )
+
+                await async_mongo_db.user_states.delete_one({"bot_id": bot_id_int, "user_id": user_id_int})
+
+                try:
+                    from plugins.clone import running_clones
+                    from datetime import datetime
+                    expiry_str = "Lifetime" if expiry is None else datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+                    days_label = "Lifetime" if expiry is None else f"{days} Days"
+                    msg_text = (
+                        f"<b>🎉 Payment Successful! VIP Activated!</b>\n\n"
+                        f"✅ <b>Plan:</b> {plan_title} ({days_label})\n"
+                        f"✅ <b>Amount Paid:</b> ₹{amount_paid}\n"
+                        f"✅ <b>Expiry:</b> <code>{expiry_str}</code>\n\n"
+                        f"You now bypass all shortlink/TMA verifications! 🚀"
+                    )
+                    bot_client = running_clones.get(bot_id_int)
+                    if bot_client:
+                        await bot_client.send_message(chat_id=user_id_int, text=msg_text)
+                    else:
+                        from TechVJ.bot import StreamBot
+                        await StreamBot.send_message(chat_id=user_id_int, text=msg_text)
+                except Exception as e:
+                    logging.error(f"Failed to notify user after payment: {e}")
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Payment {'Success' if status == 'paid' else 'Failed'}</title>
+<style>
+body{{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background:#f5f5f5}}
+.card{{background:#fff;max-width:400px;margin:auto;padding:30px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}}
+.success{{color:#28a745;font-size:48px}}
+.failed{{color:#dc3545;font-size:48px}}
+.btn{{display:inline-block;padding:12px 24px;background:#0088cc;color:#fff;text-decoration:none;border-radius:8px;margin-top:20px}}
+</style></head><body>
+<div class="card">
+<div class="{'success' if status == 'paid' else 'failed'}">{'✅' if status == 'paid' else '❌'}</div>
+<h2>Payment {'Successful!' if status == 'paid' else 'Failed / Pending'}</h2>
+<p>{'Your VIP has been activated automatically.' if status == 'paid' else 'Please complete your payment and try again.'}</p>
+<a class="btn" href="https://t.me/{state.get("bot_username", "telegram") if state else "telegram"}">Back to Bot</a>
+</div></body></html>"""
+        return web.Response(text=html, content_type='text/html')
+    except Exception as e:
+        logging.error(f"Razorpay callback error: {e}")
+        return web.Response(text=f"Error: {e}", status=500)
+
+
+@routes.get("/autopay_callback")
+async def autopay_callback_handler(request: web.Request):
+    import time
+    import hmac
+    import hashlib
+    from config import RAZORPAY_KEY_SECRET
+    from plugins.clone import async_mongo_db
+    from plugins.clone import running_clones
+
+    try:
+        sub_id = request.rel_url.query.get("razorpay_subscription_id", "")
+        payment_id = request.rel_url.query.get("razorpay_payment_id", "")
+        signature = request.rel_url.query.get("razorpay_signature", "")
+        user_id = request.rel_url.query.get("user_id", "")
+        bot_id = request.rel_url.query.get("bot_id", "")
+        plan_duration = request.rel_url.query.get("plan_duration", "1 Month")
+
+        if not sub_id or not payment_id or not signature:
+            return web.Response(text="Missing subscription params", status=400)
+
+        expected = f"{payment_id}|{sub_id}"
+        gen_sig = hmac.new(bytes(RAZORPAY_KEY_SECRET, "utf-8"), msg=bytes(expected, "utf-8"), digestmod=hashlib.sha256).hexdigest()
+        
+        status = "failed"
+        if gen_sig == signature:
+            status = "paid"
+
+        if status == "paid" and user_id and bot_id:
+            user_id_int = int(user_id)
+            bot_id_int = int(bot_id)
+            
+            now = time.time()
+            if "day" in plan_duration.lower():
+                expiry = now + 86400
+            elif "week" in plan_duration.lower():
+                expiry = now + 86400 * 7
+            elif "month" in plan_duration.lower():
+                if "3" in plan_duration:
+                    expiry = now + 86400 * 30 * 3
+                elif "6" in plan_duration:
+                    expiry = now + 86400 * 30 * 6
+                else:
+                    expiry = now + 86400 * 30
+            else:
+                expiry = now + 86400 * 30
+
+            await async_mongo_db.vip_users.update_one(
+                {"bot_id": bot_id_int, "user_id": user_id_int},
+                {"$set": {"expiry": expiry, "subscription_id": sub_id, "payment_method": "autopay", "plan_duration": plan_duration, "updated_at": now}},
+                upsert=True
+            )
+
+            app_user = await async_mongo_db.app_users.find_one({"telegram_id": str(user_id_int)})
+            if app_user:
+                linked_email = app_user.get("email", "")
+                if linked_email:
+                    await async_mongo_db.vip_users.update_one(
+                        {"email": linked_email},
+                        {"$set": {"expiry": expiry, "subscription_id": sub_id, "plan_duration": plan_duration}},
+                        upsert=True
+                    )
+                await async_mongo_db.app_users.update_one(
+                    {"telegram_id": str(user_id_int)},
+                    {"$set": {"is_vip": True}}
+                )
+
+            await async_mongo_db.user_states.delete_one({"bot_id": bot_id_int, "user_id": user_id_int})
+
+            from datetime import datetime
+            expiry_str = "Lifetime" if expiry is None else datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+            msg_text = (
+                f"<b>🔄 UPI Autopay Setup Complete! VIP Activated!</b>\n\n"
+                f"✅ <b>Plan:</b> {plan_duration}\n"
+                f"✅ <b>VIP Expiry:</b> <code>{expiry_str}</code>\n\n"
+                f"Your subscription will auto-renew. You now bypass all verifications! 🚀"
+            )
+            try:
+                bot_client = running_clones.get(bot_id_int)
+                if bot_client:
+                    await bot_client.send_message(chat_id=user_id_int, text=msg_text)
+                else:
+                    from TechVJ.bot import StreamBot
+                    await StreamBot.send_message(chat_id=user_id_int, text=msg_text)
+            except Exception as e:
+                logging.error(f"Failed to notify autopay user: {e}")
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Autopay {'Success' if status == 'paid' else 'Failed'}</title>
+<style>
+body{{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background:#f5f5f5}}
+.card{{background:#fff;max-width:400px;margin:auto;padding:30px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}}
+.success{{color:#28a745;font-size:48px}}
+.failed{{color:#dc3545;font-size:48px}}
+.btn{{display:inline-block;padding:12px 24px;background:#0088cc;color:#fff;text-decoration:none;border-radius:8px;margin-top:20px}}
+</style></head><body>
+<div class="card">
+<div class="{'success' if status == 'paid' else 'failed'}">{'✅' if status == 'paid' else '❌'}</div>
+<h2>Autopay {'Successful!' if status == 'paid' else 'Failed'}</h2>
+<p>{'Your VIP is now active with recurring billing.' if status == 'paid' else 'Please try again.'}</p>
+<a class="btn" href="https://t.me/{request.rel_url.query.get('bot_username', 'telegram')}">Back to Bot</a>
+</div></body></html>"""
+        return web.Response(text=html, content_type='text/html')
+    except Exception as e:
+        logging.error(f"Autopay callback error: {e}")
+        return web.Response(text=f"Error: {e}", status=500)
 
 
 @routes.post("/register-user")

@@ -22,6 +22,7 @@ import json
 import base64
 import time
 import string
+import aiohttp
 from shortzy import Shortzy
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,171 @@ def parse_stars_prices(plans_text):
                 prices["lifetime"] = price_candidates[0]
                 
     return prices
+
+def parse_razorpay_prices(plans_text):
+    prices = {
+        "1d": None,
+        "1w": None,
+        "1m": None,
+        "3m": None,
+        "6m": None,
+        "lifetime": None
+    }
+    
+    if not plans_text:
+        return prices
+    
+    text = re.sub(r'<[^>]+>', '', plans_text).lower()
+    text_raw = re.sub(r'<[^>]+>', '', plans_text)
+    
+    lines = text.split('\n')
+    raw_lines = text_raw.split('\n')
+    
+    for i, line in enumerate(lines):
+        line = line.strip()
+        raw_line = raw_lines[i].strip() if i < len(raw_lines) else ''
+        
+        numbers = re.findall(r'\b\d+\b', line)
+        if not numbers:
+            continue
+        
+        if any(kw in line for kw in ["1 day", "1day", "daily"]) or any(kw in raw_line for kw in ["1 ᴅᴀʏ"]):
+            price_candidates = [int(n) for n in numbers if n not in ["1"]]
+            if price_candidates:
+                prices["1d"] = price_candidates[0]
+            elif len(numbers) == 1:
+                prices["1d"] = int(numbers[0])
+        elif any(kw in line for kw in ["1 week", "1week", "7 days", "7days"]) or any(kw in raw_line for kw in ["1 ᴡᴇᴇᴋ"]):
+            price_candidates = [int(n) for n in numbers if n not in ["1", "7"]]
+            if price_candidates:
+                prices["1w"] = price_candidates[0]
+            elif len(numbers) == 1:
+                prices["1w"] = int(numbers[0])
+        elif any(kw in line for kw in ["1 month", "1month", "30 days", "30days", "monthly"]) or any(kw in raw_line for kw in ["1 ᴍᴏɴᴛʜ"]):
+            price_candidates = [int(n) for n in numbers if n not in ["1", "30"]]
+            if price_candidates:
+                prices["1m"] = price_candidates[0]
+            elif len(numbers) == 1:
+                prices["1m"] = int(numbers[0])
+        elif any(kw in line for kw in ["3 month", "3month", "90 days", "90days"]) or any(kw in raw_line for kw in ["3 ᴍᴏɴᴛʜ"]):
+            price_candidates = [int(n) for n in numbers if n not in ["3", "90"]]
+            if price_candidates:
+                prices["3m"] = price_candidates[0]
+            elif len(numbers) == 1:
+                prices["3m"] = int(numbers[0])
+        elif any(kw in line for kw in ["6 month", "6month", "180 days", "180days", "half year"]) or any(kw in raw_line for kw in ["6 ᴍᴏɴᴛʜ"]):
+            price_candidates = [int(n) for n in numbers if n not in ["6", "180"]]
+            if price_candidates:
+                prices["6m"] = price_candidates[0]
+            elif len(numbers) == 1:
+                prices["6m"] = int(numbers[0])
+        elif any(kw in line for kw in ["lifetime", "life time", "life-time", "forever"]) or any(kw in raw_line for kw in ["ʟɪғᴇᴛɪᴍᴇ"]):
+            price_candidates = [int(n) for n in numbers]
+            if price_candidates:
+                prices["lifetime"] = price_candidates[0]
+                
+    return prices
+
+async def create_razorpay_payment_link(amount_inr: int, description: str, user_id: int = 0, bot_id: int = 0, bot_username: str = "") -> dict:
+    from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, URL
+    from urllib.parse import quote
+    callback = f"{URL.rstrip('/')}/razorpay_callback?user_id={user_id}&bot_id={bot_id}&link_id={{payment_link_id}}"
+    auth = aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+    payload = {
+        "amount": amount_inr * 100,
+        "currency": "INR",
+        "description": description[:98],
+        "callback_url": callback,
+        "callback_method": "get",
+        "notes": {
+            "user_id": str(user_id),
+            "bot_id": str(bot_id),
+            "bot_username": bot_username
+        }
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://api.razorpay.com/v1/payment_links", json=payload, auth=auth, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return {"success": True, "id": data.get("id"), "short_url": data.get("short_url"), "amount": data.get("amount")}
+                else:
+                    err_text = await resp.text()
+                    return {"success": False, "error": err_text}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+async def verify_razorpay_payment_link(link_id: str) -> dict:
+    from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+    auth = aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.razorpay.com/v1/payment_links/{link_id}", auth=auth, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    status = data.get("status")
+                    paid_amount = data.get("amount", 0)
+                    return {"success": True, "status": status, "paid_amount": paid_amount}
+                else:
+                    return {"success": False, "error": await resp.text()}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+async def create_razorpay_subscription(amount_inr: int, plan_duration: str, user_id: int = 0, bot_id: int = 0, bot_username: str = "") -> dict:
+    from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, URL
+    auth = aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+    from plugins.clone import async_mongo_db
+    
+    period = "monthly"
+    interval = 1
+    dl = plan_duration.lower()
+    if "day" in dl:
+        period = "daily"; interval = 1
+    elif "week" in dl:
+        period = "weekly"; interval = 1
+    elif "3 month" in dl or "3month" in dl:
+        period = "monthly"; interval = 3
+    elif "6 month" in dl or "6month" in dl:
+        period = "monthly"; interval = 6
+    elif "lifetime" in dl:
+        period = "yearly"; interval = 10
+    
+    plan_query = {"period": period, "interval": interval, "amount": amount_inr * 100}
+    existing = await async_mongo_db.razorpay_plans.find_one(plan_query)
+    plan_id = existing.get("plan_id") if existing else None
+
+    if not plan_id:
+        plan_payload = {
+            "period": period, "interval": interval,
+            "item": {
+                "name": f"VIP Autopay {plan_duration}",
+                "amount": amount_inr * 100,
+                "currency": "INR",
+                "description": f"Recurring VIP for {plan_duration}"
+            }
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://api.razorpay.com/v1/plans", json=plan_payload, auth=auth) as resp:
+                if resp.status == 200:
+                    res = await resp.json()
+                    plan_id = res.get("id")
+                    await async_mongo_db.razorpay_plans.insert_one({"plan_id": plan_id, "period": period, "interval": interval, "amount": amount_inr * 100, "created_at": time.time()})
+                else:
+                    return {"success": False, "error": f"Plan creation failed: {await resp.text()}"}
+
+    callback = f"{URL.rstrip('/')}/autopay_callback?user_id={user_id}&bot_id={bot_id}&plan_duration={plan_duration}"
+    sub_payload = {
+        "plan_id": plan_id, "total_count": 12, "quantity": 1, "customer_notify": 1,
+        "notify_info": {"notify_phone": "", "notify_email": ""},
+        "callback_url": callback, "callback_method": "get"
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://api.razorpay.com/v1/subscriptions", json=sub_payload, auth=auth) as resp:
+            if resp.status == 200:
+                res = await resp.json()
+                return {"success": True, "subscription_id": res.get("id"), "short_url": res.get("short_url"), "plan_id": plan_id}
+            else:
+                return {"success": False, "error": f"Subscription creation failed: {await resp.text()}"}
 
 # Don't Remove Credit Tg - @viralverse0909
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
@@ -1959,14 +2125,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
             return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
             
         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id}) or {}
-        upi_enabled = plan_cfg.get("upi_enabled", True)
+        razorpay_enabled = plan_cfg.get("razorpay_enabled", True)
         stars_enabled = plan_cfg.get("stars_enabled", True)
         paypal_enabled = plan_cfg.get("paypal_enabled", True)
             
         buttons = [
             [
-                InlineKeyboardButton("💳 Set UPI", callback_data="setplan_upi"),
-                InlineKeyboardButton(f"{'✅ Enabled' if upi_enabled else '❌ Disabled'}", callback_data="toggle_upi")
+                InlineKeyboardButton("💰 Razorpay Plans", callback_data="setplan_razorpay"),
+                InlineKeyboardButton(f"{'✅ Enabled' if razorpay_enabled else '❌ Disabled'}", callback_data="toggle_razorpay")
             ],
             [
                 InlineKeyboardButton("⭐ Set Stars", callback_data="setplan_stars"),
@@ -1976,12 +2142,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 InlineKeyboardButton("🅿️ Set PayPal", callback_data="setplan_paypal"),
                 InlineKeyboardButton(f"{'✅ Enabled' if paypal_enabled else '❌ Disabled'}", callback_data="toggle_paypal")
             ],
-            [InlineKeyboardButton("📸 Set Alt Server QR", callback_data="setplan_altqr")],
             [InlineKeyboardButton("« Back to Settings", callback_data="settings")]
         ]
         
         await query.message.edit_text(
-            text="<b>⚙️ <u>Payment Plan Configuration</u>\n\nSelect the payment method you want to configure or toggle to disable/enable it:</b>",
+            text="<b>⚙️ <u>Payment Plan Configuration</u>\n\nSelect the payment method you want to configure:</b>",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
         return await query.answer()
@@ -2008,43 +2173,55 @@ async def cb_handler(client: Client, query: CallbackQuery):
         query.data = "setplan"
         return await cb_handler(client, query)
 
-    elif query.data == "setplan_upi":
+    elif query.data == "setplan_razorpay":
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
         mods = bot_doc.get("moderators", []) if bot_doc else []
         if query.from_user.id != owner_id and query.from_user.id not in mods:
             return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
             
-        msg = await client.ask(
-            chat_id=query.message.chat.id,
-            text="<b>📸 Please send/upload your UPI QR code photo (or send /cancel to exit).</b>"
-        )
-        if msg.text and msg.text.strip() == "/cancel":
-            return await msg.reply("<b>Cancelled UPI configuration.</b>")
-            
-        if not msg.photo:
-            return await msg.reply("<b>❌ Please send a photo of the QR code. Try again from Settings.</b>")
-            
-        qr_file_id = msg.photo.file_id
-        
         msg_text = await client.ask(
             chat_id=query.message.chat.id,
-            text="<b>✍️ Now please send the UPI plans text with prices (or send /cancel to skip).\n\nExample:\n<code>1 Month - 199\n3 Months - 399\nLifetime - 799</code></b>"
+            text="<b>💰 Please send the Razorpay plans text with prices (or send /cancel to exit).\n\nExample:\n<code>1 Month - 199\n3 Months - 399\nLifetime - 999</code></b>"
         )
         if msg_text.text and msg_text.text.strip() == "/cancel":
-            return await msg_text.reply("<b>Cancelled UPI configuration.</b>")
+            return await msg_text.reply("<b>Cancelled Razorpay configuration.</b>")
             
         plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
         
         await mongo_db.plans_config.update_one(
             {"_id": me.id},
             {"$set": {
-                "payment_qr": qr_file_id,
-                "plans_text": plans_text
+                "razorpay_plans_text": plans_text
             }},
             upsert=True
         )
-        await msg_text.reply("<b>✅ UPI Payment configured successfully!</b>")
+        await msg_text.reply("<b>✅ Razorpay Payment configured successfully!</b>")
+        
+    elif query.data == "setplan_autopay":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
+            
+        msg_text = await client.ask(
+            chat_id=query.message.chat.id,
+            text="<b>🔄 Please send the Autopay (UPI AutoPay) plans text with prices (or send /cancel to exit).\n\nExample:\n<code>1 Month - 199\n3 Months - 399\n6 Months - 699</code></b>"
+        )
+        if msg_text.text and msg_text.text.strip() == "/cancel":
+            return await msg_text.reply("<b>Cancelled Autopay configuration.</b>")
+            
+        plans_text = msg_text.text.html if msg_text.text else "Plans not configured"
+        
+        await mongo_db.plans_config.update_one(
+            {"_id": me.id},
+            {"$set": {
+                "autopay_plans_text": plans_text
+            }},
+            upsert=True
+        )
+        await msg_text.reply("<b>✅ Autopay configured successfully!</b>")
         
     elif query.data == "setplan_stars":
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
@@ -2109,34 +2286,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
         await msg_paypal_text.reply("<b>✅ PayPal Payment configured successfully!</b>")
         
-    elif query.data == "setplan_altqr":
-        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
-        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
-        mods = bot_doc.get("moderators", []) if bot_doc else []
-        if query.from_user.id != owner_id and query.from_user.id not in mods:
-            return await query.answer("❌ Only the bot owner and moderators can configure plans!", show_alert=True)
-            
-        msg_alt = await client.ask(
-            chat_id=query.message.chat.id,
-            text="<b>📸 Please send an alternative QR code photo for 'Server Down' (or send /cancel to exit).</b>"
-        )
-        if msg_alt.text and msg_alt.text.strip() == "/cancel":
-            return await msg_alt.reply("<b>Cancelled Alt QR configuration.</b>")
-            
-        if not msg_alt.photo:
-            return await msg_alt.reply("<b>❌ Please send a photo of the QR code. Try again from Settings.</b>")
-            
-        alt_qr_file_id = msg_alt.photo.file_id
-        
-        await mongo_db.plans_config.update_one(
-            {"_id": me.id},
-            {"$set": {
-                "alt_payment_qr": alt_qr_file_id
-            }},
-            upsert=True
-        )
-        await msg_alt.reply("<b>✅ Alternative QR configured successfully!</b>")
-
     elif query.data == "buy_plan":
         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
         if not plan_cfg:
@@ -2145,13 +2294,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
         
         btn = []
-        if plan_cfg.get("upi_enabled", True):
-            btn.append([InlineKeyboardButton("💳 UPI Payment", callback_data="buy_upi")])
-        if plan_cfg.get("stars_enabled", True):
-            btn.append([InlineKeyboardButton("⭐ Telegram Stars", callback_data="buy_stars")])
-        if plan_cfg.get("paypal_enabled", True):
-            btn.append([InlineKeyboardButton("🅿️ PayPal Payment", callback_data="buy_paypal")])
-            
+        btn.append([InlineKeyboardButton("💰 Razorpay Payment", callback_data="buy_razorpay")])
         btn.append([InlineKeyboardButton("« Back", callback_data="plan_status_back")])
         
         try:
@@ -2166,74 +2309,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
         await query.answer()
 
-    elif query.data == "buy_upi":
-        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-        if not plan_cfg:
-            return await query.answer("Plans not configured!", show_alert=True)
-            
-        qr_file_id = plan_cfg["payment_qr"]
-        plans_text = plan_cfg["plans_text"]
-        
-        caption = (
-            f"<b>🛒 <u>VIP Plans & Pricing</u></b>\n\n"
-            f"{plans_text}\n\n"
-            f"<b><u>How to buy:</u></b>\n"
-            f"1️⃣ Scan the QR code below to make payment.\n"
-            f"2️⃣ Send the screenshot of the payment receipt here in the chat.\n\n"
-            f"<i>Our admin will review and verify your screenshot to activate VIP access.</i>"
-        )
-        
-        await mongo_db.user_states.update_one(
-            {"bot_id": me.id, "user_id": query.from_user.id},
-            {"$set": {"state": "waiting_screenshot"}},
-            upsert=True
-        )
-        
-        buttons = []
-        if plan_cfg.get("alt_payment_qr"):
-            buttons.append([InlineKeyboardButton("⚠️ Receiver bank not working?", callback_data="alt_buy_upi")])
-        buttons.append([InlineKeyboardButton("« Back", callback_data="buy_plan")])
-        
-        await client.send_photo(
-            chat_id=query.message.chat.id,
-            photo=qr_file_id,
-            caption=caption,
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-        await query.message.delete()
-        await query.answer()
 
-    elif query.data == "alt_buy_upi":
-        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-        if not plan_cfg or not plan_cfg.get("alt_payment_qr"):
-            return await query.answer("Alternate QR not configured!", show_alert=True)
-            
-        alt_qr_file_id = plan_cfg["alt_payment_qr"]
-        plans_text = plan_cfg["plans_text"]
-        
-        caption = (
-            f"<b>🛒 <u>VIP Plans & Pricing</u></b>\n\n"
-            f"{plans_text}\n\n"
-            f"<b><u>How to buy:</u></b>\n"
-            f"1️⃣ Scan the QR code below to make payment.\n"
-            f"2️⃣ Send the screenshot of the payment receipt here in the chat.\n\n"
-            f"<i>Our admin will review and verify your screenshot to activate VIP access.</i>"
-        )
-        
-        buttons = [
-            [InlineKeyboardButton("🔄 Show Primary QR", callback_data="buy_upi")],
-            [InlineKeyboardButton("« Back", callback_data="buy_plan")]
-        ]
-        
-        try:
-            await query.edit_message_media(
-                media=InputMediaPhoto(media=alt_qr_file_id, caption=caption),
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
-            await query.answer()
-        except Exception as e:
-            logging.error(f"Error editing QR media: {e}")
-            await query.answer("Could not change QR image.", show_alert=True)
 
     elif query.data == "buy_paypal":
         plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
@@ -2359,11 +2435,309 @@ async def cb_handler(client: Client, query: CallbackQuery):
             logger.error(f"Error sending invoice: {e}")
             await client.send_message(
                 chat_id=query.message.chat.id,
-                text=f"<b>❌ Error sending invoice: {e}</b>\n\nPlease try again later or use UPI payment.",
+                text=f"<b>❌ Error sending invoice: {e}</b>\n\nPlease try again later or use Razorpay payment.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back to Plans", callback_data="buy_plan")]])
             )
         await query.answer()
 
+    elif query.data == "buy_razorpay":
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        plans_text = plan_cfg.get("razorpay_plans_text", "Plans not configured") if plan_cfg else "Plans not configured"
+        prices = parse_razorpay_prices(plans_text)
+        
+        text = (
+            f"<b>🛒 VIP Plans & Pricing</b>\n\n"
+            f"<b>📌 How to Buy:</b>\n"
+            f"1️⃣ Click on your preferred plan below.\n"
+            f"2️⃣ Complete payment on Razorpay page.\n"
+            f"3️⃣ VIP activates automatically!"
+        )
+        
+        btn = []
+        if prices.get("1d"):
+            btn.append([InlineKeyboardButton(f"📅 1 Day — ₹{prices['1d']}", callback_data="pay_razorpay_1")])
+        if prices.get("1w"):
+            btn.append([InlineKeyboardButton(f"📅 1 Week — ₹{prices['1w']}", callback_data="pay_autopay_7")])
+        if prices.get("1m"):
+            btn.append([InlineKeyboardButton(f"📅 1 Month — ₹{prices['1m']}", callback_data="pay_autopay_30")])
+        if prices.get("3m"):
+            btn.append([InlineKeyboardButton(f"📅 3 Months — ₹{prices['3m']}", callback_data="pay_autopay_90")])
+        if prices.get("6m"):
+            btn.append([InlineKeyboardButton(f"📅 6 Months — ₹{prices['6m']}", callback_data="pay_autopay_180")])
+        if prices.get("lifetime"):
+            btn.append([InlineKeyboardButton(f"♾️ Lifetime — ₹{prices['lifetime']}", callback_data="pay_razorpay_0")])
+            
+        btn.append([InlineKeyboardButton("« Back", callback_data="buy_plan")])
+        
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+            
+        await client.send_message(
+            chat_id=query.message.chat.id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(btn),
+            parse_mode=enums.ParseMode.HTML
+        )
+        await query.answer()
+
+    elif query.data.startswith("pay_razorpay_"):
+        days = int(query.data.split("_")[-1])
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        razorpay_plans_text = plan_cfg.get("razorpay_plans_text", "Plans not configured") if plan_cfg else "Plans not configured"
+        prices = parse_razorpay_prices(razorpay_plans_text)
+        
+        if days == 1:
+            title = "1 Day VIP Access"
+            amount = prices.get("1d")
+        elif days == 7:
+            title = "1 Week VIP Access"
+            amount = prices.get("1w")
+        elif days == 30:
+            title = "1 Month VIP Access"
+            amount = prices.get("1m")
+        elif days == 90:
+            title = "3 Months VIP Access"
+            amount = prices.get("3m")
+        elif days == 180:
+            title = "6 Months VIP Access"
+            amount = prices.get("6m")
+        else:
+            title = "Lifetime VIP Access"
+            amount = prices.get("lifetime")
+            
+        if not amount:
+            return await query.answer("Price not configured for this plan!", show_alert=True)
+        
+        await query.answer("⏳ Creating payment link...")
+        
+        result = await create_razorpay_payment_link(
+            amount, f"VIP {title} - Bot {me.username}",
+            user_id=query.from_user.id,
+            bot_id=me.id,
+            bot_username=me.username
+        )
+        
+        if not result.get("success"):
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=f"<b>❌ Failed to create payment link!</b>\n\n<code>{result.get('error', 'Unknown error')}</code>",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back to Plans", callback_data="buy_plan")]])
+            )
+            return
+        
+        short_url = result.get("short_url")
+        link_id = result.get("id")
+        
+        await mongo_db.user_states.update_one(
+            {"bot_id": me.id, "user_id": query.from_user.id},
+            {"$set": {
+                "state": "waiting_razorpay",
+                "razorpay_link_id": link_id,
+                "razorpay_days": days,
+                "razorpay_amount": amount,
+                "razorpay_plan": title
+            }},
+            upsert=True
+        )
+        
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        
+        await client.send_message(
+            chat_id=query.message.chat.id,
+            text=(
+                f"<b>🛒 <u>Razorpay Payment</u></b>\n\n"
+                f"<b>Plan:</b> {title}\n"
+                f"<b>Amount:</b> ₹{amount}\n\n"
+                f"👇 <b>Click below to pay. VIP auto-activates after payment!</b>"
+            ),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Pay ₹" + str(amount), url=short_url)],
+                [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]
+            ])
+        )
+
+    elif query.data == "buy_autopay":
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        autopay_plans_text = plan_cfg.get("autopay_plans_text", "Not configured") if plan_cfg else "Not configured"
+        prices = parse_razorpay_prices(autopay_plans_text)
+        
+        text = (
+            "<b>🔄 <u>UPI Autopay (Recurring)</u>\n\n"
+            "Set up auto-debit for VIP access. Amount deducted automatically every billing cycle.</b>\n\n"
+            f"{autopay_plans_text}"
+        )
+        
+        btn = []
+        if prices.get("1m"):
+            btn.append([InlineKeyboardButton(f"🔄 1 Month (₹{prices['1m']}/mo)", callback_data="pay_autopay_30")])
+        if prices.get("3m"):
+            btn.append([InlineKeyboardButton(f"🔄 3 Months (₹{prices['3m']}/quarter)", callback_data="pay_autopay_90")])
+        if prices.get("6m"):
+            btn.append([InlineKeyboardButton(f"🔄 6 Months (₹{prices['6m']}/half)", callback_data="pay_autopay_180")])
+        btn.append([InlineKeyboardButton("« Back", callback_data="buy_plan")])
+        
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await client.send_message(chat_id=query.message.chat.id, text=text, reply_markup=InlineKeyboardMarkup(btn))
+        await query.answer()
+
+    elif query.data.startswith("pay_autopay_"):
+        days = int(query.data.split("_")[-1])
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        prices = parse_razorpay_prices(plan_cfg.get("razorpay_plans_text", "") if plan_cfg else "")
+        
+        if days == 7:
+            title = "Weekly Autopay"; amount = prices.get("1w"); pd = "1 Week"
+        elif days == 30:
+            title = "Monthly Autopay"; amount = prices.get("1m"); pd = "1 Month"
+        elif days == 90:
+            title = "Quarterly Autopay"; amount = prices.get("3m"); pd = "3 Months"
+        elif days == 180:
+            title = "Half-Yearly Autopay"; amount = prices.get("6m"); pd = "6 Months"
+        else:
+            return await query.answer("Invalid plan", show_alert=True)
+        if not amount:
+            return await query.answer("Price not configured!", show_alert=True)
+        
+        await query.answer("⏳ Creating subscription...")
+        
+        result = await create_razorpay_subscription(amount, pd, query.from_user.id, me.id, me.username)
+        if not result.get("success"):
+            return await client.send_message(
+                chat_id=query.message.chat.id,
+                text=f"<b>❌ Subscription creation failed!</b>\n\n<code>{result.get('error')}</code>",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="buy_plan")]])
+            )
+        
+        sub_id = result.get("subscription_id")
+        short_url = result.get("short_url")
+        
+        await mongo_db.user_states.update_one(
+            {"bot_id": me.id, "user_id": query.from_user.id},
+            {"$set": {
+                "state": "waiting_autopay",
+                "subscription_id": sub_id,
+                "autopay_days": days,
+                "autopay_amount": amount,
+                "autopay_plan": title,
+                "bot_username": me.username
+            }},
+            upsert=True
+        )
+        
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        
+        await client.send_message(
+            chat_id=query.message.chat.id,
+            text=(
+                f"<b>🔄 <u>UPI Autopay Setup</u></b>\n\n"
+                f"<b>Plan:</b> {title}\n"
+                f"<b>Amount:</b> ₹{amount}/billing cycle\n\n"
+                f"👇 <b>Click below to set up UPI AutoPay mandate.</b>\n"
+                f"After mandate setup, VIP will activate automatically!"
+            ),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Set Up Autopay", url=short_url)],
+                [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]
+            ])
+        )
+
+    elif query.data == "check_pending_razorpay":
+        state = await mongo_db.user_states.find_one({"bot_id": me.id, "user_id": query.from_user.id, "state": "waiting_razorpay"})
+        if not state:
+            return await query.answer("No pending payment found.", show_alert=True)
+        
+        await query.answer("⏳ Checking payment status...")
+        
+        # Find the pending payment link from user_states
+        razorpay_link_id = state.get("razorpay_link_id", "")
+        if not razorpay_link_id:
+            return await query.answer("Session incomplete. Please buy again.", show_alert=True)
+        
+        import aiohttp as _aiohttp
+        from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+        
+        auth = _aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+        try:
+            async with _aiohttp.ClientSession() as session:
+                async with session.get(f"https://api.razorpay.com/v1/payment_links/{razorpay_link_id}", auth=auth, timeout=_aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        status = data.get("status")
+                    else:
+                        return await query.answer("Failed to check payment. Try again later.", show_alert=True)
+        except Exception as e:
+            return await query.answer(f"Error: {str(e)[:30]}", show_alert=True)
+        
+        if status != "paid":
+            return await query.answer("Payment not completed yet. Please pay using the link.", show_alert=True)
+        
+        days = state.get("razorpay_days", 30)
+        plan_title = state.get("razorpay_plan", "VIP Plan")
+        amount_paid = state.get("razorpay_amount", 0)
+        
+        import time
+        from datetime import datetime
+        
+        if days == 0:
+            expiry = None
+            days_label = "Lifetime"
+            expiry_str = "Lifetime"
+        else:
+            expiry = time.time() + days * 86400
+            days_label = f"{days} Days"
+            expiry_str = datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+        
+        user_id = query.from_user.id
+        
+        await mongo_db.vip_users.update_one(
+            {"bot_id": me.id, "user_id": user_id},
+            {"$set": {"expiry": expiry, "payment_method": "razorpay", "plan": plan_title, "updated_at": time.time()}},
+            upsert=True
+        )
+        
+        app_user = await mongo_db.app_users.find_one({"telegram_id": str(user_id)})
+        if app_user:
+            linked_email = app_user.get("email", "")
+            if linked_email:
+                await mongo_db.vip_users.update_one(
+                    {"email": linked_email},
+                    {"$set": {"expiry": expiry, "plan": plan_title}},
+                    upsert=True
+                )
+            await mongo_db.app_users.update_one(
+                {"telegram_id": str(user_id)},
+                {"$set": {"is_vip": True}}
+            )
+        
+        await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
+        
+        try:
+            await query.message.edit_text(
+                f"<b>🎉 Payment Verified! VIP Activated!</b>\n\n"
+                f"✅ <b>Plan:</b> {plan_title} ({days_label})\n"
+                f"✅ <b>Expiry:</b> <code>{expiry_str}</code>\n\n"
+                f"You now bypass all shortlink/TMA verifications! 🚀"
+            )
+        except Exception:
+            await client.send_message(
+                chat_id=query.message.chat.id,
+                text=f"<b>🎉 Payment Verified! VIP Activated!</b>\n\n"
+                     f"✅ <b>Plan:</b> {plan_title} ({days_label})\n"
+                     f"✅ <b>Expiry:</b> <code>{expiry_str}</code>\n\n"
+                     f"You now bypass all shortlink/TMA verifications! 🚀"
+            )
+        await query.answer("✅ VIP Activated Successfully!", show_alert=True)
 
     elif query.data == "plan_status_back":
         try:
@@ -2422,7 +2796,11 @@ async def plan_command_handler(client, message):
             f"Thank you for supporting us! You bypass all shortlink/TMA verifications.</b>"
         )
     else:
-        btn = [[InlineKeyboardButton("🛒 Buy Plan", callback_data="buy_plan")]]
+        state = await mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id, "state": "waiting_razorpay"})
+        btn = []
+        if state:
+            btn.append([InlineKeyboardButton("🔄 Check Pending Payment", callback_data="check_pending_razorpay")])
+        btn.append([InlineKeyboardButton("🛒 Buy Plan", callback_data="buy_plan")])
         return await message.reply_text(
             f"<b>❌ <u>VIP Plan Status</u>\n\n"
             f"➜ Status: No Active Plan ❌\n\n"
@@ -2467,63 +2845,41 @@ async def successful_payment_handler(client, message):
             
         user_id = message.from_user.id
         
-        await message.reply_text(
-            f"<b>✅ Payment Successful!</b>\n\n"
-            f"Thank you for your payment of <b>{payment.total_amount} Telegram Stars</b>.\n\n"
-            f"⏳ <b>Please wait, an admin is verifying your payment. Your VIP access will be activated shortly.</b>"
+        # Auto-activate VIP
+        await mongo_db.vip_users.update_one(
+            {"bot_id": me.id, "user_id": user_id},
+            {"$set": {"expiry": expiry, "payment_method": "stars", "updated_at": time.time()}},
+            upsert=True
         )
         
-        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
-        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
-        mods = bot_doc.get("moderators", []) if bot_doc else []
+        # Sync with app if linked
+        app_user = await mongo_db.app_users.find_one({"telegram_id": str(user_id)})
+        if app_user:
+            linked_email = app_user.get("email", "")
+            if linked_email:
+                await mongo_db.vip_users.update_one(
+                    {"email": linked_email},
+                    {"$set": {"expiry": expiry}},
+                    upsert=True
+                )
+            await mongo_db.app_users.update_one(
+                {"telegram_id": str(user_id)},
+                {"$set": {"is_vip": True}}
+            )
         
-        recipients = [owner_id] + list(mods)
-        for rcpt in recipients:
-            if rcpt:
-                try:
-                    await client.send_message(
-                        chat_id=rcpt,
-                        text=f"<b>⭐ New VIP Purchase via Telegram Stars!</b>\n\n"
-                             f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{user_id}</code>)\n"
-                             f"💵 <b>Amount:</b> <code>{payment.total_amount} Stars</code>\n"
-                             f"📅 <b>Plan:</b> {days_label}\n\n"
-                             f"<b>To activate, click and send this command:</b>\n"
-                             f"<code>/addvip {user_id} {days}</code>"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to notify recipient {rcpt} of successful payment: {e}")
+        await message.reply_text(
+            f"<b>✅ Payment Successful! VIP Activated!</b>\n\n"
+            f"Thank you for your payment of <b>{payment.total_amount} Telegram Stars</b>.\n\n"
+            f"📅 <b>Plan:</b> {days_label}\n"
+            f"⏰ <b>Expiry:</b> <code>{expiry_str}</code>\n\n"
+            f"You now bypass all shortlink/TMA verifications! 🚀"
+        )
 
 @Client.on_message((filters.photo | filters.document) & filters.private & filters.incoming)
 async def photo_message_handler(client, message):
     me = client.me or await client.get_me()
     state_doc = await mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id})
-    if state_doc and state_doc.get("state") == "waiting_screenshot":
-        await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
-        
-        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
-        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
-        mods = bot_doc.get("moderators", []) if bot_doc else []
-        
-        recipients = [owner_id] + list(mods)
-        for rcpt in recipients:
-            if rcpt:
-                try:
-                    await message.forward(rcpt)
-                    await client.send_message(
-                        chat_id=rcpt,
-                        text=f"<b>📩 New VIP Payment Receipt Screenshot!</b>\n\n"
-                             f"👤 <b>From User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n\n"
-                             f"➜ To activate: `/addvip {message.from_user.id} [days]`\n"
-                             f"➜ To decline: `/declinevip {message.from_user.id} [reason]`\n"
-                             f"➜ To message: `/msg {message.from_user.id} [text]`"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to forward screenshot to {rcpt}: {e}")
-                
-        await message.reply_text(
-            "<b>Receipt sent successfully! Please wait for confirmation.</b>"
-        )
-    elif state_doc and state_doc.get("state") == "waiting_paid_screenshot":
+    if state_doc and state_doc.get("state") == "waiting_paid_screenshot":
         payload = state_doc.get("payload")
         await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
         
