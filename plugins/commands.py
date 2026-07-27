@@ -21,6 +21,7 @@ import config
 import re
 import json
 import base64
+import aiohttp
 from urllib.parse import quote_plus
 from TechVJ.utils.file_properties import get_name, get_hash, get_media_file_size
 from TechVJ.bot import StreamBot
@@ -2813,13 +2814,31 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         await clone_mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
         
+        plans_text = plan_cfg.get("razorpay_plans_text", "Plans not configured")
+        from clone_plugins.commands import parse_razorpay_prices
+        prices = parse_razorpay_prices(plans_text)
+        
+        text = (
+            f"<b>🛒 VIP Plans & Pricing</b>\n\n"
+            f"<b>📌 How to Buy:</b>\n"
+            f"1️⃣ Click on your preferred plan below.\n"
+            f"2️⃣ Complete payment on Razorpay page.\n"
+            f"3️⃣ VIP activates automatically!"
+        )
+        
         btn = []
-        if plan_cfg.get("upi_enabled", True):
-            btn.append([InlineKeyboardButton("💳 UPI Payment", callback_data="buy_upi")])
-        if plan_cfg.get("stars_enabled", True):
-            btn.append([InlineKeyboardButton("⭐ Telegram Stars", callback_data="buy_stars")])
-        if plan_cfg.get("paypal_enabled", True):
-            btn.append([InlineKeyboardButton("🅿️ PayPal Payment", callback_data="buy_paypal")])
+        if prices.get("1d"):
+            btn.append([InlineKeyboardButton(f"📅 1 Day — ₹{prices['1d']}", callback_data="pay_razorpay_1")])
+        if prices.get("1w"):
+            btn.append([InlineKeyboardButton(f"📅 1 Week — ₹{prices['1w']}", callback_data="pay_autopay_7")])
+        if prices.get("1m"):
+            btn.append([InlineKeyboardButton(f"📅 1 Month — ₹{prices['1m']}", callback_data="pay_autopay_30")])
+        if prices.get("3m"):
+            btn.append([InlineKeyboardButton(f"📅 3 Months — ₹{prices['3m']}", callback_data="pay_autopay_90")])
+        if prices.get("6m"):
+            btn.append([InlineKeyboardButton(f"📅 6 Months — ₹{prices['6m']}", callback_data="pay_autopay_180")])
+        if prices.get("lifetime"):
+            btn.append([InlineKeyboardButton(f"♾️ Lifetime — ₹{prices['lifetime']}", callback_data="pay_razorpay_0")])
             
         btn.append([InlineKeyboardButton("« Back", callback_data="plan_status_back")])
         
@@ -2830,10 +2849,101 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
         await client.send_message(
             chat_id=query.message.chat.id,
-            text="<b>🌟 <u>Choose Payment Method</u>\n\nSelect How You Would Like To Pay For Premium Access</b>",
-            reply_markup=InlineKeyboardMarkup(btn)
+            text=text,
+            reply_markup=InlineKeyboardMarkup(btn),
+            parse_mode=enums.ParseMode.HTML
         )
         await query.answer()
+
+    elif query.data.startswith("pay_razorpay_"):
+        from clone_plugins.commands import create_razorpay_payment_link, parse_razorpay_prices
+        me = client.me or await client.get_me()
+        days = int(query.data.split("_")[-1])
+        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+        prices = parse_razorpay_prices(plan_cfg.get("razorpay_plans_text", "") if plan_cfg else "")
+        if days == 1:
+            title = "1 Day VIP Access"; amount = prices.get("1d"); pd = "1 Day"
+        elif days == 0:
+            title = "Lifetime VIP Access"; amount = prices.get("lifetime"); pd = "Lifetime"
+        else:
+            return await query.answer("Invalid plan", show_alert=True)
+        if not amount:
+            return await query.answer("Price not configured!", show_alert=True)
+        await query.answer("⏳ Creating payment link...")
+        result = await create_razorpay_payment_link(amount, f"VIP {title}", query.from_user.id, me.id, me.username)
+        if not result.get("success"):
+            return await client.send_message(chat_id=query.message.chat.id, text=f"<b>❌ Failed!</b>\n\n<code>{result.get('error')}</code>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="buy_plan")]]))
+        short_url = result.get("short_url"); link_id = result.get("id")
+        await clone_mongo_db.user_states.update_one({"bot_id": me.id, "user_id": query.from_user.id}, {"$set": {"state": "waiting_razorpay", "razorpay_link_id": link_id, "razorpay_days": days, "razorpay_amount": amount, "razorpay_plan": title}}, upsert=True)
+        try: await query.message.delete()
+        except: pass
+        await client.send_message(chat_id=query.message.chat.id, text=f"<b>🛒 Razorpay Payment</b>\n\n<b>Plan:</b> {title}\n<b>Amount:</b> ₹{amount}\n\n👇 Click below to pay. VIP auto-activates!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("💳 Pay ₹" + str(amount), url=short_url)], [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]]))
+        await query.answer()
+
+    elif query.data.startswith("pay_autopay_"):
+        from clone_plugins.commands import create_razorpay_subscription, parse_razorpay_prices
+        me = client.me or await client.get_me()
+        days = int(query.data.split("_")[-1])
+        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+        prices = parse_razorpay_prices(plan_cfg.get("razorpay_plans_text", "") if plan_cfg else "")
+        if days == 7:
+            title = "Weekly Autopay"; amount = prices.get("1w"); pd = "1 Week"
+        elif days == 30:
+            title = "Monthly Autopay"; amount = prices.get("1m"); pd = "1 Month"
+        elif days == 90:
+            title = "Quarterly Autopay"; amount = prices.get("3m"); pd = "3 Months"
+        elif days == 180:
+            title = "Half-Yearly Autopay"; amount = prices.get("6m"); pd = "6 Months"
+        else:
+            return await query.answer("Invalid plan", show_alert=True)
+        if not amount:
+            return await query.answer("Price not configured!", show_alert=True)
+        await query.answer("⏳ Creating subscription...")
+        result = await create_razorpay_subscription(amount, pd, query.from_user.id, me.id, me.username)
+        if not result.get("success"):
+            return await client.send_message(chat_id=query.message.chat.id, text=f"<b>❌ Failed!</b>\n\n<code>{result.get('error')}</code>", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("« Back", callback_data="buy_plan")]]))
+        sub_id = result.get("subscription_id"); short_url = result.get("short_url")
+        await clone_mongo_db.user_states.update_one({"bot_id": me.id, "user_id": query.from_user.id}, {"$set": {"state": "waiting_autopay", "subscription_id": sub_id, "autopay_days": days, "autopay_amount": amount, "autopay_plan": title, "bot_username": me.username}}, upsert=True)
+        try: await query.message.delete()
+        except: pass
+        await client.send_message(chat_id=query.message.chat.id, text=f"<b>🔄 UPI Autopay Setup</b>\n\n<b>Plan:</b> {title}\n<b>Amount:</b> ₹{amount}/cycle\n\n👇 Click to set up UPI AutoPay mandate!\nVIP activates automatically after mandate!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Set Up Autopay", url=short_url)], [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]]))
+        await query.answer()
+
+    elif query.data == "check_pending_razorpay":
+        me = client.me or await client.get_me()
+        state = await clone_mongo_db.user_states.find_one({"bot_id": me.id, "user_id": query.from_user.id, "state": "waiting_razorpay"})
+        if not state:
+            return await query.answer("No pending payment found.", show_alert=True)
+        await query.answer("⏳ Checking...")
+        razorpay_link_id = state.get("razorpay_link_id", "")
+        if not razorpay_link_id:
+            return await query.answer("Session incomplete.", show_alert=True)
+        auth = aiohttp.BasicAuth(config.RAZORPAY_KEY_ID, config.RAZORPAY_KEY_SECRET)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"https://api.razorpay.com/v1/payment_links/{razorpay_link_id}", auth=auth, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        status = data.get("status")
+                    else:
+                        return await query.answer("Failed to check payment.", show_alert=True)
+        except Exception as e:
+            return await query.answer(f"Error: {str(e)[:30]}", show_alert=True)
+        if status != "paid":
+            return await query.answer("Payment not completed yet.", show_alert=True)
+        days = state.get("razorpay_days", 30); plan_title = state.get("razorpay_plan", "VIP Plan"); amount_paid = state.get("razorpay_amount", 0)
+        if days == 0:
+            expiry = None; days_label = "Lifetime"
+        else:
+            expiry = time.time() + days * 86400; days_label = f"{days} Days"
+        user_id = query.from_user.id
+        await clone_mongo_db.vip_users.update_one({"bot_id": me.id, "user_id": user_id}, {"$set": {"expiry": expiry, "payment_method": "razorpay", "plan": plan_title, "updated_at": time.time()}}, upsert=True)
+        app_user = await clone_mongo_db.app_users.find_one({"telegram_id": str(user_id)})
+        if app_user:
+            await clone_mongo_db.app_users.update_one({"telegram_id": str(user_id)}, {"$set": {"is_vip": True}})
+        await clone_mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
+        await query.message.edit_text(f"<b>🎉 Payment Verified! VIP Activated!</b>\n\n✅ Plan: {plan_title} ({days_label})\n\nYou bypass all verifications! 🚀")
+        await query.answer("✅ VIP Activated!", show_alert=True)
 
     elif query.data == "buy_upi":
         me = client.me or await client.get_me()
