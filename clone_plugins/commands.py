@@ -2583,8 +2583,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         prices = parse_razorpay_prices(autopay_plans_text)
         
         text = (
-            "<b>🔄 <u>UPI Autopay (Recurring)</u>\n\n"
-            "Set up auto-debit for VIP access. Amount deducted automatically every billing cycle.</b>\n\n"
+            "<b>🔄 <u>Recurring Plans</u>\n\n"
+            "Set up recurring payment for VIP access.</b>\n\n"
             f"{autopay_plans_text}"
         )
         
@@ -2610,13 +2610,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
         prices = parse_razorpay_prices(plan_cfg.get("razorpay_plans_text", "") if plan_cfg else "")
         
         if days == 7:
-            title = "Weekly Autopay"; amount = prices.get("1w"); pd = "1 Week"
+            title = "Weekly VIP"; amount = prices.get("1w"); pd = "1 Week"
         elif days == 30:
-            title = "Monthly Autopay"; amount = prices.get("1m"); pd = "1 Month"
+            title = "Monthly VIP"; amount = prices.get("1m"); pd = "1 Month"
         elif days == 90:
-            title = "Quarterly Autopay"; amount = prices.get("3m"); pd = "3 Months"
+            title = "Quarterly VIP"; amount = prices.get("3m"); pd = "3 Months"
         elif days == 180:
-            title = "Half-Yearly Autopay"; amount = prices.get("6m"); pd = "6 Months"
+            title = "Half-Yearly VIP"; amount = prices.get("6m"); pd = "6 Months"
         else:
             return await query.answer("Invalid plan", show_alert=True)
         if not amount:
@@ -2791,10 +2791,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
             from datetime import datetime
             expiry_str = "Lifetime" if expiry is None else datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-            await query.message.edit_text(f"<b>🎉 Subscription Active! VIP Activated!</b>\n\n✅ Plan: {plan_title} ({days_label})\n✅ Expiry: <code>{expiry_str}</code>\n\nAutopay will renew automatically! 🚀")
+            await query.message.edit_text(f"<b>🎉 Subscription Active! VIP Activated!</b>\n\n✅ Plan: {plan_title} ({days_label})\n✅ Expiry: <code>{expiry_str}</code>\n\nYour subscription will renew automatically! 🚀")
             await query.answer("✅ VIP Activated!", show_alert=True)
         elif status == "created":
-            await query.answer("⏳ Mandate not yet completed. Please set up autopay.", show_alert=True)
+            await query.answer("⏳ Payment not yet completed. Please complete the payment.", show_alert=True)
         else:
             await query.answer(f"Status: {status}. Try again later.", show_alert=True)
 

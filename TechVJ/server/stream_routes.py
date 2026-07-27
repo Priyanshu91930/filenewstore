@@ -1137,7 +1137,7 @@ async def verify_subscription_handler(request: web.Request):
 
         return web.json_response({
             "status": "success",
-            "message": f"Autopay Subscribed! VIP status activated for {plan_duration}."
+            "message": f"Subscription created! VIP status activated for {plan_duration}."
         })
 
     except Exception as e:
@@ -1447,10 +1447,10 @@ async def autopay_callback_handler(request: web.Request):
             from datetime import datetime
             expiry_str = "Lifetime" if expiry is None else datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
             msg_text = (
-                f"<b>🔄 UPI Autopay Setup Complete! VIP Activated!</b>\n\n"
+                f"<b>🔄 Recurring Payment Setup Complete! VIP Activated!</b>\n\n"
                 f"✅ <b>Plan:</b> {plan_duration}\n"
                 f"✅ <b>VIP Expiry:</b> <code>{expiry_str}</code>\n\n"
-                f"Your subscription will auto-renew. You now bypass all verifications! 🚀"
+                f"Your subscription will renew automatically. You now bypass all verifications! 🚀"
             )
             try:
                 bot_client = running_clones.get(bot_id_int)
@@ -1464,7 +1464,7 @@ async def autopay_callback_handler(request: web.Request):
 
         html = f"""<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Autopay {'Success' if status == 'paid' else 'Failed'}</title>
+<title>Payment {'Success' if status == 'paid' else 'Failed'}</title>
 <style>
 body{{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background:#f5f5f5}}
 .card{{background:#fff;max-width:400px;margin:auto;padding:30px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}}
@@ -1474,7 +1474,7 @@ body{{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background:
 </style></head><body>
 <div class="card">
 <div class="{'success' if status == 'paid' else 'failed'}">{'✅' if status == 'paid' else '❌'}</div>
-<h2>Autopay {'Successful!' if status == 'paid' else 'Failed'}</h2>
+<h2>{'Payment Successful!' if status == 'paid' else 'Payment Failed'}</h2>
 <p>{'Your VIP is now active with recurring billing.' if status == 'paid' else 'Please try again.'}</p>
 <a class="btn" href="https://t.me/{request.rel_url.query.get('bot_username', 'telegram')}">Back to Bot</a>
 </div></body></html>"""
