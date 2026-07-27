@@ -276,11 +276,8 @@ async def create_razorpay_subscription(amount_inr: int, plan_duration: str, user
                 else:
                     return {"success": False, "error": f"Plan creation failed: {await resp.text()}"}
 
-    callback = f"{URL.rstrip('/')}/autopay_callback?user_id={user_id}&bot_id={bot_id}&plan_duration={plan_duration}"
     sub_payload = {
-        "plan_id": plan_id, "total_count": 12, "quantity": 1, "customer_notify": 1,
-        "notify_info": {"notify_phone": "", "notify_email": ""},
-        "callback_url": callback, "callback_method": "get"
+        "plan_id": plan_id, "total_count": 12, "quantity": 1, "customer_notify": 1
     }
     async with aiohttp.ClientSession() as session:
         async with session.post("https://api.razorpay.com/v1/subscriptions", json=sub_payload, auth=auth) as resp:
@@ -2668,10 +2665,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 f"<b>Plan:</b> {title}\n"
                 f"<b>Amount:</b> ₹{amount}/billing cycle\n\n"
                 f"👇 <b>Click below to set up UPI AutoPay mandate.</b>\n"
-                f"After mandate setup, VIP will activate automatically!"
+                f"After mandate setup, come back and check status!"
             ),
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 Set Up Autopay", url=short_url)],
+                [InlineKeyboardButton("✅ Check Subscription Status", callback_data="check_autopay_status")],
                 [InlineKeyboardButton("« Cancel", callback_data="buy_plan")]
             ])
         )
@@ -2763,6 +2761,55 @@ async def cb_handler(client: Client, query: CallbackQuery):
             )
         await query.answer("✅ VIP Activated Successfully!", show_alert=True)
 
+    elif query.data == "check_autopay_status":
+        state = await mongo_db.user_states.find_one({"bot_id": me.id, "user_id": query.from_user.id, "state": "waiting_autopay"})
+        if not state:
+            return await query.answer("No pending subscription found.", show_alert=True)
+        sub_id = state.get("subscription_id")
+        if not sub_id:
+            return await query.answer("Session incomplete.", show_alert=True)
+        await query.answer("⏳ Checking subscription...")
+        from config import RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
+        auth = aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"https://api.razorpay.com/v1/subscriptions/{sub_id}", auth=auth, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        status = data.get("status")
+                        charge_at = data.get("charge_at", 0)
+                    else:
+                        return await query.answer("Failed to check subscription.", show_alert=True)
+        except Exception as e:
+            return await query.answer(f"Error: {str(e)[:30]}", show_alert=True)
+        
+        if status in ("active", "authenticated", "completed"):
+            days = state.get("autopay_days", 30)
+            plan_title = state.get("autopay_plan", "VIP Plan")
+            amount_paid = state.get("autopay_amount", 0)
+            import time
+            if days == 0:
+                expiry = None; days_label = "Lifetime"
+            else:
+                expiry = time.time() + days * 86400; days_label = f"{days} Days"
+            user_id = query.from_user.id
+            await mongo_db.vip_users.update_one({"bot_id": me.id, "user_id": user_id}, {"$set": {"expiry": expiry, "subscription_id": sub_id, "payment_method": "autopay", "plan": plan_title, "updated_at": time.time()}}, upsert=True)
+            app_user = await mongo_db.app_users.find_one({"telegram_id": str(user_id)})
+            if app_user:
+                linked_email = app_user.get("email", "")
+                if linked_email:
+                    await mongo_db.vip_users.update_one({"email": linked_email}, {"$set": {"expiry": expiry, "subscription_id": sub_id}}, upsert=True)
+                await mongo_db.app_users.update_one({"telegram_id": str(user_id)}, {"$set": {"is_vip": True}})
+            await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": query.from_user.id})
+            from datetime import datetime
+            expiry_str = "Lifetime" if expiry is None else datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+            await query.message.edit_text(f"<b>🎉 Subscription Active! VIP Activated!</b>\n\n✅ Plan: {plan_title} ({days_label})\n✅ Expiry: <code>{expiry_str}</code>\n\nAutopay will renew automatically! 🚀")
+            await query.answer("✅ VIP Activated!", show_alert=True)
+        elif status == "created":
+            await query.answer("⏳ Mandate not yet completed. Please set up autopay.", show_alert=True)
+        else:
+            await query.answer(f"Status: {status}. Try again later.", show_alert=True)
+
     elif query.data == "plan_status_back":
         try:
             await query.message.delete()
@@ -2820,10 +2867,12 @@ async def plan_command_handler(client, message):
             f"Thank you for supporting us! You bypass all shortlink/TMA verifications.</b>"
         )
     else:
-        state = await mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id, "state": "waiting_razorpay"})
+        state = await mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id})
         btn = []
-        if state:
+        if state and state.get("state") == "waiting_razorpay":
             btn.append([InlineKeyboardButton("🔄 Check Pending Payment", callback_data="check_pending_razorpay")])
+        if state and state.get("state") == "waiting_autopay":
+            btn.append([InlineKeyboardButton("🔄 Check Subscription Status", callback_data="check_autopay_status")])
         btn.append([InlineKeyboardButton("🛒 Buy Plan", callback_data="buy_plan")])
         return await message.reply_text(
             f"<b>❌ <u>VIP Plan Status</u>\n\n"
