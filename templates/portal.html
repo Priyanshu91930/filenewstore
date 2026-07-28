@@ -533,15 +533,17 @@
           data.posts.forEach(post => {
             const card = document.createElement('div');
             const isPaid = post.is_paid === true;
+            const isPaidCard = post.is_paid_card === true;
             card.className = 'movie-card' + (isPaid ? ' premium-card' : '');
+            const priceBadgeHtml = isPaidCard ? `<div class="premium-badge" style="background: linear-gradient(135deg,#ff0055,#ff6b35);">₹${post.price || 99}</div>` : (isPaid ? `<div class="premium-badge">&#x1F451; PREMIUM</div>` : '');
             card.innerHTML = `
               <div class="movie-poster-wrapper">
-                ${isPaid ? `<div class="premium-badge">&#x1F451; PREMIUM</div>` : ''}
-                <img class="movie-poster" src="${post.image_url || '/static/LOGO.jpg'}" alt="${post.title}" onerror="this.src='/static/LOGO.jpg'" style="${isPaid ? 'margin-top:28px; height:calc(100% - 28px);' : ''}">
+                ${priceBadgeHtml}
+                <img class="movie-poster" src="${post.image_url || '/static/LOGO.jpg'}" alt="${post.title}" onerror="this.src='/static/LOGO.jpg'" style="${(isPaid || isPaidCard) ? 'margin-top:28px; height:calc(100% - 28px);' : ''}">
                 ${!isPaid ? `<span class="movie-category-badge">${post.category || 'General'}</span>` : ''}
               </div>
               <div class="movie-info">
-                <div class="movie-title">${isPaid ? '&#x1F451; ' : ''}${post.title}</div>
+                <div class="movie-title">${isPaidCard ? '💎 ' : (isPaid ? '&#x1F451; ' : '')}${post.title}</div>
                 <div class="movie-stats" style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
                   <span class="views">👁 ${formatNumber(post.views || 0)}</span>
                   <div class="reactions" style="display: flex; gap: 6px;">
@@ -550,7 +552,8 @@
                 </div>
               </div>
             `;
-            card.addEventListener('click', () => handleCardClick(post.file_deeplink, post.bot_username, post.id));
+            const clickPayload = post.is_paid_card ? post.payload : post.file_deeplink;
+            card.addEventListener('click', () => handleCardClick(clickPayload, post.bot_username, post.id));
             moviesGrid.appendChild(card);
           });
           moviesGrid.style.display = 'grid';

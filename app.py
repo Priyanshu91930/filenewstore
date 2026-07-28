@@ -144,7 +144,7 @@ def portal():
 
 @app.route('/portal-data')
 def portal_data():
-    """API to fetch paginated posts, categories, and search results for the Portal."""
+    """API to fetch paginated posts, categories, paid cards, and search results for the Portal."""
     from pymongo import MongoClient
     from config import DB_URI
     import math
@@ -157,42 +157,91 @@ def portal_data():
     db_client = MongoClient(DB_URI)
     db = db_client["cloned_vjbotz"]
 
-    query = {"is_gdrive": True}
-    if category != 'All':
-        query['category'] = category
-    if search:
-        query['title'] = {'$regex': search, '$options': 'i'}
-
-    total_posts = db.posts.count_documents(query)
-    total_pages = math.ceil(total_posts / limit) or 1
-    page = max(1, min(page, total_pages))
-    skip = (page - 1) * limit
-
-    # Sort: paid/premium posts ALWAYS first, then newest
-    posts_cursor = db.posts.find(query).sort(
-        [('is_paid', -1), ('created_at', -1)]
-    ).skip(skip).limit(limit)
     posts = []
-    for doc in posts_cursor:
-        posts.append({
-            'id': str(doc['_id']),
-            'title': doc.get('title', ''),
-            'image_url': doc.get('image_url', ''),
-            'category': doc.get('category', ''),
-            'file_deeplink': doc.get('file_deeplink', ''),
-            'bot_username': doc.get('bot_username', ''),
-            'views': doc.get('views', 0),
-            'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
-            'is_paid': bool(doc.get('is_paid', False)),
-            'gdrive_file_id': doc.get('gdrive_file_id', ''),
-            'gdrive_file_ids': doc.get('gdrive_file_ids', []),
-            'is_batch': bool(doc.get('is_batch', False)),
-            'caption': doc.get('caption', doc.get('title', '')),
-            'is_gdrive': bool(doc.get('is_gdrive', False))
-        })
+    is_paid_category = category == 'Paid'
+
+    if is_paid_category:
+        # Only fetch paid cards
+        paid_cards_cursor = db.paid_cards.find({}).sort([('created_at', -1)])
+        for doc in paid_cards_cursor:
+            posts.append({
+                'id': str(doc['_id']),
+                'title': doc.get('caption', 'Unlock Content'),
+                'image_url': doc.get('image_url', ''),
+                'category': 'Paid',
+                'file_deeplink': doc.get('payload', ''),
+                'bot_username': doc.get('bot_username', ''),
+                'views': 0,
+                'reactions': {},
+                'is_paid': True,
+                'caption': doc.get('caption', ''),
+                'is_gdrive': False,
+                'is_paid_card': True,
+                'price': doc.get('price', 0),
+                'payload': doc.get('payload', '')
+            })
+    else:
+        query = {"is_gdrive": True}
+        if category != 'All':
+            query['category'] = category
+        if search:
+            query['title'] = {'$regex': search, '$options': 'i'}
+
+        total_posts = db.posts.count_documents(query)
+        total_pages = math.ceil(total_posts / limit) or 1
+        page = max(1, min(page, total_pages))
+        skip = (page - 1) * limit
+
+        # Sort: paid/premium posts ALWAYS first, then newest
+        posts_cursor = db.posts.find(query).sort(
+            [('is_paid', -1), ('created_at', -1)]
+        ).skip(skip).limit(limit)
+        for doc in posts_cursor:
+            posts.append({
+                'id': str(doc['_id']),
+                'title': doc.get('title', ''),
+                'image_url': doc.get('image_url', ''),
+                'category': doc.get('category', ''),
+                'file_deeplink': doc.get('file_deeplink', ''),
+                'bot_username': doc.get('bot_username', ''),
+                'views': doc.get('views', 0),
+                'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
+                'is_paid': bool(doc.get('is_paid', False)),
+                'gdrive_file_id': doc.get('gdrive_file_id', ''),
+                'gdrive_file_ids': doc.get('gdrive_file_ids', []),
+                'is_batch': bool(doc.get('is_batch', False)),
+                'caption': doc.get('caption', doc.get('title', '')),
+                'is_gdrive': bool(doc.get('is_gdrive', False))
+            })
+
+        # Fetch paid cards and prepend (skip if searching)
+        if not search:
+            paid_cards_cursor = db.paid_cards.find({}).sort([('created_at', -1)])
+            paid_cards = []
+            for doc in paid_cards_cursor:
+                paid_cards.append({
+                    'id': str(doc['_id']),
+                    'title': doc.get('caption', 'Unlock Content'),
+                    'image_url': doc.get('image_url', ''),
+                    'category': 'Paid',
+                    'file_deeplink': doc.get('payload', ''),
+                    'bot_username': doc.get('bot_username', ''),
+                    'views': 0,
+                    'reactions': {},
+                    'is_paid': True,
+                    'caption': doc.get('caption', ''),
+                    'is_gdrive': False,
+                    'is_paid_card': True,
+                    'price': doc.get('price', 0),
+                    'payload': doc.get('payload', '')
+                })
+            posts = paid_cards + posts
 
     # Get unique categories
     categories = ['All']
+    paid_cards_exist = db.paid_cards.count_documents({}) > 0
+    if paid_cards_exist:
+        categories.append('Paid')
     unique_cats = db.posts.distinct('category')
     for cat in unique_cats:
         if cat and cat not in categories:
@@ -383,11 +432,13 @@ def _gdrive_file_to_post_app(gfile, category_name="All"):
 @app.route('/gdrive-portal-data')
 def gdrive_portal_data():
     """
-    GDrive-based video feed for React Native app.
+    GDrive-based video feed for React Native app, now also includes paid cards.
     Lists .dat files from GDrive folder, returns stream URLs via Cloudflare Worker.
-    Query params: category (All or folder ID/name), limit, page
+    Query params: category (All, Paid, or folder ID/name), limit, page
     """
     from config import GDRIVE_FOLDER_ID
+    from pymongo import MongoClient
+    from config import DB_URI
     import math
 
     category = request.args.get('category', 'All')
@@ -397,10 +448,56 @@ def gdrive_portal_data():
     try:
         posts = []
 
-        if category == 'All':
+        if category == 'Paid':
+            # Fetch paid cards only
+            db_client = MongoClient(DB_URI)
+            db = db_client["cloned_vjbotz"]
+            paid_cards_cursor = db.paid_cards.find({}).sort([('created_at', -1)])
+            for doc in paid_cards_cursor:
+                posts.append({
+                    "id": str(doc['_id']),
+                    "title": doc.get('caption', 'Unlock Content'),
+                    "category": "Paid",
+                    "image_url": doc.get('image_url', ''),
+                    "bot_username": doc.get('bot_username', ''),
+                    "file_deeplink": doc.get('payload', ''),
+                    "is_gdrive": False,
+                    "is_paid_card": True,
+                    "price": doc.get('price', 0),
+                    "payload": doc.get('payload', ''),
+                    "views": 0,
+                    "is_paid": True,
+                    "reactions": {},
+                })
+            db_client.close()
+        elif category == 'All':
             files = _list_gdrive_files_app(GDRIVE_FOLDER_ID, page_size=limit * page)
             for f in files:
                 posts.append(_gdrive_file_to_post_app(f, category_name='All'))
+
+            # Prepend paid cards
+            db_client = MongoClient(DB_URI)
+            db = db_client["cloned_vjbotz"]
+            paid_cards_cursor = db.paid_cards.find({}).sort([('created_at', -1)])
+            paid_cards = []
+            for doc in paid_cards_cursor:
+                paid_cards.append({
+                    "id": str(doc['_id']),
+                    "title": doc.get('caption', 'Unlock Content'),
+                    "category": "Paid",
+                    "image_url": doc.get('image_url', ''),
+                    "bot_username": doc.get('bot_username', ''),
+                    "file_deeplink": doc.get('payload', ''),
+                    "is_gdrive": False,
+                    "is_paid_card": True,
+                    "price": doc.get('price', 0),
+                    "payload": doc.get('payload', ''),
+                    "views": 0,
+                    "is_paid": True,
+                    "reactions": {},
+                })
+            db_client.close()
+            posts = paid_cards + posts
         else:
             subfolders = _list_gdrive_subfolders_app(GDRIVE_FOLDER_ID)
             matched_folder = None
@@ -427,7 +524,7 @@ def gdrive_portal_data():
         return jsonify({
             "status": "ok",
             "posts": paged_posts,
-            "categories": ['All'],
+            "categories": ['All', 'Paid'],
             "page": page,
             "total_pages": total_pages,
             "has_next": page < total_pages,

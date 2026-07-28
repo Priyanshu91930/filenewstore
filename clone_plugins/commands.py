@@ -239,10 +239,14 @@ async def create_razorpay_subscription(amount_inr: int, plan_duration: str, user
     auth = aiohttp.BasicAuth(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
     from plugins.clone import async_mongo_db
     
+    is_onetime = "onetime" in plan_duration.lower()
+    
     period = "monthly"
     interval = 1
     dl = plan_duration.lower()
-    if "day" in dl:
+    if is_onetime:
+        period = "weekly"; interval = 1
+    elif "day" in dl:
         period = "daily"; interval = 1
     elif "week" in dl:
         period = "weekly"; interval = 1
@@ -253,6 +257,10 @@ async def create_razorpay_subscription(amount_inr: int, plan_duration: str, user
     elif "lifetime" in dl:
         period = "yearly"; interval = 10
     
+    plan_name = f"Paid File ₹{amount_inr}" if is_onetime else f"VIP Autopay {plan_duration}"
+    plan_desc = f"Paid file subscription" if is_onetime else f"Recurring VIP for {plan_duration}"
+    total_count = 520 if is_onetime else 12
+    
     plan_query = {"period": period, "interval": interval, "amount": amount_inr * 100}
     existing = await async_mongo_db.razorpay_plans.find_one(plan_query)
     plan_id = existing.get("plan_id") if existing else None
@@ -261,10 +269,10 @@ async def create_razorpay_subscription(amount_inr: int, plan_duration: str, user
         plan_payload = {
             "period": period, "interval": interval,
             "item": {
-                "name": f"VIP Autopay {plan_duration}",
+                "name": plan_name,
                 "amount": amount_inr * 100,
                 "currency": "INR",
-                "description": f"Recurring VIP for {plan_duration}"
+                "description": plan_desc
             }
         }
         async with aiohttp.ClientSession() as session:
@@ -276,8 +284,12 @@ async def create_razorpay_subscription(amount_inr: int, plan_duration: str, user
                 else:
                     return {"success": False, "error": f"Plan creation failed: {await resp.text()}"}
 
+    cb_url = f"{URL.rstrip('/')}/autopay_callback?user_id={user_id}&bot_id={bot_id}&bot_username={bot_username}"
     sub_payload = {
-        "plan_id": plan_id, "total_count": 12, "quantity": 1, "customer_notify": 1
+        "plan_id": plan_id, "total_count": total_count, "quantity": 1,
+        "customer_notify": 1,
+        "callback_url": cb_url,
+        "callback_method": "get"
     }
     async with aiohttp.ClientSession() as session:
         async with session.post("https://api.razorpay.com/v1/subscriptions", json=sub_payload, auth=auth) as resp:
@@ -528,24 +540,26 @@ async def start(client, message):
                 
                 title = "Paid File"
                 price = "Paid Link"
-                qr_file_id = None
+                razorpay_price = None
                 
                 if paid_doc:
                     title = paid_doc.get("title", "Paid File")
                     price = paid_doc.get("price", "N/A")
-                    qr_file_id = paid_doc.get("qr_file_id")
-                else:
-                    # Look up fallback details from plans_config
-                    plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
-                    if plan_cfg:
-                        qr_file_id = plan_cfg.get("alt_payment_qr") or plan_cfg.get("upi_qr") or plan_cfg.get("paypal_qr")
+                    razorpay_price = paid_doc.get("razorpay_price")
                 
-                caption = f"💰 **Paid File: {title}**\n💵 **Price:** {price}\n\nPlease scan the QR code to pay, and tap the button below to submit your payment screenshot."
-                btn = [[InlineKeyboardButton("📤 Submit Screenshot", callback_data=f"sub_pay_{check_payload}")]]
-                if qr_file_id:
-                    return await message.reply_photo(photo=qr_file_id, caption=caption, reply_markup=InlineKeyboardMarkup(btn))
-                else:
-                    return await message.reply_text(text=caption, reply_markup=InlineKeyboardMarkup(btn))
+                if not razorpay_price:
+                    return await message.reply_text(
+                        f"<b>💰 Paid File: {title}</b>\n\n"
+                        f"This file requires payment, but no Razorpay price is configured.\n"
+                        f"Please ask the admin to set a price using <code>/makepaid {check_payload} [price]</code>"
+                    )
+                
+                caption = f"<b>💰 Paid File: {title}</b>\n\n💵 <b>Price:</b> ₹{razorpay_price}\n\nPay via Razorpay to unlock this file."
+                btn = [
+                    [InlineKeyboardButton(f"💳 Pay ₹{razorpay_price} via Razorpay", callback_data=f"pay_rzp_paid_{check_payload}_{razorpay_price}")]
+                ]
+                
+                return await message.reply_text(text=caption, reply_markup=InlineKeyboardMarkup(btn))
 
     # ── Referral Campaign Start Handler ──
     if data == "joinref":
@@ -1659,6 +1673,87 @@ async def cb_handler(client: Client, query: CallbackQuery):
         await query.answer("🛑 Cancellation request received! Stopping migration...", show_alert=True)
         return
 
+    if query.data.startswith("pay_rzp_paid_"):
+        parts = query.data.split("_", 4)
+        payload = parts[3]
+        try:
+            amount_inr = int(parts[4])
+        except (IndexError, ValueError):
+            amount_inr = 0
+        if amount_inr <= 0:
+            return await query.answer("❌ Invalid Razorpay price configured by admin.", show_alert=True)
+        
+        await query.answer("⏳ Creating payment...")
+        
+        # Check for existing pending payment
+        existing_state = await mongo_db.user_states.find_one({
+            "bot_id": me.id, "user_id": query.from_user.id,
+            "state": "waiting_razorpay_paidlink", "payload": payload
+        })
+        if existing_state and existing_state.get("rzp_sub_id"):
+            short_url = existing_state.get("rzp_short_url")
+            if short_url:
+                btn = [
+                    [InlineKeyboardButton(f"💳 Pay ₹{amount_inr}", url=short_url)]
+                ]
+                try: await query.message.delete()
+                except: pass
+                await client.send_message(
+                    chat_id=query.message.chat.id,
+                    text=f"<b>💳 Payment Already Created</b>\n\n"
+                         f"💰 <b>Amount:</b> ₹{amount_inr}\n"
+                         f"📁 <b>File:</b> {payload}\n\n"
+                         f"Complete your payment:",
+                    reply_markup=InlineKeyboardMarkup(btn)
+                )
+                return await query.answer()
+        
+        # Use Razorpay subscription as single-charge (total_count=1) so user gets
+        # an autopay-style checkout but it charges only once.
+        result = await create_razorpay_subscription(
+            amount_inr,
+            "onetime",
+            user_id=query.from_user.id,
+            bot_id=me.id,
+            bot_username=me.username
+        )
+        
+        if not result.get("success"):
+            return await query.answer(f"❌ Failed: {result.get('error', 'Unknown')[:50]}", show_alert=True)
+        
+        sub_id = result.get("subscription_id")
+        short_url = result.get("short_url")
+        
+        await mongo_db.user_states.update_one(
+            {"bot_id": me.id, "user_id": query.from_user.id},
+            {"$set": {
+                "state": "waiting_razorpay_paidlink",
+                "rzp_sub_id": sub_id,
+                "rzp_short_url": short_url,
+                "rzp_amount": amount_inr,
+                "payload": payload,
+                "bot_username": me.username,
+                "created_at": time.time()
+            }},
+            upsert=True
+        )
+        
+        btn = [
+            [InlineKeyboardButton(f"💳 Pay ₹{amount_inr}", url=short_url)]
+        ]
+        
+        try: await query.message.delete()
+        except: pass
+        await client.send_message(
+            chat_id=query.message.chat.id,
+            text=f"<b>💳 Payment</b>\n\n"
+                 f"💰 <b>Amount:</b> ₹{amount_inr}\n"
+                 f"📁 <b>File:</b> {payload}\n\n"
+                 f"Click below to complete:",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        return await query.answer()
+    
     if query.data.startswith("sub_pay_"):
         payload = query.data.split("sub_pay_", 1)[1]
         await mongo_db.user_states.update_one(
@@ -3234,8 +3329,8 @@ async def makepaid_handler(client, message):
     if not paid_links_enabled:
         return await message.reply("<b>❌ Paid Links feature is currently turned OFF. Please toggle it ON in /setting first.</b>")
 
-    if len(message.command) < 2:
-        return await message.reply("<b>Usage:</b> `/makepaid [payload_or_link]`\nExample: `/makepaid BATCH-1234` or `/makepaid https://t.me/BotName?start=BATCH-1234`")
+    if len(message.command) < 3:
+        return await message.reply("<b>Usage:</b> `/makepaid [payload_or_link] [price_in_inr]`\nExample: `/makepaid BATCH-1234 199` or `/makepaid https://t.me/BotName?start=BATCH-1234 99`")
 
     raw_payload = message.command[1].strip()
     payload = raw_payload
@@ -3244,37 +3339,32 @@ async def makepaid_handler(client, message):
     payload = from_small_caps(payload)
 
     try:
-        title_msg = await _ask(client, message.chat.id, "<b>📝 Please send the TITLE of this paid file:</b>", timeout=120)
-        title = title_msg.text.strip() if title_msg.text else "Paid File"
-    except asyncio.TimeoutError:
-        return await message.reply("<b>❌ Timeout: Setup cancelled.</b>")
+        razorpay_price = int(message.command[2])
+    except ValueError:
+        return await message.reply("<b>❌ Invalid price. Please provide a valid number in INR.\nExample: <code>/makepaid BATCH-abc123 199</code></b>")
 
-    try:
-        price_msg = await _ask(client, message.chat.id, "<b>💵 Please send the PRICE of this file (e.g. 5$, 500 INR):</b>", timeout=120)
-        price = price_msg.text.strip() if price_msg.text else "N/A"
-    except asyncio.TimeoutError:
-        return await message.reply("<b>❌ Timeout: Setup cancelled.</b>")
+    if razorpay_price < 1:
+        return await message.reply("<b>❌ Price must be at least ₹1.</b>")
 
-    try:
-        qr_msg = await _ask(client, message.chat.id, "<b>🖼️ Please send the QR Code image for payment:</b>", timeout=120)
-        if not qr_msg.photo:
-            return await message.reply("<b>❌ Error: You must send an image/photo of the QR code. Setup cancelled.</b>")
-        qr_file_id = qr_msg.photo.file_id
-    except asyncio.TimeoutError:
-        return await message.reply("<b>❌ Timeout: Setup cancelled.</b>")
+    title = f"Paid File - {payload[:20]}"
 
     await mongo_db.paid_links.update_one(
         {"bot_id": me.id, "payload": payload},
         {"$set": {
             "title": title,
-            "price": price,
-            "qr_file_id": qr_file_id,
+            "price": f"₹{razorpay_price}",
+            "razorpay_price": razorpay_price,
             "updated_at": time.time()
         }},
         upsert=True
     )
 
-    await message.reply(f"<b>✅ Paid link successfully created!</b>\n\n<b>Payload:</b> <code>{payload}</code>\n<b>Title:</b> {title}\n<b>Price:</b> {price}")
+    await message.reply(
+        f"<b>✅ Razorpay Paid Link Created!</b>\n\n"
+        f"🔗 <b>Payload:</b> <code>{payload}</code>\n"
+        f"💰 <b>Price:</b> ₹{razorpay_price}\n\n"
+        f"Users will now need to pay ₹{razorpay_price} via Razorpay to access this link."
+    )
 
 @Client.on_message(filters.command("approvepaid") & filters.private)
 async def approvepaid_handler(client, message):
@@ -3767,6 +3857,75 @@ async def clone_upload_gdrive_cmd_handler(client, message):
         f"🔑 <b>GDrive File ID:</b> <code>{gdrive_file_id}</code>\n"
         f"🎭 <b>Masked Name:</b> <code>{masked_name}</code>\n"
         f"🤖 <b>Bot Deeplink:</b> <code>{file_deeplink}</code>"
+    )
+
+
+@Client.on_message(filters.command("add_paid_card") & filters.private)
+async def add_paid_card_cmd_handler(client, message):
+    me = client.me or await client.get_me()
+    bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+    if bot_doc and bot_doc.get("is_deactivated", False):
+        return await message.reply_text("<b>⚠️ This bot has been deactivated by the owner.</b>")
+
+    owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+    mods = bot_doc.get("moderators", []) if bot_doc else []
+    if message.from_user.id != owner_id and message.from_user.id not in mods and message.from_user.id not in ADMINS:
+        return await message.reply("<b>❌ Only the bot owner and moderators can use this command.</b>")
+
+    replied = message.reply_to_message
+    if not replied or not replied.photo:
+        return await message.reply_text("<b>❌ Reply to a photo with caption:</b>\n<code>/add_paid_card BATCH-payload 199</code>")
+
+    if len(message.command) < 3:
+        return await message.reply_text("<b>❌ Usage:</b> <code>/add_paid_card [payload] [price_inr]</code>\nExample: <code>/add_paid_card BATCH-abc123 199</code>")
+
+    payload = message.command[1]
+    try:
+        price = int(message.command[2])
+    except ValueError:
+        return await message.reply_text("<b>❌ Price must be a number.</b>")
+
+    caption_text = message.text.split(None, 3)[3] if len(message.command) > 3 else ""
+    if not caption_text and replied.caption:
+        caption_text = replied.caption
+
+    sts = await message.reply_text("<b>⏳ Uploading photo...</b>")
+
+    photo = replied.photo[-1]
+    thumb_file = await client.download_media(photo.file_id)
+    image_url, _ = await upload_image_via_main_bot(thumb_file)
+    try:
+        os.remove(thumb_file)
+    except:
+        pass
+
+    if not image_url or image_url.startswith("Error"):
+        return await sts.edit_text("<b>❌ Failed to upload photo.</b>")
+
+    from uuid import uuid4
+    card_id = str(uuid4())[:8]
+    await mongo_db.paid_cards.update_one(
+        {"bot_id": me.id, "payload": payload},
+        {"$set": {
+            "_id": card_id,
+            "bot_username": me.username,
+            "image_url": image_url,
+            "caption": caption_text or f"Unlock {payload}",
+            "payload": payload,
+            "price": price,
+            "created_at": time.time()
+        }},
+        upsert=True
+    )
+
+    await sts.edit_text(
+        f"<b>✅ Paid Card Created!</b>\n\n"
+        f"📸 <b>Photo:</b> Uploaded\n"
+        f"📁 <b>Payload:</b> <code>{payload}</code>\n"
+        f"💰 <b>Price:</b> ₹{price}\n"
+        f"📝 <b>Caption:</b> {caption_text or 'None'}\n"
+        f"🤖 <b>Bot:</b> @{me.username}\n\n"
+        f"Now visible in App & Mini App!"
     )
 
 

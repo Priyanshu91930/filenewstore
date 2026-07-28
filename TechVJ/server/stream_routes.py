@@ -18,6 +18,7 @@ from ..utils.time_format import get_readable_time
 from ..utils.custom_dl import ByteStreamer
 from TechVJ.utils.render_template import render_page
 from config import MULTI_CLIENT
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 routes = web.RouteTableDef()
@@ -484,42 +485,90 @@ async def portal_data_route_handler(request: web.Request):
     search = request.rel_url.query.get('search', '')
     limit = int(request.rel_url.query.get('limit', 100))
 
-    query = {"is_gdrive": True}
-    if category and category != 'All':
-        query['category'] = {'$regex': f'^{category}$', '$options': 'i'}
-    if search:
-        query['title'] = {'$regex': search, '$options': 'i'}
-
-    total_posts = await async_mongo_db.posts.count_documents(query)
-    total_pages = math.ceil(total_posts / limit) or 1
-    page = max(1, min(page, total_pages))
-    skip = (page - 1) * limit
-
-    posts_cursor = async_mongo_db.posts.find(query).sort([('created_at', -1)]).skip(skip).limit(limit)
     posts = []
-    async for doc in posts_cursor:
-        posts.append({
-            'id': str(doc['_id']),
-            'title': doc.get('title', ''),
-            'image_url': _normalize_image_url(doc.get('image_url', '')),
-            'category': doc.get('category', ''),
-            'file_deeplink': doc.get('file_deeplink', ''),
-            'bot_username': doc.get('bot_username', ''),
-            'views': doc.get('views', 0),
-            'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
-            'is_paid': bool(doc.get('is_paid', False)),
-            'gdrive_file_id': doc.get('gdrive_file_id', ''),
-            'gdrive_file_ids': doc.get('gdrive_file_ids', []),
-            'is_batch': bool(doc.get('is_batch', False)),
-            'caption': doc.get('caption', doc.get('title', '')),
-            'is_gdrive': bool(doc.get('is_gdrive', False)),
-            'duration': doc.get('duration', '03:15'),
-            'stream_url': f"https://appvideo.solankipriyanshu94.workers.dev/video.mp4?fileId={doc.get('gdrive_file_id', '')}" if doc.get('gdrive_file_id') else '',
-            'thumbnails': [_normalize_image_url(t) for t in doc.get('thumbnails', [])] if doc.get('thumbnails') else [_normalize_image_url(doc.get('image_url', ''))]
-        })
+    is_paid_category = category == 'Paid'
 
-    # Get unique categories
+    if is_paid_category:
+        # Only fetch paid cards
+        paid_cards_cursor = async_mongo_db.paid_cards.find({}).sort([('created_at', -1)])
+        async for doc in paid_cards_cursor:
+            posts.append({
+                'id': str(doc['_id']),
+                'title': doc.get('caption', 'Unlock Content'),
+                'image_url': _normalize_image_url(doc.get('image_url', '')),
+                'category': 'Paid',
+                'file_deeplink': doc.get('payload', ''),
+                'bot_username': doc.get('bot_username', ''),
+                'views': 0,
+                'reactions': {},
+                'is_paid': True,
+                'caption': doc.get('caption', ''),
+                'is_gdrive': False,
+                'is_paid_card': True,
+                'price': doc.get('price', 0),
+                'payload': doc.get('payload', '')
+            })
+    else:
+        query = {"is_gdrive": True}
+        if category and category != 'All':
+            query['category'] = {'$regex': f'^{category}$', '$options': 'i'}
+        if search:
+            query['title'] = {'$regex': search, '$options': 'i'}
+
+        total_posts = await async_mongo_db.posts.count_documents(query)
+        total_pages = math.ceil(total_posts / limit) or 1
+        page = max(1, min(page, total_pages))
+        skip = (page - 1) * limit
+
+        posts_cursor = async_mongo_db.posts.find(query).sort([('created_at', -1)]).skip(skip).limit(limit)
+        async for doc in posts_cursor:
+            posts.append({
+                'id': str(doc['_id']),
+                'title': doc.get('title', ''),
+                'image_url': _normalize_image_url(doc.get('image_url', '')),
+                'category': doc.get('category', ''),
+                'file_deeplink': doc.get('file_deeplink', ''),
+                'bot_username': doc.get('bot_username', ''),
+                'views': doc.get('views', 0),
+                'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
+                'is_paid': bool(doc.get('is_paid', False)),
+                'gdrive_file_id': doc.get('gdrive_file_id', ''),
+                'gdrive_file_ids': doc.get('gdrive_file_ids', []),
+                'is_batch': bool(doc.get('is_batch', False)),
+                'caption': doc.get('caption', doc.get('title', '')),
+                'is_gdrive': bool(doc.get('is_gdrive', False)),
+                'duration': doc.get('duration', '03:15'),
+                'stream_url': f"https://appvideo.solankipriyanshu94.workers.dev/video.mp4?fileId={doc.get('gdrive_file_id', '')}" if doc.get('gdrive_file_id') else '',
+                'thumbnails': [_normalize_image_url(t) for t in doc.get('thumbnails', [])] if doc.get('thumbnails') else [_normalize_image_url(doc.get('image_url', ''))]
+            })
+
+        # Fetch paid cards and prepend (skip if searching)
+        if not search:
+            paid_cards_cursor = async_mongo_db.paid_cards.find({}).sort([('created_at', -1)])
+            paid_cards = []
+            async for doc in paid_cards_cursor:
+                paid_cards.append({
+                    'id': str(doc['_id']),
+                    'title': doc.get('caption', 'Unlock Content'),
+                    'image_url': _normalize_image_url(doc.get('image_url', '')),
+                    'category': 'Paid',
+                    'file_deeplink': doc.get('payload', ''),
+                    'bot_username': doc.get('bot_username', ''),
+                    'views': 0,
+                    'reactions': {},
+                    'is_paid': True,
+                    'caption': doc.get('caption', ''),
+                    'is_gdrive': False,
+                    'is_paid_card': True,
+                    'price': doc.get('price', 0),
+                    'payload': doc.get('payload', '')
+                })
+            posts = paid_cards + posts
+
+    # Get unique categories (include "Paid" if any paid cards exist)
     categories = ['All']
+    if paid_cards:
+        categories.append('Paid')
     unique_cats = await async_mongo_db.posts.distinct('category')
     for cat in unique_cats:
         if cat and cat not in categories:
@@ -1195,6 +1244,65 @@ async def razorpay_webhook_handler(request: web.Request):
             if not subscription_id:
                 return web.Response(status=200, text="No subscription ID found in payload")
 
+            # Check if this is a paid link subscription (first charge or recurring)
+            paid_link_state = await async_mongo_db.user_states.find_one(
+                {"state": "waiting_razorpay_paidlink", "rzp_sub_id": subscription_id}
+            )
+            if paid_link_state:
+                # First charge
+                user_id = paid_link_state.get("user_id")
+                bot_id = paid_link_state.get("bot_id")
+                payload_data = paid_link_state.get("payload", "")
+                amount_paid = paid_link_state.get("rzp_amount", 0)
+
+                if user_id and bot_id and payload_data:
+                    from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+                    await async_mongo_db.paid_unlocks.update_one(
+                        {"bot_id": bot_id, "user_id": user_id, "payload": payload_data},
+                        {"$set": {"unlocked_at": time.time(), "paid_via": "razorpay_webhook", "amount": amount_paid, "rzp_sub_id": subscription_id}},
+                        upsert=True
+                    )
+                    await async_mongo_db.user_states.delete_one(
+                        {"bot_id": bot_id, "user_id": user_id, "state": "waiting_razorpay_paidlink"}
+                    )
+                    bot_username = paid_link_state.get("bot_username", "")
+                    deeplink = f"https://t.me/{bot_username}?start={payload_data}"
+                    try:
+                        bot_client = running_clones.get(bot_id)
+                        if bot_client:
+                            await bot_client.send_message(
+                                chat_id=user_id,
+                                text=f"<b>🎉 Payment Successful! File Unlocked!</b>\n\n"
+                                     f"✅ <b>Amount:</b> ₹{amount_paid}\n"
+                                     f"✅ <b>File:</b> {payload_data}\n\n"
+                                     f"👉 Click below to access your file:\n{deeplink}",
+                                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📁 Open File", url=deeplink)]])
+                            )
+                        else:
+                            from TechVJ.bot import StreamBot
+                            await StreamBot.send_message(
+                                chat_id=user_id,
+                                text=f"<b>🎉 Payment Successful! File Unlocked!</b>\n\n"
+                                     f"✅ <b>Amount:</b> ₹{amount_paid}\n"
+                                     f"✅ <b>File:</b> {payload_data}\n\n"
+                                     f"👉 Click below to access your file:\n{deeplink}",
+                                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📁 Open File", url=deeplink)]])
+                            )
+                    except Exception as e:
+                        logging.error(f"Webhook: Failed to notify paid link user: {e}")
+                    logging.info(f"Razorpay Webhook: Paid link unlocked for user {user_id}, payload {payload_data}")
+                return web.Response(status=200, text="Paid Link Unlocked Successfully")
+
+            # Check for recurring charge on existing paid link
+            existing_unlock = await async_mongo_db.paid_unlocks.find_one({"rzp_sub_id": subscription_id})
+            if existing_unlock:
+                await async_mongo_db.paid_unlocks.update_one(
+                    {"_id": existing_unlock["_id"]},
+                    {"$set": {"unlocked_at": time.time(), "last_charged_at": time.time()}}
+                )
+                logging.info(f"Razorpay Webhook: Recurring charge refreshed unlock for sub {subscription_id}")
+                return web.Response(status=200, text="Paid Link Recurrence Handled")
+
             # Determine subscription details based on plan_id or current configuration
             # Fetch user details matching subscription_id from DB
             vip_user = await async_mongo_db.vip_users.find_one({"subscription_id": subscription_id})
@@ -1298,6 +1406,8 @@ async def razorpay_callback_handler(request: web.Request):
         if status == "paid":
             user_id_int = int(user_id)
             bot_id_int = int(bot_id)
+            
+            # Try VIP plan payment first
             state = await async_mongo_db.user_states.find_one(
                 {"bot_id": bot_id_int, "user_id": user_id_int, "state": "waiting_razorpay"}
             )
@@ -1354,6 +1464,60 @@ async def razorpay_callback_handler(request: web.Request):
                 except Exception as e:
                     logging.error(f"Failed to notify user after payment: {e}")
 
+            else:
+                # Check for paid link payment
+                paid_state = await async_mongo_db.user_states.find_one(
+                    {"bot_id": bot_id_int, "user_id": user_id_int, "state": "waiting_razorpay_paidlink"}
+                )
+                if paid_state:
+                    payload = paid_state.get("payload", "")
+                    amount_paid = paid_state.get("rzp_amount", 0)
+                    bot_username = paid_state.get("bot_username", "telegram")
+                    
+                    await async_mongo_db.paid_unlocks.update_one(
+                        {"bot_id": bot_id_int, "user_id": user_id_int, "payload": payload},
+                        {"$set": {"unlocked_at": time.time(), "paid_via": "razorpay", "amount": amount_paid}},
+                        upsert=True
+                    )
+                    
+                    await async_mongo_db.user_states.delete_one({"bot_id": bot_id_int, "user_id": user_id_int, "state": "waiting_razorpay_paidlink"})
+                    
+                    deeplink = f"https://t.me/{bot_username}?start={payload}"
+                    try:
+                        bot_client = running_clones.get(bot_id_int)
+                        if bot_client:
+                            await bot_client.send_message(
+                                chat_id=user_id_int,
+                                text=f"<b>🎉 Payment Successful! File Unlocked!</b>\n\n"
+                                     f"✅ <b>Amount:</b> ₹{amount_paid}\n"
+                                     f"✅ <b>File:</b> {payload}\n\n"
+                                     f"👉 Click below to access your file:\n{deeplink}",
+                                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📁 Open File", url=deeplink)]])
+                            )
+                        else:
+                            from TechVJ.bot import StreamBot
+                            await StreamBot.send_message(
+                                chat_id=user_id_int,
+                                text=f"<b>🎉 Payment Successful! File Unlocked!</b>\n\n"
+                                     f"✅ <b>Amount:</b> ₹{amount_paid}\n"
+                                     f"✅ <b>File:</b> {payload}\n\n"
+                                     f"👉 Click below to access your file:\n{deeplink}",
+                                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📁 Open File", url=deeplink)]])
+                            )
+                    except Exception as e:
+                        logging.error(f"Failed to notify paid link user: {e}")
+
+        paid_state_username = ""
+        try:
+            paid_state_username = paid_state.get("bot_username", "")
+        except:
+            pass
+        bot_username_for_btn = "telegram"
+        if state and hasattr(state, "get"):
+            bot_username_for_btn = state.get("bot_username", "telegram")
+        elif paid_state_username:
+            bot_username_for_btn = paid_state_username
+            
         html = f"""<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Payment {'Success' if status == 'paid' else 'Failed'}</title>
@@ -1367,8 +1531,8 @@ body{{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background:
 <div class="card">
 <div class="{'success' if status == 'paid' else 'failed'}">{'✅' if status == 'paid' else '❌'}</div>
 <h2>Payment {'Successful!' if status == 'paid' else 'Failed / Pending'}</h2>
-<p>{'Your VIP has been activated automatically.' if status == 'paid' else 'Please complete your payment and try again.'}</p>
-<a class="btn" href="https://t.me/{state.get("bot_username", "telegram") if state else "telegram"}">Back to Bot</a>
+<p>{'Your payment was successful!' if status == 'paid' else 'Please complete your payment and try again.'}</p>
+<a class="btn" href="https://t.me/{bot_username_for_btn}">Back to Bot</a>
 </div></body></html>"""
         return web.Response(text=html, content_type='text/html')
     except Exception as e:
@@ -1406,61 +1570,98 @@ async def autopay_callback_handler(request: web.Request):
         if status == "paid" and user_id and bot_id:
             user_id_int = int(user_id)
             bot_id_int = int(bot_id)
+            bot_username = request.rel_url.query.get("bot_username", "telegram")
             
-            now = time.time()
-            if "day" in plan_duration.lower():
-                expiry = now + 86400
-            elif "week" in plan_duration.lower():
-                expiry = now + 86400 * 7
-            elif "month" in plan_duration.lower():
-                if "3" in plan_duration:
-                    expiry = now + 86400 * 30 * 3
-                elif "6" in plan_duration:
-                    expiry = now + 86400 * 30 * 6
+            # Check if this is a paid link payment
+            paid_link_state = await async_mongo_db.user_states.find_one(
+                {"bot_id": bot_id_int, "user_id": user_id_int, "state": "waiting_razorpay_paidlink"}
+            )
+            
+            if paid_link_state:
+                # Handle paid link unlock
+                payload = paid_link_state.get("payload", "")
+                amount_paid = paid_link_state.get("rzp_amount", 0)
+                
+                await async_mongo_db.paid_unlocks.update_one(
+                    {"bot_id": bot_id_int, "user_id": user_id_int, "payload": payload},
+                    {"$set": {"unlocked_at": time.time(), "paid_via": "razorpay", "amount": amount_paid}},
+                    upsert=True
+                )
+                
+                await async_mongo_db.user_states.delete_one({"bot_id": bot_id_int, "user_id": user_id_int, "state": "waiting_razorpay_paidlink"})
+                
+                deeplink = f"https://t.me/{bot_username}?start={payload}"
+                notify_text = (
+                    f"<b>🎉 Payment Successful! File Unlocked!</b>\n\n"
+                    f"✅ <b>Amount:</b> ₹{amount_paid}\n"
+                    f"✅ <b>File:</b> {payload}\n\n"
+                    f"👉 Click below to access your file:\n{deeplink}"
+                )
+                try:
+                    bot_client = running_clones.get(bot_id_int)
+                    if bot_client:
+                        await bot_client.send_message(chat_id=user_id_int, text=notify_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📁 Open File", url=deeplink)]]))
+                    else:
+                        from TechVJ.bot import StreamBot
+                        await StreamBot.send_message(chat_id=user_id_int, text=notify_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📁 Open File", url=deeplink)]]))
+                except Exception as e:
+                    logging.error(f"Failed to notify paid link user via autopay callback: {e}")
+            else:
+                # VIP plan subscription
+                now = time.time()
+                if "day" in plan_duration.lower():
+                    expiry = now + 86400
+                elif "week" in plan_duration.lower():
+                    expiry = now + 86400 * 7
+                elif "month" in plan_duration.lower():
+                    if "3" in plan_duration:
+                        expiry = now + 86400 * 30 * 3
+                    elif "6" in plan_duration:
+                        expiry = now + 86400 * 30 * 6
+                    else:
+                        expiry = now + 86400 * 30
                 else:
                     expiry = now + 86400 * 30
-            else:
-                expiry = now + 86400 * 30
 
-            await async_mongo_db.vip_users.update_one(
-                {"bot_id": bot_id_int, "user_id": user_id_int},
-                {"$set": {"expiry": expiry, "subscription_id": sub_id, "payment_method": "autopay", "plan_duration": plan_duration, "updated_at": now}},
-                upsert=True
-            )
-
-            app_user = await async_mongo_db.app_users.find_one({"telegram_id": str(user_id_int)})
-            if app_user:
-                linked_email = app_user.get("email", "")
-                if linked_email:
-                    await async_mongo_db.vip_users.update_one(
-                        {"email": linked_email},
-                        {"$set": {"expiry": expiry, "subscription_id": sub_id, "plan_duration": plan_duration}},
-                        upsert=True
-                    )
-                await async_mongo_db.app_users.update_one(
-                    {"telegram_id": str(user_id_int)},
-                    {"$set": {"is_vip": True}}
+                await async_mongo_db.vip_users.update_one(
+                    {"bot_id": bot_id_int, "user_id": user_id_int},
+                    {"$set": {"expiry": expiry, "subscription_id": sub_id, "payment_method": "autopay", "plan_duration": plan_duration, "updated_at": now}},
+                    upsert=True
                 )
 
-            await async_mongo_db.user_states.delete_one({"bot_id": bot_id_int, "user_id": user_id_int})
+                app_user = await async_mongo_db.app_users.find_one({"telegram_id": str(user_id_int)})
+                if app_user:
+                    linked_email = app_user.get("email", "")
+                    if linked_email:
+                        await async_mongo_db.vip_users.update_one(
+                            {"email": linked_email},
+                            {"$set": {"expiry": expiry, "subscription_id": sub_id, "plan_duration": plan_duration}},
+                            upsert=True
+                        )
+                    await async_mongo_db.app_users.update_one(
+                        {"telegram_id": str(user_id_int)},
+                        {"$set": {"is_vip": True}}
+                    )
 
-            from datetime import datetime
-            expiry_str = "Lifetime" if expiry is None else datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
-            msg_text = (
-                f"<b>🔄 Payment Setup Complete! VIP Activated!</b>\n\n"
-                f"✅ <b>Plan:</b> {plan_duration}\n"
-                f"✅ <b>VIP Expiry:</b> <code>{expiry_str}</code>\n\n"
-                f"You now bypass all verifications! 🚀"
-            )
-            try:
-                bot_client = running_clones.get(bot_id_int)
-                if bot_client:
-                    await bot_client.send_message(chat_id=user_id_int, text=msg_text)
-                else:
-                    from TechVJ.bot import StreamBot
-                    await StreamBot.send_message(chat_id=user_id_int, text=msg_text)
-            except Exception as e:
-                logging.error(f"Failed to notify autopay user: {e}")
+                await async_mongo_db.user_states.delete_one({"bot_id": bot_id_int, "user_id": user_id_int})
+
+                from datetime import datetime
+                expiry_str = "Lifetime" if expiry is None else datetime.fromtimestamp(expiry).strftime('%Y-%m-%d %H:%M:%S')
+                msg_text = (
+                    f"<b>🔄 Payment Setup Complete! VIP Activated!</b>\n\n"
+                    f"✅ <b>Plan:</b> {plan_duration}\n"
+                    f"✅ <b>VIP Expiry:</b> <code>{expiry_str}</code>\n\n"
+                    f"You now bypass all verifications! 🚀"
+                )
+                try:
+                    bot_client = running_clones.get(bot_id_int)
+                    if bot_client:
+                        await bot_client.send_message(chat_id=user_id_int, text=msg_text)
+                    else:
+                        from TechVJ.bot import StreamBot
+                        await StreamBot.send_message(chat_id=user_id_int, text=msg_text)
+                except Exception as e:
+                    logging.error(f"Failed to notify autopay user: {e}")
 
         html = f"""<!DOCTYPE html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -1475,7 +1676,7 @@ body{{font-family:Arial,sans-serif;text-align:center;margin-top:50px;background:
 <div class="card">
 <div class="{'success' if status == 'paid' else 'failed'}">{'✅' if status == 'paid' else '❌'}</div>
 <h2>{'Payment Successful!' if status == 'paid' else 'Payment Failed'}</h2>
-<p>{'Your VIP is now active.' if status == 'paid' else 'Please try again.'}</p>
+<p>{'Your payment was successful.' if status == 'paid' else 'Please try again.'}</p>
 <a class="btn" href="https://t.me/{request.rel_url.query.get('bot_username', 'telegram')}">Back to Bot</a>
 </div></body></html>"""
         return web.Response(text=html, content_type='text/html')
