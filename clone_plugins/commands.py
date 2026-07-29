@@ -3891,7 +3891,7 @@ async def add_paid_card_cmd_handler(client, message):
 
     sts = await message.reply_text("<b>⏳ Uploading photo...</b>")
 
-    photo = replied.photo[-1]
+    photo = replied.photo
     thumb_file = await client.download_media(photo.file_id)
     image_url, _ = await upload_image_via_main_bot(thumb_file)
     try:
@@ -4491,7 +4491,7 @@ async def clone_add_thumb_cmd_handler(client, message):
         # ── PHOTO MODE: thumbnail + resolve bot link → merge if BATCH → GDrive ──
         await sts.edit_text("<b>⏳ Uploading thumbnail and resolving video...</b>")
 
-        photo = replied.photo[-1]
+        photo = replied.photo
         thumb_file = await client.download_media(photo.file_id)
         if not thumb_file:
             return await sts.edit_text("<b>❌ Failed to download thumbnail.</b>")
@@ -4911,7 +4911,7 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
 
             elif msg.photo:
                 # ── PHOTO MODE: photo = thumbnail, resolve bot link → merge if BATCH → GDrive ──
-                photo = msg.photo[-1]
+                photo = msg.photo
                 thumb_file = await client.download_media(photo.file_id)
                 if not thumb_file:
                     skipped += 1
