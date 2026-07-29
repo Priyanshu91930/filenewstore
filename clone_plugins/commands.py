@@ -4535,7 +4535,7 @@ async def clone_add_thumb_cmd_handler(client, message):
                             if not cid or not mid:
                                 continue
                             vm = await client.get_messages(int(cid), int(mid))
-                            vmedia = (vm.video or vm.document) if vm else None
+                            vmedia = (vm.video or vm.animation or vm.document) if vm else None
                             if not vmedia:
                                 continue
                             fn = getattr(vmedia, "file_name", f"part_{len(dl_list)}_{int(time.time())}.mp4")
@@ -4622,7 +4622,7 @@ async def clone_add_thumb_cmd_handler(client, message):
                             if cid and mid:
                                 video_msg = await client.get_messages(int(cid), int(mid))
                     if video_msg:
-                        vid_media = video_msg.video or video_msg.document
+                        vid_media = video_msg.video or video_msg.animation or video_msg.document
                     if vid_media:
                         local_fn = getattr(vid_media, "file_name", f"video_{int(time.time())}.mp4")
                         local_path = os.path.join(temp_dir, local_fn)
@@ -4955,7 +4955,7 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                                     if not cid or not mid:
                                         continue
                                     vm = await client.get_messages(int(cid), int(mid))
-                                    vmedia = (vm.video or vm.document) if vm else None
+                                    vmedia = (vm.video or vm.animation or vm.document) if vm else None
                                     if not vmedia:
                                         continue
                                     fn = getattr(vmedia, "file_name", f"part_{len(dl_list)}_{int(time.time())}.mp4")
@@ -5041,7 +5041,7 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                                     if cid and mid:
                                         video_msg = await client.get_messages(int(cid), int(mid))
                             if video_msg:
-                                vid_media = video_msg.video or video_msg.document
+                                vid_media = video_msg.video or video_msg.animation or video_msg.document
                             if vid_media:
                                 local_fn = getattr(vid_media, "file_name", f"video_{int(time.time())}.mp4")
                                 local_path = os.path.join(temp_dir, local_fn)
