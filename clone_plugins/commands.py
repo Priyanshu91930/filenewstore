@@ -4488,8 +4488,8 @@ async def clone_add_thumb_cmd_handler(client, message):
         )
 
     elif replied.photo:
-        # ── PHOTO MODE: just thumbnail + link ──
-        await sts.edit_text("<b>⏳ Uploading thumbnail and adding post...</b>")
+        # ── PHOTO MODE: thumbnail + resolve bot link → merge if BATCH → GDrive ──
+        await sts.edit_text("<b>⏳ Uploading thumbnail and resolving video...</b>")
 
         photo = replied.photo[-1]
         thumb_file = await client.download_media(photo.file_id)
@@ -4505,26 +4505,203 @@ async def clone_add_thumb_cmd_handler(client, message):
         if not image_url or image_url.startswith("Error"):
             return await sts.edit_text(f"<b>❌ Thumbnail upload failed.</b>\n\n<code>{debug_info}</code>")
 
-        post_id = str(uuid.uuid4())[:8]
-        await mongo_db.posts.insert_one({
-            "_id": post_id,
+        # ── Resolve deeplink: single file or BATCH merge ──
+        gdrive_file_id = None
+        file_deeplink = deeplink
+        fmt_dur = "03:15"
+        thumb_gdrive_ids = []
+        duration = 0
+        clone_folder_id = bot_doc.get("gdrive_folder_id") if bot_doc else None
+
+        if deeplink.startswith("BATCH-"):
+            # ── BATCH MODE: merge all videos into one ──
+            try:
+                batch_b64 = deeplink.split("-", 1)[1]
+                batch_msg_id = int(base64.urlsafe_b64decode(batch_b64 + "=" * (-len(batch_b64) % 4)).decode("ascii"))
+                from config import LOG_CHANNEL
+                batch_msg = await client.get_messages(LOG_CHANNEL, batch_msg_id)
+                if batch_msg and batch_msg.document:
+                    batch_json_path = await client.download_media(batch_msg.document.file_id)
+                    if batch_json_path:
+                        with open(batch_json_path) as f:
+                            batch_entries = json.load(f)
+                        try:
+                            os.remove(batch_json_path)
+                        except:
+                            pass
+
+                        dl_list = []
+                        total_dur = 0
+                        for be in batch_entries:
+                            cid = be.get("channel_id")
+                            mid = be.get("msg_id")
+                            if not cid or not mid:
+                                continue
+                            vm = await client.get_messages(int(cid), int(mid))
+                            vmedia = (vm.video or vm.document) if vm else None
+                            if not vmedia:
+                                continue
+                            fn = getattr(vmedia, "file_name", f"part_{len(dl_list)}_{int(time.time())}.mp4")
+                            fp = os.path.join(temp_dir, fn)
+                            dp = await client.download_media(vmedia.file_id, file_name=fp)
+                            if dp and os.path.exists(dp):
+                                dl_list.append(dp)
+                                total_dur += getattr(vmedia, "duration", 0) or 0
+
+                        if len(dl_list) >= 1:
+                            merged_name = f"merged_{int(time.time())}.mp4"
+                            merged_path = os.path.join(temp_dir, merged_name)
+                            if len(dl_list) == 1:
+                                merged_path = dl_list[0]
+                            else:
+                                flist = os.path.join(temp_dir, f"flist_{int(time.time())}.txt")
+                                with open(flist, 'w') as f:
+                                    for p in dl_list:
+                                        f.write(f"file '{p}'\n")
+                                try:
+                                    subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', flist, '-c', 'copy', merged_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                                except:
+                                    subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', flist, '-c:v', 'libx264', '-c:a', 'aac', merged_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                                try:
+                                    os.remove(flist)
+                                except:
+                                    pass
+                                for p in dl_list:
+                                    try:
+                                        os.remove(p)
+                                    except:
+                                        pass
+
+                            if os.path.exists(merged_path):
+                                try:
+                                    probe = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', merged_path], capture_output=True, text=True)
+                                    dur_str = probe.stdout.strip()
+                                    if dur_str:
+                                        total_dur = float(dur_str)
+                                except:
+                                    pass
+
+                                duration = total_dur or 10
+
+                                # Frame extraction on merged
+                                offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
+                                for idx, offset in enumerate(offsets):
+                                    tn = f"thumb_{int(time.time())}_{idx}.jpg"
+                                    tp = os.path.join(temp_dir, tn)
+                                    try:
+                                        subprocess.run(['ffmpeg', '-y', '-ss', str(offset), '-i', merged_path, '-vframes', '1', '-q:v', '3', tp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                                        if os.path.exists(tp):
+                                            from gdrive_helper import upload_file_to_gdrive
+                                            tid, _ = upload_file_to_gdrive(tp, tn, parent_folder_id=clone_folder_id)
+                                            if tid:
+                                                thumb_gdrive_ids.append(tid)
+                                            try:
+                                                os.remove(tp)
+                                            except:
+                                                pass
+                                    except:
+                                        pass
+
+                                await sts.edit_text("<b>⏳ Uploading merged video to GDrive...</b>")
+                                from gdrive_helper import upload_file_to_gdrive
+                                gdrive_file_id, _ = upload_file_to_gdrive(merged_path, merged_name, parent_folder_id=clone_folder_id)
+                                try:
+                                    os.remove(merged_path)
+                                except:
+                                    pass
+
+                                if gdrive_file_id:
+                                    m2, s2 = int(duration // 60), int(duration % 60)
+                                    fmt_dur = f"{m2:02d}:{s2:02d}"
+                                    short_id2 = str(uuid.uuid4())[:8]
+                                    await mongo_db.clone_files.insert_one({
+                                        "_id": short_id2,
+                                        "bot_username": me.username,
+                                        "file_id": merged_name,
+                                        "file_size": 0,
+                                        "chat_id": message.chat.id,
+                                        "message_id": replied.id
+                                    })
+                                    file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
+            except:
+                pass
+
+        else:
+            # ── SINGLE FILE MODE ──
+            try:
+                decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
+                if decoded.startswith("file_"):
+                    ref_id = decoded.split("_", 1)[1]
+                    video_msg = None
+                    vid_media = None
+                    if ref_id.isdigit():
+                        from config import LOG_CHANNEL
+                        video_msg = await client.get_messages(LOG_CHANNEL, int(ref_id))
+                    else:
+                        fd = await mongo_db.clone_files.find_one({"_id": ref_id})
+                        if fd:
+                            cid = fd.get("chat_id")
+                            mid = fd.get("message_id")
+                            if cid and mid:
+                                video_msg = await client.get_messages(int(cid), int(mid))
+                    if video_msg:
+                        vid_media = video_msg.video or video_msg.document
+                    if vid_media:
+                        local_fn = getattr(vid_media, "file_name", f"video_{int(time.time())}.mp4")
+                        local_path = os.path.join(temp_dir, local_fn)
+                        dl = await client.download_media(message=vid_media.file_id, file_name=local_path)
+                        if dl and os.path.exists(dl):
+                            duration = getattr(vid_media, "duration", 10) or 10
+                            from gdrive_helper import upload_file_to_gdrive
+                            gdrive_file_id, _ = upload_file_to_gdrive(dl, local_fn, parent_folder_id=clone_folder_id)
+                            try:
+                                os.remove(dl)
+                            except:
+                                pass
+                            if gdrive_file_id:
+                                m2, s2 = int(duration // 60), int(duration % 60)
+                                fmt_dur = f"{m2:02d}:{s2:02d}"
+                                short_id2 = str(uuid.uuid4())[:8]
+                                await mongo_db.clone_files.insert_one({
+                                    "_id": short_id2,
+                                    "bot_username": me.username,
+                                    "file_id": vid_media.file_id,
+                                    "file_size": getattr(vid_media, "file_size", 0),
+                                    "chat_id": message.chat.id,
+                                    "message_id": replied.id
+                                })
+                                file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
+            except:
+                pass
+
+        post_doc = {
+            "_id": str(uuid.uuid4())[:8],
             "title": title,
             "image_url": image_url,
             "category": category,
-            "file_deeplink": deeplink,
+            "file_deeplink": file_deeplink,
             "bot_username": bot_username,
             "created_at": time.time(),
             "views": 10,
             "reactions": {"❤️": 5, "👍": 4, "🔥": 3, "💦": 5}
-        })
+        }
+        if gdrive_file_id:
+            post_doc["gdrive_file_id"] = gdrive_file_id
+            post_doc["is_gdrive"] = True
+            post_doc["duration"] = fmt_dur
+        if thumb_gdrive_ids:
+            post_doc["thumbnails"] = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
+
+        await mongo_db.posts.insert_one(post_doc)
 
         await sts.edit_text(
             f"<b>✅ Thumbnail post added to portal!</b>\n\n"
-            f"📋 <b>ID:</b> <code>{post_id}</code>\n"
+            f"📋 <b>ID:</b> <code>{post_doc['_id']}</code>\n"
             f"🎬 <b>Title:</b> {title}\n"
             f"📂 <b>Category:</b> {category}\n"
             f"🤖 <b>Bot:</b> @{bot_username or 'Default'}\n\n"
-            f"🟢 Mini App: opens bot link"
+            f"🟢 Mini App: opens bot link\n"
+            f"📱 App: {'streams video via GDrive' if gdrive_file_id else '—'}"
         )
     else:
         return await message.reply_text("<b>❌ Reply to a photo or video with caption containing bot link.</b>")
@@ -4758,7 +4935,7 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                 imported += 1
 
             elif msg.photo:
-                # ── PHOTO MODE: photo itself = thumbnail, resolve bot link → GDrive upload ──
+                # ── PHOTO MODE: photo = thumbnail, resolve bot link → merge if BATCH → GDrive ──
                 photo = msg.photo[-1]
                 thumb_file = await client.download_media(photo.file_id)
                 if not thumb_file:
@@ -4778,51 +4955,165 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                 gdrive_file_id = None
                 file_deeplink = deeplink
                 fmt_dur = "03:15"
-                try:
-                    decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
-                    if decoded.startswith("file_"):
-                        ref_id = decoded.split("_", 1)[1]
-                        video_msg = None
-                        vid_media = None
-                        if ref_id.isdigit():
-                            from config import LOG_CHANNEL
-                            video_msg = await client.get_messages(LOG_CHANNEL, int(ref_id))
-                        else:
-                            fd = await mongo_db.clone_files.find_one({"_id": ref_id})
-                            if fd:
-                                cid = fd.get("chat_id")
-                                mid = fd.get("message_id")
-                                if cid and mid:
-                                    video_msg = await client.get_messages(int(cid), int(mid))
-                        if video_msg:
-                            vid_media = video_msg.video or video_msg.document
-                        if vid_media:
-                            local_fn = getattr(vid_media, "file_name", f"video_{int(time.time())}.mp4")
-                            local_path = os.path.join(temp_dir, local_fn)
-                            dl = await client.download_media(message=vid_media.file_id, file_name=local_path)
-                            if dl and os.path.exists(dl):
-                                duration = getattr(vid_media, "duration", 10) or 10
-                                from gdrive_helper import upload_file_to_gdrive
-                                gdrive_file_id, _ = upload_file_to_gdrive(dl, local_fn, parent_folder_id=clone_folder_id)
+                thumb_gdrive_ids = []
+                duration = 0
+
+                if deeplink.startswith("BATCH-"):
+                    try:
+                        batch_b64 = deeplink.split("-", 1)[1]
+                        batch_msg_id = int(base64.urlsafe_b64decode(batch_b64 + "=" * (-len(batch_b64) % 4)).decode("ascii"))
+                        from config import LOG_CHANNEL
+                        batch_msg = await client.get_messages(LOG_CHANNEL, batch_msg_id)
+                        if batch_msg and batch_msg.document:
+                            batch_json_path = await client.download_media(batch_msg.document.file_id)
+                            if batch_json_path:
+                                with open(batch_json_path) as f:
+                                    batch_entries = json.load(f)
                                 try:
-                                    os.remove(dl)
+                                    os.remove(batch_json_path)
                                 except:
                                     pass
-                                if gdrive_file_id:
-                                    m2, s2 = int(duration // 60), int(duration % 60)
-                                    fmt_dur = f"{m2:02d}:{s2:02d}"
-                                    short_id2 = str(uuid.uuid4())[:8]
-                                    await mongo_db.clone_files.insert_one({
-                                        "_id": short_id2,
-                                        "bot_username": me.username,
-                                        "file_id": vid_media.file_id,
-                                        "file_size": getattr(vid_media, "file_size", 0),
-                                        "chat_id": msg.chat.id,
-                                        "message_id": msg.id
-                                    })
-                                    file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
-                except:
-                    pass
+
+                                dl_list = []
+                                total_dur = 0
+                                for be in batch_entries:
+                                    cid = be.get("channel_id")
+                                    mid = be.get("msg_id")
+                                    if not cid or not mid:
+                                        continue
+                                    vm = await client.get_messages(int(cid), int(mid))
+                                    vmedia = (vm.video or vm.document) if vm else None
+                                    if not vmedia:
+                                        continue
+                                    fn = getattr(vmedia, "file_name", f"part_{len(dl_list)}_{int(time.time())}.mp4")
+                                    fp = os.path.join(temp_dir, fn)
+                                    dp = await client.download_media(vmedia.file_id, file_name=fp)
+                                    if dp and os.path.exists(dp):
+                                        dl_list.append(dp)
+                                        total_dur += getattr(vmedia, "duration", 0) or 0
+
+                                if len(dl_list) >= 1:
+                                    merged_name = f"merged_{int(time.time())}.mp4"
+                                    merged_path = os.path.join(temp_dir, merged_name)
+                                    if len(dl_list) == 1:
+                                        merged_path = dl_list[0]
+                                    else:
+                                        flist = os.path.join(temp_dir, f"flist_{int(time.time())}.txt")
+                                        with open(flist, 'w') as f:
+                                            for p in dl_list:
+                                                f.write(f"file '{p}'\n")
+                                        try:
+                                            subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', flist, '-c', 'copy', merged_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                                        except:
+                                            subprocess.run(['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', flist, '-c:v', 'libx264', '-c:a', 'aac', merged_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                                        try:
+                                            os.remove(flist)
+                                        except:
+                                            pass
+                                        for p in dl_list:
+                                            try:
+                                                os.remove(p)
+                                            except:
+                                                pass
+
+                                    if os.path.exists(merged_path):
+                                        try:
+                                            probe = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', merged_path], capture_output=True, text=True)
+                                            dur_str = probe.stdout.strip()
+                                            if dur_str:
+                                                total_dur = float(dur_str)
+                                        except:
+                                            pass
+
+                                        duration = total_dur or 10
+
+                                        offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
+                                        for idx, offset in enumerate(offsets):
+                                            tn = f"thumb_{int(time.time())}_{idx}.jpg"
+                                            tp = os.path.join(temp_dir, tn)
+                                            try:
+                                                subprocess.run(['ffmpeg', '-y', '-ss', str(offset), '-i', merged_path, '-vframes', '1', '-q:v', '3', tp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                                                if os.path.exists(tp):
+                                                    from gdrive_helper import upload_file_to_gdrive
+                                                    tid, _ = upload_file_to_gdrive(tp, tn, parent_folder_id=clone_folder_id)
+                                                    if tid:
+                                                        thumb_gdrive_ids.append(tid)
+                                                    try:
+                                                        os.remove(tp)
+                                                    except:
+                                                        pass
+                                            except:
+                                                pass
+
+                                        from gdrive_helper import upload_file_to_gdrive
+                                        gdrive_file_id, _ = upload_file_to_gdrive(merged_path, merged_name, parent_folder_id=clone_folder_id)
+                                        try:
+                                            os.remove(merged_path)
+                                        except:
+                                            pass
+
+                                        if gdrive_file_id:
+                                            m2, s2 = int(duration // 60), int(duration % 60)
+                                            fmt_dur = f"{m2:02d}:{s2:02d}"
+                                            short_id2 = str(uuid.uuid4())[:8]
+                                            await mongo_db.clone_files.insert_one({
+                                                "_id": short_id2,
+                                                "bot_username": me.username,
+                                                "file_id": merged_name,
+                                                "file_size": 0,
+                                                "chat_id": msg.chat.id,
+                                                "message_id": msg.id
+                                            })
+                                            file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
+                    except:
+                        pass
+
+                else:
+                    try:
+                        decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
+                        if decoded.startswith("file_"):
+                            ref_id = decoded.split("_", 1)[1]
+                            video_msg = None
+                            vid_media = None
+                            if ref_id.isdigit():
+                                from config import LOG_CHANNEL
+                                video_msg = await client.get_messages(LOG_CHANNEL, int(ref_id))
+                            else:
+                                fd = await mongo_db.clone_files.find_one({"_id": ref_id})
+                                if fd:
+                                    cid = fd.get("chat_id")
+                                    mid = fd.get("message_id")
+                                    if cid and mid:
+                                        video_msg = await client.get_messages(int(cid), int(mid))
+                            if video_msg:
+                                vid_media = video_msg.video or video_msg.document
+                            if vid_media:
+                                local_fn = getattr(vid_media, "file_name", f"video_{int(time.time())}.mp4")
+                                local_path = os.path.join(temp_dir, local_fn)
+                                dl = await client.download_media(message=vid_media.file_id, file_name=local_path)
+                                if dl and os.path.exists(dl):
+                                    duration = getattr(vid_media, "duration", 10) or 10
+                                    from gdrive_helper import upload_file_to_gdrive
+                                    gdrive_file_id, _ = upload_file_to_gdrive(dl, local_fn, parent_folder_id=clone_folder_id)
+                                    try:
+                                        os.remove(dl)
+                                    except:
+                                        pass
+                                    if gdrive_file_id:
+                                        m2, s2 = int(duration // 60), int(duration % 60)
+                                        fmt_dur = f"{m2:02d}:{s2:02d}"
+                                        short_id2 = str(uuid.uuid4())[:8]
+                                        await mongo_db.clone_files.insert_one({
+                                            "_id": short_id2,
+                                            "bot_username": me.username,
+                                            "file_id": vid_media.file_id,
+                                            "file_size": getattr(vid_media, "file_size", 0),
+                                            "chat_id": msg.chat.id,
+                                            "message_id": msg.id
+                                        })
+                                        file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
+                    except:
+                        pass
 
                 post_doc = {
                     "_id": str(uuid.uuid4())[:8],
@@ -4839,6 +5130,8 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                     post_doc["gdrive_file_id"] = gdrive_file_id
                     post_doc["is_gdrive"] = True
                     post_doc["duration"] = fmt_dur
+                if thumb_gdrive_ids:
+                    post_doc["thumbnails"] = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
 
                 await mongo_db.posts.insert_one(post_doc)
                 imported += 1
