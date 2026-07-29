@@ -4509,12 +4509,9 @@ async def clone_add_thumb_cmd_handler(client, message):
         gdrive_file_id = None
         file_deeplink = deeplink
         fmt_dur = "03:15"
-        thumb_gdrive_ids = []
-        duration = 0
         clone_folder_id = bot_doc.get("gdrive_folder_id") if bot_doc else None
 
         if deeplink.startswith("BATCH-"):
-            # ── BATCH MODE: merge all videos into one ──
             try:
                 batch_b64 = deeplink.split("-", 1)[1]
                 batch_msg_id = int(base64.urlsafe_b64decode(batch_b64 + "=" * (-len(batch_b64) % 4)).decode("ascii"))
@@ -4583,25 +4580,6 @@ async def clone_add_thumb_cmd_handler(client, message):
 
                                 duration = total_dur or 10
 
-                                # Frame extraction on merged
-                                offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
-                                for idx, offset in enumerate(offsets):
-                                    tn = f"thumb_{int(time.time())}_{idx}.jpg"
-                                    tp = os.path.join(temp_dir, tn)
-                                    try:
-                                        subprocess.run(['ffmpeg', '-y', '-ss', str(offset), '-i', merged_path, '-vframes', '1', '-q:v', '3', tp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-                                        if os.path.exists(tp):
-                                            from gdrive_helper import upload_file_to_gdrive
-                                            tid, _ = upload_file_to_gdrive(tp, tn, parent_folder_id=clone_folder_id)
-                                            if tid:
-                                                thumb_gdrive_ids.append(tid)
-                                            try:
-                                                os.remove(tp)
-                                            except:
-                                                pass
-                                    except:
-                                        pass
-
                                 await sts.edit_text("<b>⏳ Uploading merged video to GDrive...</b>")
                                 from gdrive_helper import upload_file_to_gdrive
                                 gdrive_file_id, _ = upload_file_to_gdrive(merged_path, merged_name, parent_folder_id=clone_folder_id)
@@ -4627,7 +4605,6 @@ async def clone_add_thumb_cmd_handler(client, message):
                 pass
 
         else:
-            # ── SINGLE FILE MODE ──
             try:
                 decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
                 if decoded.startswith("file_"):
@@ -4689,8 +4666,6 @@ async def clone_add_thumb_cmd_handler(client, message):
             post_doc["gdrive_file_id"] = gdrive_file_id
             post_doc["is_gdrive"] = True
             post_doc["duration"] = fmt_dur
-        if thumb_gdrive_ids:
-            post_doc["thumbnails"] = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
 
         await mongo_db.posts.insert_one(post_doc)
 
@@ -4955,8 +4930,6 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                 gdrive_file_id = None
                 file_deeplink = deeplink
                 fmt_dur = "03:15"
-                thumb_gdrive_ids = []
-                duration = 0
 
                 if deeplink.startswith("BATCH-"):
                     try:
@@ -5026,24 +4999,6 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                                             pass
 
                                         duration = total_dur or 10
-
-                                        offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
-                                        for idx, offset in enumerate(offsets):
-                                            tn = f"thumb_{int(time.time())}_{idx}.jpg"
-                                            tp = os.path.join(temp_dir, tn)
-                                            try:
-                                                subprocess.run(['ffmpeg', '-y', '-ss', str(offset), '-i', merged_path, '-vframes', '1', '-q:v', '3', tp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-                                                if os.path.exists(tp):
-                                                    from gdrive_helper import upload_file_to_gdrive
-                                                    tid, _ = upload_file_to_gdrive(tp, tn, parent_folder_id=clone_folder_id)
-                                                    if tid:
-                                                        thumb_gdrive_ids.append(tid)
-                                                    try:
-                                                        os.remove(tp)
-                                                    except:
-                                                        pass
-                                            except:
-                                                pass
 
                                         from gdrive_helper import upload_file_to_gdrive
                                         gdrive_file_id, _ = upload_file_to_gdrive(merged_path, merged_name, parent_folder_id=clone_folder_id)
@@ -5130,8 +5085,6 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                     post_doc["gdrive_file_id"] = gdrive_file_id
                     post_doc["is_gdrive"] = True
                     post_doc["duration"] = fmt_dur
-                if thumb_gdrive_ids:
-                    post_doc["thumbnails"] = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
 
                 await mongo_db.posts.insert_one(post_doc)
                 imported += 1
