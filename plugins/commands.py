@@ -4050,6 +4050,546 @@ async def add_post_cmd_handler(client, message):
     await message.reply_text(f"<b>✅ Post added successfully!\n\nID: <code>{post_id}</code>\nTitle: {title}\nCategory: {category}\nBot Username: {bot_username or 'Default'}</b>")
 
 
+@Client.on_message(filters.command("addthumb") & filters.private & filters.user(ADMINS))
+async def add_thumb_cmd_handler(client, message):
+    replied = message.reply_to_message
+    if not replied:
+        return await message.reply_text(
+            "<b>📸 Usage (Photo):</b> Reply to a photo with caption containing bot link.\n"
+            "<b>🎬 Usage (Video):</b> Reply to a video with caption — auto GDrive upload.\n\n"
+            "<code>/addthumb [Category]</code>\n\n"
+            "Caption must contain <code>https://t.me/bot?start=PAYLOAD</code> link."
+        )
+
+    if not replied.caption:
+        return await message.reply_text("<b>❌ The replied message must have a caption with bot link.</b>")
+
+    import re
+    import uuid
+    import time
+    import os
+    import asyncio
+    import base64
+    from urllib.parse import quote_plus
+
+    bot_username = None
+    bot_match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)\?start=([A-Za-z0-9_-]+)", replied.caption)
+    if bot_match:
+        bot_username = bot_match.group(1)
+        deeplink = bot_match.group(2)
+    else:
+        links = re.findall(r"start=([A-Za-z0-9_-]+)", replied.caption)
+        if not links:
+            links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", replied.caption)
+        if not links:
+            return await message.reply_text("<b>❌ Could not find a bot start link (payload) in the caption.</b>")
+        deeplink = links[0]
+
+    lines = [l.strip() for l in replied.caption.split('\n') if l.strip()]
+    title = lines[0] if lines else "Untitled"
+    title = re.sub(r'<[^>]+>', '', title)
+    title = re.sub(r'[*_`~]', '', title).strip()
+
+    category = "General"
+    if len(message.command) > 1:
+        category = message.text.split(" ", 1)[1].strip()
+    else:
+        for line in lines:
+            if line.lower().startswith("category:") or line.lower().startswith("genre:"):
+                parsed_cat = line.split(":", 1)[1].strip()
+                parsed_cat = re.sub(r'<[^>]+>', '', parsed_cat).strip()
+                if parsed_cat:
+                    category = parsed_cat
+                    break
+
+    media = replied.video or replied.document
+    is_video = media is not None
+
+    sts = await message.reply_text("<b>⏳ Processing...</b>")
+
+    if is_video:
+        # ── VIDEO MODE: GDrive upload + frame extraction + bot link ──
+        image_url = None
+        if media.thumbs:
+            try:
+                thumb_file = await client.download_media(media.thumbs[0].file_id)
+                if thumb_file:
+                    image_url, _ = await upload_image(client, replied)
+                    try:
+                        os.remove(thumb_file)
+                    except:
+                        pass
+            except Exception as e:
+                logger.error(f"Thumb extraction error: {e}")
+
+        if not image_url:
+            image_url = "https://graph.org/file/6a869326b7756a622bd48-6213fc97b75f7bfb30.jpg"
+
+        await sts.edit_text("<b>⏳ Downloading video from Telegram...</b>")
+
+        temp_dir = "scratch/temp_upload"
+        os.makedirs(temp_dir, exist_ok=True)
+        local_filename = getattr(media, "file_name", f"video_{int(time.time())}.mp4")
+        local_path = os.path.join(temp_dir, local_filename)
+
+        class PS:
+            last_update = 0
+        ps = PS()
+
+        async def prog(cur, tot):
+            now = time.time()
+            if now - ps.last_update < 4:
+                return
+            ps.last_update = now
+            if not tot:
+                return
+            pct = (cur / tot) * 100
+            try:
+                await sts.edit_text(f"<b>⏳ Downloading video...</b>\n<code>[{'●' * int(pct // 10)}{'○' * (10 - int(pct // 10))}] {pct:.1f}%</code>")
+            except:
+                pass
+
+        try:
+            dl = await client.download_media(message=media.file_id, file_name=local_path, progress=prog)
+        except Exception as e:
+            return await sts.edit_text(f"<b>❌ Download Failed:</b>\n<code>{e}</code>")
+
+        if not dl or not os.path.exists(dl):
+            return await sts.edit_text("<b>❌ Download failed.</b>")
+
+        # Frame extraction
+        duration = getattr(media, "duration", 10) or 10
+        offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
+        thumb_gdrive_ids = []
+        import subprocess
+        for idx, offset in enumerate(offsets):
+            tn = f"thumb_{int(time.time())}_{idx}.jpg"
+            tp = os.path.join(temp_dir, tn)
+            try:
+                subprocess.run(['ffmpeg', '-y', '-ss', str(offset), '-i', dl, '-vframes', '1', '-q:v', '3', tp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                if os.path.exists(tp):
+                    tid, _ = upload_file_to_gdrive(tp, tn)
+                    if tid:
+                        thumb_gdrive_ids.append(tid)
+                    try:
+                        os.remove(tp)
+                    except:
+                        pass
+            except:
+                pass
+
+        await sts.edit_text("<b>⏳ Uploading video to Google Drive...</b>")
+
+        from gdrive_helper import upload_file_to_gdrive
+        gdrive_file_id, masked_name = upload_file_to_gdrive(dl, local_filename)
+        try:
+            os.remove(dl)
+        except:
+            pass
+
+        if not gdrive_file_id:
+            return await sts.edit_text(f"<b>❌ GDrive Upload Failed.</b>")
+
+        # Create clone_files entry for bot deeplink
+        file_deeplink = ""
+        try:
+            short_id = str(uuid.uuid4())[:8]
+            await clone_mongo_db.clone_files.insert_one({
+                "_id": short_id,
+                "bot_username": client.me.username,
+                "file_id": media.file_id,
+                "file_size": getattr(media, "file_size", 0),
+                "chat_id": message.chat.id,
+                "message_id": replied.id
+            })
+            file_deeplink = base64.urlsafe_b64encode(f"file_{short_id}".encode()).decode().rstrip("=")
+        except Exception as e:
+            logger.error(f"clone_files deeplink error: {e}")
+            file_deeplink = deeplink
+
+        thumb_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
+        default_thumb = thumb_urls[0] if thumb_urls else image_url
+
+        fmt_dur = "03:15"
+        if duration:
+            m, s = int(duration // 60), int(duration % 60)
+            fmt_dur = f"{m:02d}:{s:02d}"
+
+        post_id = str(uuid.uuid4())[:8]
+        await clone_mongo_db.posts.insert_one({
+            "_id": post_id,
+            "title": title,
+            "image_url": default_thumb,
+            "thumbnails": thumb_urls,
+            "category": category,
+            "duration": fmt_dur,
+            "gdrive_file_id": gdrive_file_id,
+            "file_deeplink": file_deeplink,
+            "is_gdrive": True,
+            "bot_username": bot_username or client.me.username,
+            "created_at": time.time(),
+            "views": 0,
+            "reactions": {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}
+        })
+
+        await sts.edit_text(
+            f"<b>✅ Video synced to portal + app!</b>\n\n"
+            f"📋 <b>ID:</b> <code>{post_id}</code>\n"
+            f"🎬 <b>Title:</b> {title}\n"
+            f"📂 <b>Category:</b> {category}\n\n"
+            f"🟢 <b>Mini App:</b> opens bot link\n"
+            f"📱 <b>App:</b> streams video via GDrive\n"
+            f"🔑 <b>GDrive ID:</b> <code>{gdrive_file_id}</code>"
+        )
+
+    elif replied.photo:
+        # ── PHOTO MODE: just thumbnail + link ──
+        await sts.edit_text("<b>⏳ Uploading thumbnail and adding post...</b>")
+
+        image_url, debug_info = await upload_image(client, replied)
+        if not image_url:
+            return await sts.edit_text(f"<b>❌ Thumbnail upload failed.</b>\n\n<code>{debug_info}</code>")
+
+        post_id = str(uuid.uuid4())[:8]
+        await clone_mongo_db.posts.insert_one({
+            "_id": post_id,
+            "title": title,
+            "image_url": image_url,
+            "category": category,
+            "file_deeplink": deeplink,
+            "bot_username": bot_username,
+            "created_at": time.time(),
+            "views": 10,
+            "reactions": {"❤️": 5, "👍": 4, "🔥": 3, "💦": 5}
+        })
+
+        await sts.edit_text(
+            f"<b>✅ Thumbnail post added to portal!</b>\n\n"
+            f"📋 <b>ID:</b> <code>{post_id}</code>\n"
+            f"🎬 <b>Title:</b> {title}\n"
+            f"📂 <b>Category:</b> {category}\n"
+            f"🤖 <b>Bot:</b> @{bot_username or 'Default'}\n\n"
+            f"🟢 Mini App: opens bot link"
+        )
+    else:
+        return await message.reply_text("<b>❌ Reply to a photo or video with caption containing bot link.</b>")
+
+
+@Client.on_message(filters.command("bulkaddthumb") & filters.private & filters.user(ADMINS))
+async def bulk_add_thumb_cmd_handler(client, message):
+    import re
+    import uuid
+    import time
+    import os
+    import base64
+    import subprocess
+
+    chat_id = None
+    start_msg_id = None
+    end_msg_id = None
+    default_category = "General"
+
+    try:
+        first_prompt = await client.ask(
+            message.chat.id,
+            "<b>Forward the FIRST message (photo/video with caption + link) from the channel, or paste its link.</b>\n\nType <code>/cancel</code> to abort."
+        )
+        if first_prompt.text == "/cancel":
+            return await message.reply_text("<b>❌ Cancelled.</b>")
+
+        if first_prompt.forward_from_chat:
+            chat_id = first_prompt.forward_from_chat.id
+            start_msg_id = first_prompt.forward_from_message_id
+        elif first_prompt.text:
+            link_match = re.search(r"t\.me/(?:c/)?([a-zA-Z0-9_-]+)/(\d+)", first_prompt.text)
+            if link_match:
+                chat_id = link_match.group(1)
+                if chat_id.isdigit():
+                    chat_id = int("-100" + chat_id)
+                start_msg_id = int(link_match.group(2))
+            elif first_prompt.text.isdigit():
+                start_msg_id = int(first_prompt.text)
+
+        if not start_msg_id:
+            return await message.reply_text("<b>❌ Invalid first message.</b>")
+
+        last_prompt = await client.ask(
+            message.chat.id,
+            "<b>Forward the LAST message from the channel, or paste its link.</b>\n\nType <code>/cancel</code> to abort."
+        )
+        if last_prompt.text == "/cancel":
+            return await message.reply_text("<b>❌ Cancelled.</b>")
+
+        if last_prompt.forward_from_chat:
+            end_msg_id = last_prompt.forward_from_message_id
+            if not chat_id:
+                chat_id = last_prompt.forward_from_chat.id
+        elif last_prompt.text:
+            link_match = re.search(r"t\.me/(?:c/)?([a-zA-Z0-9_-]+)/(\d+)", last_prompt.text)
+            if link_match:
+                end_msg_id = int(link_match.group(2))
+            elif last_prompt.text.isdigit():
+                end_msg_id = int(last_prompt.text)
+
+        if not end_msg_id:
+            return await message.reply_text("<b>❌ Invalid last message.</b>")
+
+        if not chat_id:
+            chat_prompt = await client.ask(message.chat.id, "<b>Send the Channel Username or ID:</b>")
+            chat_id = chat_prompt.text.strip()
+            if chat_id.isdigit() or chat_id.startswith("-100"):
+                chat_id = int(chat_id)
+
+        cat_prompt = await client.ask(
+            message.chat.id,
+            "<b>Default category? Send name or <code>/skip</code> for 'General':</b>"
+        )
+        default_category = cat_prompt.text.strip() if cat_prompt.text != "/skip" else "General"
+
+    except Exception as e:
+        return await message.reply_text(f"<b>❌ Error: {e}</b>")
+
+    sts = await message.reply_text("<b>⏳ Importing posts to portal...</b>")
+    imported = 0
+    skipped = 0
+    temp_dir = "scratch/temp_upload"
+    os.makedirs(temp_dir, exist_ok=True)
+
+    for msg_id in range(start_msg_id, end_msg_id + 1):
+        try:
+            msg = await client.get_messages(chat_id, msg_id)
+            if not msg or msg.empty or not msg.caption:
+                skipped += 1
+                continue
+
+            bot_username = None
+            bot_match = re.search(r"https?://t\.me/([A-Za-z0-9_]+)\?start=([A-Za-z0-9_-]+)", msg.caption)
+            if bot_match:
+                bot_username = bot_match.group(1)
+                deeplink = bot_match.group(2)
+            else:
+                links = re.findall(r"start=([A-Za-z0-9_-]+)", msg.caption)
+                if not links:
+                    links = re.findall(r"https?://t\.me/[A-Za-z0-9_]+\?start=([A-Za-z0-9_-]+)", msg.caption)
+                if not links:
+                    skipped += 1
+                    continue
+                deeplink = links[0]
+
+            lines = [l.strip() for l in msg.caption.split('\n') if l.strip()]
+            title = lines[0] if lines else "Untitled"
+            title = re.sub(r'<[^>]+>', '', title)
+            title = re.sub(r'[*_`~]', '', title).strip()
+
+            category = default_category
+            for line in lines:
+                if line.lower().startswith("category:") or line.lower().startswith("genre:"):
+                    parsed_cat = line.split(":", 1)[1].strip()
+                    parsed_cat = re.sub(r'<[^>]+>', '', parsed_cat).strip()
+                    if parsed_cat:
+                        category = parsed_cat
+                        break
+
+            media = msg.video or msg.document
+            is_video = media is not None
+
+            if is_video and media:
+                # ── VIDEO MODE: GDrive upload ──
+                image_url = None
+                if media.thumbs:
+                    try:
+                        thumb_file = await client.download_media(media.thumbs[0].file_id)
+                        if thumb_file:
+                            image_url, _ = await upload_image(client, msg)
+                            try:
+                                os.remove(thumb_file)
+                            except:
+                                pass
+                    except:
+                        pass
+                if not image_url:
+                    image_url = "https://graph.org/file/6a869326b7756a622bd48-6213fc97b75f7bfb30.jpg"
+
+                for attempt in range(3):
+                    try:
+                        await sts.edit_text(f"<b>⏳ [{imported+1}] Downloading video: {title[:30]}...</b>")
+                        break
+                    except:
+                        break
+
+                local_fn = getattr(media, "file_name", f"video_{int(time.time())}.mp4")
+                local_path = os.path.join(temp_dir, local_fn)
+                try:
+                    dl = await client.download_media(message=media.file_id, file_name=local_path)
+                except:
+                    skipped += 1
+                    continue
+                if not dl or not os.path.exists(dl):
+                    skipped += 1
+                    continue
+
+                # Frame extraction
+                duration = getattr(media, "duration", 10) or 10
+                offsets = [max(1, int(duration * p)) for p in [0.1, 0.35, 0.6, 0.85]]
+                thumb_gdrive_ids = []
+                for idx, offset in enumerate(offsets):
+                    tn = f"thumb_{int(time.time())}_{idx}.jpg"
+                    tp = os.path.join(temp_dir, tn)
+                    try:
+                        subprocess.run(['ffmpeg', '-y', '-ss', str(offset), '-i', dl, '-vframes', '1', '-q:v', '3', tp], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                        if os.path.exists(tp):
+                            from gdrive_helper import upload_file_to_gdrive
+                            tid, _ = upload_file_to_gdrive(tp, tn)
+                            if tid:
+                                thumb_gdrive_ids.append(tid)
+                            try:
+                                os.remove(tp)
+                            except:
+                                pass
+                    except:
+                        pass
+
+                from gdrive_helper import upload_file_to_gdrive
+                gdrive_file_id, masked_name = upload_file_to_gdrive(dl, local_fn)
+                try:
+                    os.remove(dl)
+                except:
+                    pass
+
+                if not gdrive_file_id:
+                    skipped += 1
+                    continue
+
+                file_deeplink = ""
+                try:
+                    short_id = str(uuid.uuid4())[:8]
+                    await clone_mongo_db.clone_files.insert_one({
+                        "_id": short_id,
+                        "bot_username": client.me.username,
+                        "file_id": media.file_id,
+                        "file_size": getattr(media, "file_size", 0),
+                        "chat_id": msg.chat.id,
+                        "message_id": msg.id
+                    })
+                    file_deeplink = base64.urlsafe_b64encode(f"file_{short_id}".encode()).decode().rstrip("=")
+                except:
+                    file_deeplink = deeplink
+
+                thumb_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
+                default_thumb = thumb_urls[0] if thumb_urls else image_url
+                fmt_dur = "03:15"
+                if duration:
+                    m, s = int(duration // 60), int(duration % 60)
+                    fmt_dur = f"{m:02d}:{s:02d}"
+
+                await clone_mongo_db.posts.insert_one({
+                    "_id": str(uuid.uuid4())[:8],
+                    "title": title,
+                    "image_url": default_thumb,
+                    "thumbnails": thumb_urls,
+                    "category": category,
+                    "duration": fmt_dur,
+                    "gdrive_file_id": gdrive_file_id,
+                    "file_deeplink": file_deeplink,
+                    "is_gdrive": True,
+                    "bot_username": bot_username or client.me.username,
+                    "created_at": time.time(),
+                    "views": 0,
+                    "reactions": {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}
+                })
+                imported += 1
+
+            elif msg.photo:
+                # ── PHOTO MODE: photo itself = thumbnail, resolve bot link → GDrive upload ──
+                image_url, _ = await upload_image(client, msg)
+                if not image_url:
+                    skipped += 1
+                    continue
+
+                gdrive_file_id = None
+                file_deeplink = deeplink
+                fmt_dur = "03:15"
+                try:
+                    decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
+                    if decoded.startswith("file_"):
+                        ref_id = decoded.split("_", 1)[1]
+                        video_msg = None
+                        vid_media = None
+                        if ref_id.isdigit():
+                            video_msg = await client.get_messages(LOG_CHANNEL, int(ref_id))
+                        else:
+                            fd = await clone_mongo_db.clone_files.find_one({"_id": ref_id})
+                            if fd:
+                                cid = fd.get("chat_id")
+                                mid = fd.get("message_id")
+                                if cid and mid:
+                                    video_msg = await client.get_messages(int(cid), int(mid))
+                        if video_msg:
+                            vid_media = video_msg.video or video_msg.document
+                        if vid_media:
+                            local_fn = getattr(vid_media, "file_name", f"video_{int(time.time())}.mp4")
+                            local_path = os.path.join(temp_dir, local_fn)
+                            dl = await client.download_media(message=vid_media.file_id, file_name=local_path)
+                            if dl and os.path.exists(dl):
+                                duration = getattr(vid_media, "duration", 10) or 10
+                                from gdrive_helper import upload_file_to_gdrive
+                                gdrive_file_id, _ = upload_file_to_gdrive(dl, local_fn)
+                                try:
+                                    os.remove(dl)
+                                except:
+                                    pass
+                                if gdrive_file_id:
+                                    m2, s2 = int(duration // 60), int(duration % 60)
+                                    fmt_dur = f"{m2:02d}:{s2:02d}"
+                                    short_id2 = str(uuid.uuid4())[:8]
+                                    await clone_mongo_db.clone_files.insert_one({
+                                        "_id": short_id2,
+                                        "bot_username": client.me.username,
+                                        "file_id": vid_media.file_id,
+                                        "file_size": getattr(vid_media, "file_size", 0),
+                                        "chat_id": msg.chat.id,
+                                        "message_id": msg.id
+                                    })
+                                    file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
+                except:
+                    pass
+
+                post_doc = {
+                    "_id": str(uuid.uuid4())[:8],
+                    "title": title,
+                    "image_url": image_url,
+                    "category": category,
+                    "file_deeplink": file_deeplink,
+                    "bot_username": bot_username,
+                    "created_at": time.time(),
+                    "views": 10,
+                    "reactions": {"❤️": 5, "👍": 4, "🔥": 3, "💦": 5}
+                }
+                if gdrive_file_id:
+                    post_doc["gdrive_file_id"] = gdrive_file_id
+                    post_doc["is_gdrive"] = True
+                    post_doc["duration"] = fmt_dur
+
+                await clone_mongo_db.posts.insert_one(post_doc)
+                imported += 1
+            else:
+                skipped += 1
+                continue
+
+            await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"BulkAddThumb error msg {msg_id}: {e}")
+            skipped += 1
+
+    await sts.edit_text(
+        f"<b>✅ Bulk Import Complete!</b>\n\n"
+        f"📥 Imported: <code>{imported}</code> posts\n"
+        f"🚫 Skipped: <code>{skipped}</code> messages\n\n"
+        f"🟢 <b>Mini App:</b> opens bot links\n"
+        f"📱 <b>App:</b> {'streams video via GDrive' if imported > 0 else '—'}"
+    )
+
+
 @Client.on_message(filters.command("upload_gdrive") & filters.private & filters.user(ADMINS))
 async def upload_gdrive_cmd_handler(client, message):
     replied = message.reply_to_message
