@@ -4107,6 +4107,9 @@ async def add_thumb_cmd_handler(client, message):
 
     sts = await message.reply_text("<b>⏳ Processing...</b>")
 
+    temp_dir = "scratch/temp_upload"
+    os.makedirs(temp_dir, exist_ok=True)
+
     if is_video:
         # ── VIDEO MODE: GDrive upload + frame extraction + bot link ──
         image_url = None
@@ -4127,8 +4130,6 @@ async def add_thumb_cmd_handler(client, message):
 
         await sts.edit_text("<b>⏳ Downloading video from Telegram...</b>")
 
-        temp_dir = "scratch/temp_upload"
-        os.makedirs(temp_dir, exist_ok=True)
         local_filename = getattr(media, "file_name", f"video_{int(time.time())}.mp4")
         local_path = os.path.join(temp_dir, local_filename)
 
@@ -4348,9 +4349,8 @@ async def add_thumb_cmd_handler(client, message):
                                         "message_id": replied.id
                                     })
                                     file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
-            except:
-                pass
-
+            except Exception as e:
+                logger.exception("Error during BATCH merge")
         else:
             try:
                 decoded = base64.urlsafe_b64decode(deeplink + "=" * (-len(deeplink) % 4)).decode("ascii")
@@ -4396,8 +4396,8 @@ async def add_thumb_cmd_handler(client, message):
                                     "message_id": replied.id
                                 })
                                 file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
-            except:
-                pass
+            except Exception as e:
+                logger.exception("Error during single file download")
 
         post_doc = {
             "_id": str(uuid.uuid4())[:8],
