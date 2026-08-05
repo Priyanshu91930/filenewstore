@@ -4208,7 +4208,7 @@ async def add_thumb_cmd_handler(client, message):
             logger.error(f"clone_files deeplink error: {e}")
             file_deeplink = deeplink
 
-        thumb_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
+        thumb_urls = [f"{CLOUDFLARE_WORKER_URL}/stream?fileId={tid}" for tid in thumb_gdrive_ids]
         default_thumb = thumb_urls[0] if thumb_urls else image_url
 
         fmt_dur = "03:15"
@@ -4630,7 +4630,7 @@ async def bulk_add_thumb_cmd_handler(client, message):
                 except:
                     file_deeplink = deeplink
 
-                thumb_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
+                thumb_urls = [f"{CLOUDFLARE_WORKER_URL}/stream?fileId={tid}" for tid in thumb_gdrive_ids]
                 default_thumb = thumb_urls[0] if thumb_urls else image_url
                 fmt_dur = "03:15"
                 if duration:
@@ -5010,7 +5010,7 @@ async def upload_gdrive_cmd_handler(client, message):
         logger.error(f"Failed to create clone_files entry for deeplink: {e}")
 
     # 6. Insert into MongoDB collection
-    thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
+    thumbnails_urls = [f"{CLOUDFLARE_WORKER_URL}/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
     default_thumb = thumbnails_urls[0] if thumbnails_urls else image_url
 
     # Keep chosen category

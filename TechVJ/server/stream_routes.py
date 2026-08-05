@@ -17,7 +17,7 @@ from TechVJ import StartTime, __version__
 from ..utils.time_format import get_readable_time
 from ..utils.custom_dl import ByteStreamer
 from TechVJ.utils.render_template import render_page
-from config import MULTI_CLIENT
+from config import MULTI_CLIENT, CLOUDFLARE_WORKER_URL
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
@@ -538,7 +538,7 @@ async def portal_data_route_handler(request: web.Request):
                 'caption': doc.get('caption', doc.get('title', '')),
                 'is_gdrive': bool(doc.get('is_gdrive', False)),
                 'duration': doc.get('duration', '03:15'),
-                'stream_url': f"https://appvideo.solankipriyanshu94.workers.dev/video.mp4?fileId={doc.get('gdrive_file_id', '')}" if doc.get('gdrive_file_id') else '',
+                'stream_url': f"{CLOUDFLARE_WORKER_URL}/video.mp4?fileId={doc.get('gdrive_file_id', '')}" if doc.get('gdrive_file_id') else '',
                 'thumbnails': [_normalize_image_url(t) for t in doc.get('thumbnails', [])] if doc.get('thumbnails') else [_normalize_image_url(doc.get('image_url', ''))]
             })
 
@@ -654,7 +654,7 @@ async def api_check_vip_route_handler(request: web.Request):
 
 # ─── GDrive Video Feed (for React Native App) ────────────────────────────────
 
-CLOUDFLARE_WORKER_URL = "https://appvideo.solankipriyanshu94.workers.dev"
+# CLOUDFLARE_WORKER_URL imported from config
 
 def _normalize_image_url(url_str):
     if not url_str:

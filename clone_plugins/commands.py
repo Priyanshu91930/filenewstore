@@ -14,7 +14,7 @@ from clone_plugins.genlink import _ask
 from pyrogram import Client, filters, enums
 from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait, UserNotParticipant
-from config import BOT_USERNAME, ADMINS, LOG_CHANNEL, PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL
+from config import BOT_USERNAME, ADMINS, LOG_CHANNEL, PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL, CLOUDFLARE_WORKER_URL
 from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT, MongoDict, consume_tma_link, get_tma_cooldown_remaining, schedule_tma_renewal_msg
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto, WebAppInfo
 import re
@@ -3820,7 +3820,7 @@ async def clone_upload_gdrive_cmd_handler(client, message):
         logger.error(f"Failed to create clone_files entry for deeplink: {e}")
 
     # Build thumbnails URLs list
-    thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
+    thumbnails_urls = [f"{CLOUDFLARE_WORKER_URL}/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
     default_thumb = thumbnails_urls[0] if thumbnails_urls else image_url
 
     # Keep chosen category
@@ -4146,7 +4146,7 @@ Processed before cancellation: <code>{success_count + fail_count}/{total_posts}<
                     logger.error(f"Error migrating single file {post_id}: {e}")
 
             if gdrive_ids:
-                thumbnails_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
+                thumbnails_urls = [f"{CLOUDFLARE_WORKER_URL}/stream?fileId={tid}" for tid in thumbnail_gdrive_ids]
                 
                 update_fields = {
                     "is_gdrive": True,
@@ -4452,7 +4452,7 @@ async def clone_add_thumb_cmd_handler(client, message):
             logger.error(f"clone_files deeplink error: {e}")
             file_deeplink = deeplink
 
-        thumb_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
+        thumb_urls = [f"{CLOUDFLARE_WORKER_URL}/stream?fileId={tid}" for tid in thumb_gdrive_ids]
         default_thumb = thumb_urls[0] if thumb_urls else image_url
 
         fmt_dur = "03:15"
@@ -4885,7 +4885,7 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                 except:
                     file_deeplink = deeplink
 
-                thumb_urls = [f"https://appvideo.solankipriyanshu94.workers.dev/stream?fileId={tid}" for tid in thumb_gdrive_ids]
+                thumb_urls = [f"{CLOUDFLARE_WORKER_URL}/stream?fileId={tid}" for tid in thumb_gdrive_ids]
                 default_thumb = thumb_urls[0] if thumb_urls else image_url
                 fmt_dur = "03:15"
                 if duration:

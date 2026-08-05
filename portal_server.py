@@ -20,15 +20,15 @@ from google.oauth2.credentials import Credentials
 
 # ─── Config ─────────────────────────────────────────────────────────────────
 try:
-    from config import GDRIVE_FOLDER_ID, GDRIVE_SERVICE_ACCOUNT_FILE
+    from config import GDRIVE_FOLDER_ID, GDRIVE_SERVICE_ACCOUNT_FILE, CLOUDFLARE_WORKER_URL
 except ImportError:
     GDRIVE_FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "")
     GDRIVE_SERVICE_ACCOUNT_FILE = os.environ.get("GDRIVE_SERVICE_ACCOUNT_FILE", "service_account.json")
+    CLOUDFLARE_WORKER_URL = os.environ.get(
+        "CLOUDFLARE_WORKER_URL",
+        "https://appvideo.solankipriyanshu94.workers.dev"
+    )
 
-CLOUDFLARE_WORKER_URL = os.environ.get(
-    "CLOUDFLARE_WORKER_URL",
-    "https://appvideo.solankipriyanshu94.workers.dev"
-)
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)

@@ -50,11 +50,34 @@ export default {
           if (tokenMatch && tokenMatch[1]) {
             const confirmToken = tokenMatch[1];
             const confirmUrl = `https://docs.google.com/uc?export=download&id=${fileId}&confirm=${confirmToken}`;
+            
+            const confirmHeaders = new Headers(requestHeaders);
+            const setCookie = driveResponse.headers.get('set-cookie');
+            if (setCookie) {
+              confirmHeaders.set('Cookie', setCookie);
+            }
+
             driveResponse = await fetch(confirmUrl, {
               method: 'GET',
-              headers: requestHeaders,
-              redirect: 'follow'
+              headers: confirmHeaders,
+              redirect: 'manual'
             });
+
+            if (
+              driveResponse.status === 301 ||
+              driveResponse.status === 302 ||
+              driveResponse.status === 303 ||
+              driveResponse.status === 307 ||
+              driveResponse.status === 308
+            ) {
+              const redirectUrl = driveResponse.headers.get('Location');
+              if (redirectUrl) {
+                driveResponse = await fetch(redirectUrl, {
+                  method: 'GET',
+                  headers: requestHeaders
+                });
+              }
+            }
           }
         }
 
@@ -92,8 +115,7 @@ export default {
         let responseBody = driveResponse.body;
         if (responseBody && (driveResponse.status === 200 || driveResponse.status === 206)) {
           const decryptor = new TransformStream(new XorTransformStream(0x5A));
-          responseBody.pipeTo(decryptor.writable);
-          responseBody = decryptor.readable;
+          responseBody = responseBody.pipeThrough(decryptor);
         }
 
         return new Response(responseBody, {

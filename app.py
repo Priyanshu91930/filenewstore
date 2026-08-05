@@ -340,7 +340,7 @@ def api_check_vip():
 
 # ─── GDrive Video Feed (for React Native App) ────────────────────────────────
 
-CLOUDFLARE_WORKER_URL = "https://appvideo.solankipriyanshu94.workers.dev"
+from config import CLOUDFLARE_WORKER_URL
 
 def _get_gdrive_service_app():
     """Returns authenticated Google Drive service for app.py."""
