@@ -4773,10 +4773,31 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
     os.makedirs(temp_dir, exist_ok=True)
     clone_folder_id = bot_doc.get("gdrive_folder_id") if bot_doc else None
 
+    seen_media_groups = set()  # track already-processed media group IDs
+
     for msg_id in range(start_msg_id, end_msg_id + 1):
         try:
             msg = await client.get_messages(chat_id, msg_id)
-            if not msg or msg.empty or not msg.caption:
+            if not msg or msg.empty:
+                skipped += 1
+                continue
+
+            # ── Handle media groups (albums with multiple files) ──
+            if msg.media_group_id:
+                if msg.media_group_id in seen_media_groups:
+                    # Already processed this group via its first member — skip silently
+                    continue
+                seen_media_groups.add(msg.media_group_id)
+                # Fetch all messages in this album
+                try:
+                    group_msgs = await client.get_media_group(chat_id, msg_id)
+                except Exception:
+                    group_msgs = [msg]
+                # Use the message that has the caption as the representative
+                caption_msg = next((m for m in group_msgs if m.caption), msg)
+                msg = caption_msg
+
+            if not msg.caption:
                 skipped += 1
                 continue
 
