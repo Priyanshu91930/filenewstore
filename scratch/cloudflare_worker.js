@@ -60,8 +60,11 @@ export default {
         const contentType = driveResponse.headers.get('content-type') || '';
         if (contentType.includes('text/html') && driveResponse.status === 200) {
           const htmlText = await driveResponse.text();
-          // Match confirm token: e.g. confirm=xxxx or confirm=t
-          const tokenMatch = htmlText.match(/confirm=([a-zA-Z0-9-_]+)/);
+          // Match confirm token: e.g. confirm=xxxx or confirm=t, or in the new form inputs
+          const tokenMatch = htmlText.match(/confirm=([a-zA-Z0-9-_]+)/) || 
+                             htmlText.match(/name="confirm"\s+value="([^"]+)"/) ||
+                             htmlText.match(/value="([^"]+)"\s+name="confirm"/) ||
+                             htmlText.match(/id="confirm"[^>]*value="([^"]+)"/);
           if (tokenMatch && tokenMatch[1]) {
             const confirmToken = tokenMatch[1];
             const confirmUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=${confirmToken}`;
