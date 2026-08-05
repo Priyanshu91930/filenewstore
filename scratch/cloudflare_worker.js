@@ -93,6 +93,11 @@ export default {
                 });
               }
             }
+          } else {
+            return new Response(`Failed to parse confirm token. Status: ${driveResponse.status}, Content-Type: ${contentType}. HTML Snippet: ${htmlText.substring(0, 2000)}`, {
+              status: 500,
+              headers: { "Content-Type": "text/plain" }
+            });
           }
         }
 
