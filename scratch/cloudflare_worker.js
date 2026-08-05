@@ -104,15 +104,10 @@ export default {
           }
         }
 
-        const originalContentType = driveResponse.headers.get('Content-Type') || driveResponse.headers.get('content-type') || '';
-        const disposition = driveResponse.headers.get('Content-Disposition') || '';
-        const isEncrypted = originalContentType.includes('octet-stream') || 
-                            originalContentType.includes('download') || 
-                            disposition.includes('.dat');
-
         // Setup headers to return to the Android Player
         const responseHeaders = new Headers();
-        let contentTypeHeader = originalContentType || 'video/mp4';
+        const originalContentType = driveResponse.headers.get('Content-Type') || driveResponse.headers.get('content-type') || 'video/mp4';
+        let contentTypeHeader = originalContentType;
         if (contentTypeHeader.includes('text/html') || contentTypeHeader.includes('octet-stream') || contentTypeHeader.includes('download')) {
           contentTypeHeader = 'video/mp4';
         }
@@ -140,9 +135,9 @@ export default {
           });
         }
 
-        // XOR Decrypt raw bytes dynamically only if the file is encrypted
+        // XOR Decrypt raw bytes dynamically
         let responseBody = driveResponse.body;
-        if (responseBody && isEncrypted && (driveResponse.status === 200 || driveResponse.status === 206)) {
+        if (responseBody && (driveResponse.status === 200 || driveResponse.status === 206)) {
           const decryptor = new TransformStream(new XorTransformStream(0x5A));
           responseBody = responseBody.pipeThrough(decryptor);
         }
