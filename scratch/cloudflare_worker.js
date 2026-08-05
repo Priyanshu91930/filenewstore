@@ -1,14 +1,29 @@
 class XorTransformStream {
   constructor(key = 0x5A) {
     this.key = key;
+    this.key32 = (key << 24) | (key << 16) | (key << 8) | key;
   }
 
   transform(chunk, controller) {
-    const decrypted = new Uint8Array(chunk.length);
-    for (let i = 0; i < chunk.length; i++) {
-      decrypted[i] = chunk[i] ^ this.key;
+    const len = chunk.length;
+    if (len === 0) return;
+
+    const byteOffset = chunk.byteOffset;
+    if (byteOffset % 4 === 0) {
+      const u32len = Math.floor(len / 4);
+      const u32view = new Uint32Array(chunk.buffer, byteOffset, u32len);
+      for (let i = 0; i < u32len; i++) {
+        u32view[i] ^= this.key32;
+      }
+      for (let i = u32len * 4; i < len; i++) {
+        chunk[i] ^= this.key;
+      }
+    } else {
+      for (let i = 0; i < len; i++) {
+        chunk[i] ^= this.key;
+      }
     }
-    controller.enqueue(decrypted);
+    controller.enqueue(chunk);
   }
 }
 
