@@ -67,7 +67,7 @@ export default {
                              htmlText.match(/id="confirm"[^>]*value="([^"]+)"/);
           if (tokenMatch && tokenMatch[1]) {
             const confirmToken = tokenMatch[1];
-            const confirmUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=${confirmToken}`;
+            const confirmUrl = `https://drive.usercontent.google.com/download?id=${fileId}&confirm=${confirmToken}`;
 
             const confirmHeaders = new Headers(requestHeaders);
             const setCookie = driveResponse.headers.get('set-cookie');
