@@ -4509,31 +4509,11 @@ async def bulk_add_thumb_cmd_handler(client, message):
     skipped = 0
     temp_dir = "scratch/temp_upload"
     os.makedirs(temp_dir, exist_ok=True)
-    seen_media_groups = set()  # track already-processed media group IDs
 
     for msg_id in range(start_msg_id, end_msg_id + 1):
         try:
             msg = await client.get_messages(chat_id, msg_id)
-            if not msg or msg.empty:
-                skipped += 1
-                continue
-
-            # ── Handle media groups (albums with multiple files) ──
-            if msg.media_group_id:
-                if msg.media_group_id in seen_media_groups:
-                    # Already processed this group via its first member — skip silently
-                    continue
-                seen_media_groups.add(msg.media_group_id)
-                # Fetch all messages in this album
-                try:
-                    group_msgs = await client.get_media_group(chat_id, msg_id)
-                except Exception:
-                    group_msgs = [msg]
-                # Use the message that has the caption as the representative
-                caption_msg = next((m for m in group_msgs if m.caption), msg)
-                msg = caption_msg
-
-            if not msg.caption:
+            if not msg or msg.empty or not msg.caption:
                 skipped += 1
                 continue
 
@@ -4682,8 +4662,10 @@ async def bulk_add_thumb_cmd_handler(client, message):
                     continue
 
                 gdrive_file_id = None
-                file_deeplink = deeplink
+                file_deeplink = deeplink      # GDrive deeplink (updated on success)
+                bot_deeplink = deeplink       # Original bot link (always kept for bot)
                 fmt_dur = "03:15"
+                batch_merge_failed = False
 
                 if deeplink.startswith("BATCH-"):
                     try:
@@ -4774,8 +4756,26 @@ async def bulk_add_thumb_cmd_handler(client, message):
                                                 "message_id": msg.id
                                             })
                                             file_deeplink = base64.urlsafe_b64encode(f"file_{short_id2}".encode()).decode().rstrip("=")
-                    except:
-                        pass
+                                        else:
+                                            logger.error(f"BulkAddThumb BATCH GDrive upload failed for msg {msg_id}")
+                                            batch_merge_failed = True
+                                    else:
+                                        logger.error(f"BulkAddThumb BATCH merge file not found for msg {msg_id}")
+                                        batch_merge_failed = True
+                                else:
+                                    logger.warning(f"BulkAddThumb BATCH no downloadable parts for msg {msg_id}")
+                                    batch_merge_failed = True
+                        else:
+                            logger.warning(f"BulkAddThumb BATCH json message not found for msg {msg_id}")
+                            batch_merge_failed = True
+                    except Exception as batch_err:
+                        logger.error(f"BulkAddThumb BATCH processing error for msg {msg_id}: {batch_err}")
+                        batch_merge_failed = True
+
+                    # Skip post entirely if BATCH merge failed — don't insert broken entry
+                    if batch_merge_failed:
+                        skipped += 1
+                        continue
 
                 else:
                     try:
@@ -4828,7 +4828,8 @@ async def bulk_add_thumb_cmd_handler(client, message):
                     "title": title,
                     "image_url": image_url,
                     "category": category,
-                    "file_deeplink": file_deeplink,
+                    "file_deeplink": file_deeplink,   # GDrive link (for app streaming)
+                    "bot_deeplink": bot_deeplink,     # Original bot link (for bot send)
                     "bot_username": bot_username,
                     "created_at": time.time(),
                     "views": 10,

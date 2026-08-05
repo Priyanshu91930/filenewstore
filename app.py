@@ -203,6 +203,7 @@ def portal_data():
                 'image_url': doc.get('image_url', ''),
                 'category': doc.get('category', ''),
                 'file_deeplink': doc.get('file_deeplink', ''),
+                'bot_deeplink': doc.get('bot_deeplink') or doc.get('file_deeplink', ''),  # original bot link for card click
                 'bot_username': doc.get('bot_username', ''),
                 'views': doc.get('views', 0),
                 'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),

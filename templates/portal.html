@@ -552,7 +552,8 @@
                 </div>
               </div>
             `;
-            const clickPayload = post.is_paid_card ? post.payload : post.file_deeplink;
+            // Use bot_deeplink for bot redirect (original BATCH link), fallback to file_deeplink
+            const clickPayload = post.is_paid_card ? post.payload : (post.bot_deeplink || post.file_deeplink);
             card.addEventListener('click', () => handleCardClick(clickPayload, post.bot_username, post.id));
             moviesGrid.appendChild(card);
           });
