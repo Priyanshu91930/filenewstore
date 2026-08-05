@@ -37,7 +37,7 @@ export default {
         return new Response('Missing fileId parameter', { status: 400 });
       }
 
-      const gdriveUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
+      const gdriveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
       // Forward target headers (including Range header required by ExoPlayer/Android)
       const requestHeaders = new Headers();
@@ -64,7 +64,7 @@ export default {
           const tokenMatch = htmlText.match(/confirm=([a-zA-Z0-9-_]+)/);
           if (tokenMatch && tokenMatch[1]) {
             const confirmToken = tokenMatch[1];
-            const confirmUrl = `https://docs.google.com/uc?export=download&id=${fileId}&confirm=${confirmToken}`;
+            const confirmUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=${confirmToken}`;
             
             const confirmHeaders = new Headers(requestHeaders);
             const setCookie = driveResponse.headers.get('set-cookie');
