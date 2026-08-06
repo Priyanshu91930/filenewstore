@@ -888,7 +888,7 @@ async def start(client, message):
                             ]
                             
                             if ads_today > 0:
-                                unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
+                                unlock_text = f"<b>⚠️ 5 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 5 free files limit is over. Please watch another ad to unlock 5 more files, or purchase a VIP plan."
                             else:
                                 unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
 
@@ -899,15 +899,15 @@ async def start(client, message):
                             )
                         else:
                             is_verified = True
+                    else:
+                        btn = [[InlineKeyboardButton("💳 Buy VIP Plan to Unlock", callback_data="buy_plan")]]
+                        return await message.reply_text(
+                            text=f"<b>🔒 Hey {message.from_user.mention}, this file is locked!\n\nPlease purchase a VIP Plan to get instant access to files.</b>",
+                            protect_content=True,
+                            reply_markup=InlineKeyboardMarkup(btn)
+                        )
                 else:
                     is_verified = True
-                else:
-                    btn = [[InlineKeyboardButton("💳 Buy VIP Plan to Unlock", callback_data="buy_plan")]]
-                    return await message.reply_text(
-                        text=f"<b>🔒 Hey {message.from_user.mention}, this file is locked!\n\nPlease purchase a VIP Plan to get instant access to files.</b>",
-                        protect_content=True,
-                        reply_markup=InlineKeyboardMarkup(btn)
-                    )
             elif tma_mode and not user_is_vip:
                 if not await check_tma_verification(message.from_user.id, bot_id=me.id):
                     ads_today = 0
