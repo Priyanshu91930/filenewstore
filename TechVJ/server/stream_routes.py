@@ -509,7 +509,7 @@ async def portal_data_route_handler(request: web.Request):
                 'payload': doc.get('payload', '')
             })
     else:
-        query = {"is_gdrive": True}
+        query = {}
         if category and category != 'All':
             query['category'] = {'$regex': f'^{category}$', '$options': 'i'}
         if search:
@@ -528,6 +528,7 @@ async def portal_data_route_handler(request: web.Request):
                 'image_url': _normalize_image_url(doc.get('image_url', '')),
                 'category': doc.get('category', ''),
                 'file_deeplink': doc.get('file_deeplink', ''),
+                'bot_deeplink': doc.get('bot_deeplink') or doc.get('file_deeplink', ''),  # original bot link for card click
                 'bot_username': doc.get('bot_username', ''),
                 'views': doc.get('views', 0),
                 'reactions': doc.get('reactions', {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}),
