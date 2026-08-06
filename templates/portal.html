@@ -505,7 +505,7 @@
       paginationControls.style.display = 'none';
 
       try {
-        const response = await fetch(`/portal-data?page=${currentPage}&category=${encodeURIComponent(currentCategory)}&search=${encodeURIComponent(searchQuery)}`);
+        const response = await fetch(`/portal-data?page=${currentPage}&category=${encodeURIComponent(currentCategory)}&search=${encodeURIComponent(searchQuery)}&include_all=1`);
         const data = await response.json();
 
         // Render Categories if they've changed / initialized

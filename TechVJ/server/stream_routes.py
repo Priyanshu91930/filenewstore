@@ -487,6 +487,7 @@ async def portal_data_route_handler(request: web.Request):
 
     posts = []
     is_paid_category = category == 'Paid'
+    include_all = request.rel_url.query.get('include_all', '') == '1'
 
     if is_paid_category:
         # Only fetch paid cards
@@ -509,7 +510,7 @@ async def portal_data_route_handler(request: web.Request):
                 'payload': doc.get('payload', '')
             })
     else:
-        query = {}
+        query = {"is_gdrive": True} if not include_all else {}
         if category and category != 'All':
             query['category'] = {'$regex': f'^{category}$', '$options': 'i'}
         if search:
