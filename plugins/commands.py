@@ -867,7 +867,7 @@ async def start(client, message):
                 if not user_is_vip:
                     stats = await clone_mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
                     download_count = stats.get("count", 0) if stats else 0
-                    if download_count >= 5:
+                    if download_count >= 3:
                         # Check Screenshot Verification Mode
                         if config.SCREENSHOT_VERIFY_MODE and not is_unlocked:
                             if await check_and_send_screenshot_verification(client, message, data):
@@ -906,20 +906,20 @@ async def start(client, message):
                                     reply_markup=InlineKeyboardMarkup(btn)
                                 )
                                 return
-                    elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
-                        btn = [[
-                            InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
-                        ],[
-                            InlineKeyboardButton("How To Open Link & Verify", url=VERIFY_TUTORIAL)
-                        ]]
-                        await message.reply_text(
-                            text="<b>You are not verified !\nKindly verify to continue !</b>",
-                            protect_content=True,
-                            reply_markup=InlineKeyboardMarkup(btn)
-                        )
-                        return
-                    if config.TMA_MODE:
-                        await consume_tma_link(message.from_user.id)
+                        elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
+                            btn = [[
+                                InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
+                            ],[
+                                InlineKeyboardButton("How To Open Link & Verify", url=VERIFY_TUTORIAL)
+                            ]]
+                            await message.reply_text(
+                                text="<b>You are not verified !\nKindly verify to continue !</b>",
+                                protect_content=True,
+                                reply_markup=InlineKeyboardMarkup(btn)
+                            )
+                            return
+                        if config.TMA_MODE:
+                            await consume_tma_link(message.from_user.id)
             except Exception as e:
                 return await message.reply_text(f"**Error - {e}**")
             sts = await message.reply("**🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ**")
@@ -1066,7 +1066,7 @@ async def start(client, message):
         if not user_is_vip:
             stats = await clone_mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
             download_count = stats.get("count", 0) if stats else 0
-            if download_count >= 5:
+            if download_count >= 3:
                 # Check Screenshot Verification Mode
                 if config.SCREENSHOT_VERIFY_MODE and not is_unlocked:
                     if await check_and_send_screenshot_verification(client, message, data):
@@ -1105,20 +1105,20 @@ async def start(client, message):
                             reply_markup=InlineKeyboardMarkup(btn)
                         )
                         return
-            elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
-                btn = [[
-                    InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
-                ],[
-                    InlineKeyboardButton("How To Open Link & Verify", url=VERIFY_TUTORIAL)
-                ]]
-                await message.reply_text(
-                    text="<b>You are not verified !\nKindly verify to continue !</b>",
-                    protect_content=True,
-                    reply_markup=InlineKeyboardMarkup(btn)
-                )
-                return
-            if config.TMA_MODE:
-                await consume_tma_link(message.from_user.id)
+                elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
+                    btn = [[
+                        InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
+                    ],[
+                        InlineKeyboardButton("How To Open Link & Verify", url=VERIFY_TUTORIAL)
+                    ]]
+                    await message.reply_text(
+                        text="<b>You are not verified !\nKindly verify to continue !</b>",
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn)
+                    )
+                    return
+                if config.TMA_MODE:
+                    await consume_tma_link(message.from_user.id)
         try:
             msg = await client.get_messages(LOG_CHANNEL, int(decode_file_id))
             if msg.media:
