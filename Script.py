@@ -162,12 +162,12 @@ Nᴀᴍᴇ - {}</b>
 Hey {}, to access this file you need to watch a short ad in our Mini App.
 
 ✅ It only takes <u>5-10 seconds</u>
-✅ Unlocks <u>3 free links</u>
+✅ Unlocks <u>5 free links</u>
 ✅ 100% safe & free
 
 Tap the button below to open the Mini App and watch the ad to unlock!</b>"""
 
-    TMA_VERIFIED_TEXT = """<b>Hey {}, you've been successfully verified and got 3 free links! 🎉</b>"""
+    TMA_VERIFIED_TEXT = """<b>Hey {}, you've been successfully verified and got 5 free links! 🎉</b>"""
 
     TMA_UPSELL_TEXT = """<b>🚀 Enjoy your file!
 

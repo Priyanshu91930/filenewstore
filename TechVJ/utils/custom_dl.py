@@ -250,10 +250,14 @@ class ByteStreamer:
                     r = await fetch_chunk(media_session, location, offset, chunk_size)
                     if r is None:
                         break  # retries exhausted, stop gracefully
-        except (TimeoutError, AttributeError):
+        except (TimeoutError, AttributeError, GeneratorExit, ConnectionResetError, ConnectionAbortedError):
             pass
         except Exception as e:
-            logging.error(f"Unhandled error in yield_file: {e}")
+            err_str = str(e)
+            if "Connection lost" in err_str or "Connection reset" in err_str or "ClientDisconnectedError" in err_str:
+                logging.debug(f"Client disconnected during yield_file: {e}")
+            else:
+                logging.error(f"Unhandled error in yield_file: {e}")
         finally:
             logging.debug("Finished yielding file with {current_part} parts.")
             if index in work_loads:

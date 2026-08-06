@@ -97,6 +97,68 @@ def mini_app():
     )
 
 
+@app.route('/google-login')
+def google_login():
+    """Serve the Google Sign-In verification page."""
+    from config import GOOGLE_CLIENT_ID
+    return render_template('google_login.html', google_client_id=GOOGLE_CLIENT_ID)
+
+
+@app.route('/google-verify', methods=['POST'])
+def google_verify():
+    """Verify the Google ID token and redirect user back to the Telegram bot."""
+    from config import GOOGLE_CLIENT_ID, BOT_USERNAME
+    from google.oauth2 import id_token
+    from google.auth.transport import requests as google_requests
+    from plugins.clone import async_mongo_db
+    import asyncio
+
+    data = request.get_json(silent=True) or {}
+    credential = data.get('credential', '')
+    uid = data.get('uid', '')
+    file_data = data.get('file', '')
+    bot_username = data.get('bot', BOT_USERNAME)
+
+    if not credential or not uid:
+        return jsonify({"error": "Missing parameters"}), 400
+
+    # Verify Google ID token
+    try:
+        # Since GOOGLE_CLIENT_ID might be a dummy or custom one, verify it.
+        # We can also handle verification in an async-friendly way or standard way.
+        idinfo = id_token.verify_oauth2_token(credential, google_requests.Request(), GOOGLE_CLIENT_ID)
+        email = idinfo.get('email')
+        if not email:
+            return jsonify({"error": "Email not found in token"}), 400
+    except Exception as e:
+        print(f"Error verifying Google token: {e}")
+        # For testing purposes, if Client ID is dummy, we can fallback to decoding without verification, 
+        # but let's enforce security. Let's log it.
+        return jsonify({"error": f"Invalid token: {str(e)}"}), 400
+
+    # Save Google login info to DB
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(
+            async_mongo_db.screenshot_verifications.update_one(
+                {"user_id": int(uid)},
+                {"$set": {"gmail": email, "google_verified": True}},
+                upsert=True
+            )
+        )
+    except Exception as db_err:
+        print(f"DB Error saving Gmail: {db_err}")
+    finally:
+        loop.close()
+
+    # Build the Telegram redirect URL back to the bot
+    # Payload format: start=ss_{user_id}_login_{file_data}
+    redirect_url = f"https://t.me/{bot_username}?start=ss_{uid}_login_{file_data}"
+    return jsonify({"redirect_url": redirect_url})
+
+
+
 @app.route('/tma-verify', methods=['POST'])
 def tma_verify():
     """
@@ -181,7 +243,7 @@ def portal_data():
                 'payload': doc.get('payload', '')
             })
     else:
-        query = {"is_gdrive": True}
+        query = {}
         if category != 'All':
             query['category'] = category
         if search:

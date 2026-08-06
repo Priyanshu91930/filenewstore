@@ -254,9 +254,9 @@ async def verify_tma_user(user_id: int, token: str, timeout: int = 0, bot_id: in
             pass
             
     if tma_type == "links":
-        # 3 free links per ad view (valid until consumed, no 1-hour rolling expiration)
+        # 5 free links per ad view (valid until consumed, no 1-hour rolling expiration)
         TMA_VERIFIED[key] = {
-            "links": 3,
+            "links": 5,
             "verified_at": int(time.time())
         }
     else:
@@ -350,7 +350,7 @@ async def consume_tma_link(user_id: int, bot_id: int = None) -> int:
             pass
 
     if tma_type != "links":
-        return 3
+        return 5
 
     key = f"{bot_id}_{user_id}" if bot_id else user_id
     if key in TMA_VERIFIED:

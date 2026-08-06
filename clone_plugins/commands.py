@@ -14,8 +14,9 @@ from clone_plugins.genlink import _ask
 from pyrogram import Client, filters, enums
 from plugins.clone import async_mongo_db as mongo_db
 from pyrogram.errors import ChatAdminRequired, FloodWait, UserNotParticipant
-from config import BOT_USERNAME, ADMINS, LOG_CHANNEL, PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL, CLOUDFLARE_WORKER_URL
+from config import BOT_USERNAME, ADMINS, LOG_CHANNEL, PICS, CUSTOM_FILE_CAPTION, AUTO_DELETE_TIME, AUTO_DELETE, UNIVERSAL_FORCE_SUB_CHANNEL, URL, CLOUDFLARE_WORKER_URL, SCREENSHOT_VERIFY_MODE
 from utils import is_subscribed_universal, check_tma_verification, get_tma_link, verify_tma_user, is_token_consumed, consume_token, validate_tma_token, is_vip, TMA_TIMEOUT, MongoDict, consume_tma_link, get_tma_cooldown_remaining, schedule_tma_renewal_msg
+from plugins.commands import deliver_requested_files, check_and_send_screenshot_verification
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto, WebAppInfo
 import re
 import json
@@ -330,6 +331,73 @@ async def get_invalid_link_btn(client, user_id, data):
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     me = client.me or await client.get_me()
+    
+    # Check Google redirect start payload
+    if len(message.command) == 2 and message.command[1].startswith("ss_"):
+        data = message.command[1]
+        parts = data.split("_")
+        if len(parts) >= 4 and parts[2] == "login":
+            uid_str = parts[1]
+            file_data = "_".join(parts[3:])
+            if str(message.from_user.id) == uid_str:
+                doc = await mongo_db.screenshot_verifications.find_one({"user_id": message.from_user.id})
+                if doc and doc.get("google_verified"):
+                    gmail = doc.get("gmail")
+                    ss_count = doc.get("count", 0)
+                    admin_text = (
+                        f"<b>📧 New Gmail Verified for Closed Testing!</b>\n\n"
+                        f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                        f"📧 <b>Gmail:</b> <code>{gmail}</code>\n"
+                        f"🤖 <b>Bot:</b> @{me.username} (Clone)\n"
+                        f"🔄 <b>Verification:</b> App {ss_count + 1}"
+                    )
+                    try:
+                        admin_msg = await client.send_message(LOG_CHANNEL, admin_text)
+                        await admin_msg.pin()
+                    except Exception as pin_err:
+                        logger.error(f"Failed to pin admin Gmail notification: {pin_err}")
+                    
+                    import config
+                    if ss_count == 0:
+                        app_url = config.PLAYSTORE_APP1_URL
+                        instruction = config.PLAYSTORE_APP1_INSTRUCTION
+                    else:
+                        app_url = config.PLAYSTORE_APP2_URL
+                        instruction = config.PLAYSTORE_APP2_INSTRUCTION
+                        
+                    btn = [[InlineKeyboardButton("📲 Download & Install App", url=app_url)]]
+                    
+                    await mongo_db.screenshot_verifications.update_one(
+                        {"user_id": message.from_user.id},
+                        {"$set": {"step": f"waiting_for_screenshot_{ss_count + 1}", "active_file_data": file_data}}
+                    )
+                    
+                    caption = (
+                        f"<b>✅ Email Verified! Now proceed to App Installation:</b>\n\n"
+                        f"Instructions:\n"
+                        f"{instruction}\n\n"
+                        f"After installing and completing the task, please take a screenshot and <b>send it directly as a photo to this bot</b> to complete verification."
+                    )
+                    
+                    import os
+                    photo_path = "screenshot/app1.png" if ss_count == 0 else "screenshot/app2.png"
+                    
+                    if os.path.exists(photo_path):
+                        try:
+                            return await message.reply_photo(
+                                photo=photo_path,
+                                caption=caption,
+                                reply_markup=InlineKeyboardMarkup(btn),
+                                protect_content=True
+                            )
+                        except Exception as photo_err:
+                            logger.error(f"Failed to send screenshot app photo: {photo_err}")
+
+                    return await message.reply_text(
+                        text=caption,
+                        reply_markup=InlineKeyboardMarkup(btn),
+                        protect_content=True
+                    )
     # Clear any stale user state
     await mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
     bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
@@ -792,39 +860,47 @@ async def start(client, message):
             is_verified = False
             
             if plan_cfg and plan_enabled and not user_is_vip:
-                if tma_mode:
-                    if not await check_tma_verification(message.from_user.id, bot_id=me.id):
-                        ads_today = 0
-                        try:
-                            import pytz
-                            from datetime import datetime
-                            tz = pytz.timezone('Asia/Kolkata')
-                            today_str = datetime.now(tz).strftime('%Y-%m-%d')
-                            doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-                            if doc:
-                                ads_today = doc.get("ads_watched", 0)
-                        except Exception as e:
-                            logger.error(f"Error checking daily ads: {e}")
+                stats = await mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
+                download_count = stats.get("count", 0) if stats else 0
+                if download_count >= 5:
+                    if SCREENSHOT_VERIFY_MODE and not is_unlocked:
+                        if await check_and_send_screenshot_verification(client, message, data):
+                            return
+                    if tma_mode:
+                        if not await check_tma_verification(message.from_user.id, bot_id=me.id):
+                            ads_today = 0
+                            try:
+                                import pytz
+                                from datetime import datetime
+                                tz = pytz.timezone('Asia/Kolkata')
+                                today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                                doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                                if doc:
+                                    ads_today = doc.get("ads_watched", 0)
+                            except Exception as e:
+                                logger.error(f"Error checking daily ads: {e}")
 
-                        tma_app_url = f"{URL.rstrip('/')}/tma"
-                        tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
-                        btn = [
-                            [InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))],
-                            [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
-                        ]
-                        
-                        if ads_today > 0:
-                            unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
+                            tma_app_url = f"{URL.rstrip('/')}/tma"
+                            tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+                            btn = [
+                                [InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))],
+                                [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
+                            ]
+                            
+                            if ads_today > 0:
+                                unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
+                            else:
+                                unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+
+                            return await message.reply_text(
+                                text=unlock_text,
+                                protect_content=True,
+                                reply_markup=InlineKeyboardMarkup(btn)
+                            )
                         else:
-                            unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
-
-                        return await message.reply_text(
-                            text=unlock_text,
-                            protect_content=True,
-                            reply_markup=InlineKeyboardMarkup(btn)
-                        )
-                    else:
-                        is_verified = True
+                            is_verified = True
+                else:
+                    is_verified = True
                 else:
                     btn = [[InlineKeyboardButton("💳 Buy VIP Plan to Unlock", callback_data="buy_plan")]]
                     return await message.reply_text(
@@ -1051,40 +1127,48 @@ async def start(client, message):
     logger.info(f"TMA mode: {tma_mode}, User VIP: {user_is_vip}, Plan configured: {plan_cfg is not None}, Plan enabled: {plan_enabled}")
     
     if plan_cfg and plan_enabled and not user_is_vip:
-        if tma_mode:
-            ads_today = 0
-            try:
-                import pytz
-                from datetime import datetime
-                tz = pytz.timezone('Asia/Kolkata')
-                today_str = datetime.now(tz).strftime('%Y-%m-%d')
-                doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-                if doc:
-                    ads_today = doc.get("ads_watched", 0)
-            except Exception as e:
-                logger.error(f"Error checking daily ads: {e}")
+        stats = await mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
+        download_count = stats.get("count", 0) if stats else 0
+        if download_count >= 5:
+            if SCREENSHOT_VERIFY_MODE and not is_unlocked:
+                if await check_and_send_screenshot_verification(client, message, data):
+                    return
+            if tma_mode:
+                ads_today = 0
+                try:
+                    import pytz
+                    from datetime import datetime
+                    tz = pytz.timezone('Asia/Kolkata')
+                    today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                    doc = await mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                    if doc:
+                        ads_today = doc.get("ads_watched", 0)
+                except Exception as e:
+                    logger.error(f"Error checking daily ads: {e}")
 
-            if ads_today >= 3:
-                btn = [[InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]]
-                return await message.reply_text(
-                    text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
-                    protect_content=True,
-                    reply_markup=InlineKeyboardMarkup(btn)
-                )
-            bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
-            is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
-            if not is_verified and not is_unlocked:
-                tma_app_url = f"{URL.rstrip('/')}/tma"
-                tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
-                btn = [
-                    [InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))],
-                    [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
-                ]
-                return await message.reply_text(
-                    text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
-                    protect_content=True,
-                    reply_markup=InlineKeyboardMarkup(btn)
-                )
+                if ads_today >= 3:
+                    btn = [[InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]]
+                    return await message.reply_text(
+                        text="<b>⚠️ Maximum Ads Shown!</b>\n\nYou have already watched your maximum limit of 3 ads for today. Please wait until tomorrow or purchase a VIP Plan.",
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn)
+                    )
+                bot_tma_timeout = bot_owner.get("token_timeout", 0) if bot_owner else 0
+                is_verified = await check_tma_verification(message.from_user.id, timeout=bot_tma_timeout, bot_id=me.id)
+                if not is_verified and not is_unlocked:
+                    tma_app_url = f"{URL.rstrip('/')}/tma"
+                    tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data, bot_username=me.username)
+                    btn = [
+                        [InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))],
+                        [InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")]
+                    ]
+                    return await message.reply_text(
+                        text=script.TMA_UNLOCK_TEXT.format(message.from_user.mention),
+                        protect_content=True,
+                        reply_markup=InlineKeyboardMarkup(btn)
+                    )
+        else:
+            pass
         else:
             btn = [[InlineKeyboardButton("💳 Buy VIP Plan to Unlock", callback_data="buy_plan")]]
             return await message.reply_text(
@@ -1660,6 +1744,88 @@ async def join_reqs_handler(client, join_request):
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
     me = client.me or await client.get_me()
+    
+    if query.data.startswith("ss_dev_android_"):
+        file_data = query.data.split("_", 3)[3]
+        user_id = query.from_user.id
+        google_url = f"{URL.rstrip('/')}/google-login?uid={user_id}&file={file_data}&bot={me.username}"
+        btn = [[InlineKeyboardButton("🔒 Not a Robot Verification", url=google_url)]]
+        await query.message.edit_text(
+            text=f"<b>🤖 Android Verification Step 1:</b>\n\nClick the button below to complete the human verification using Google Sign-In.",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        return
+
+    elif query.data.startswith("ss_dev_iphone_"):
+        file_data = query.data.split("_", 3)[3]
+        user_id = query.from_user.id
+        tma_app_url = f"{URL.rstrip('/')}/tma"
+        tma_link = await get_tma_link(client, user_id, tma_app_url, file_data=file_data, bot_username=me.username)
+        btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+        plan_cfg = await mongo_db.plans_config.find_one({"_id": me.id})
+        if plan_cfg:
+            btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+        await query.message.edit_text(
+            text=script.TMA_UNLOCK_TEXT.format(query.from_user.mention),
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        return
+
+    elif query.data.startswith("ss_appr_"):
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ You are not an admin!", show_alert=True)
+        user_id = int(query.data.split("_")[2])
+        doc = await mongo_db.screenshot_verifications.find_one({"user_id": user_id})
+        if not doc:
+            return await query.answer("Verification request not found!", show_alert=True)
+            
+        ss_count = doc.get("count", 0)
+        file_data = doc.get("active_file_data", "")
+        
+        await mongo_db.screenshot_verifications.update_one(
+            {"user_id": user_id},
+            {"$set": {"count": ss_count + 1, "step": ""}}
+        )
+        
+        try:
+            await client.send_message(
+                chat_id=user_id,
+                text="<b>✅ Your screenshot verification has been approved! Delivering files...</b>"
+            )
+            await deliver_requested_files(client, user_id, file_data)
+        except Exception as notify_err:
+            logger.error(f"Failed to notify user after screenshot approval: {notify_err}")
+            
+        await query.answer("Screenshot approved and user notified!", show_alert=True)
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.reply_text(f"<b>✅ Approved by {query.from_user.mention}</b>")
+        return
+
+    elif query.data.startswith("ss_decl_"):
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ You are not an admin!", show_alert=True)
+        user_id = int(query.data.split("_")[2])
+        doc = await mongo_db.screenshot_verifications.find_one({"user_id": user_id})
+        if not doc:
+            return await query.answer("Verification request not found!", show_alert=True)
+            
+        await mongo_db.screenshot_verifications.update_one(
+            {"user_id": user_id},
+            {"$set": {"step": ""}}
+        )
+        
+        try:
+            await client.send_message(
+                chat_id=user_id,
+                text="<b>❌ Your screenshot verification was declined.</b>\n\nPlease make sure you sent the correct screenshot showing the class 12 math paper page and your review. Try downloading the file again to restart."
+            )
+        except Exception as notify_err:
+            logger.error(f"Failed to notify user after screenshot decline: {notify_err}")
+            
+        await query.answer("Screenshot declined and user notified!", show_alert=True)
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.reply_text(f"<b>❌ Declined by {query.from_user.mention}</b>")
+        return
     
     if query.data == "cancel_gdrive_migration":
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
@@ -3030,9 +3196,107 @@ async def successful_payment_handler(client, message):
             f"You now bypass all shortlink/TMA verifications! 🚀"
         )
 
+async def perform_ocr(image_path):
+    import aiohttp
+    url = "https://api.ocr.space/parse/image"
+    data = aiohttp.FormData()
+    data.add_field('apikey', config.OCR_API_KEY)
+    data.add_field('language', 'eng')
+    data.add_field('isOverlayRequired', 'false')
+    data.add_field('file', open(image_path, 'rb'), filename=os.path.basename(image_path))
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=data) as resp:
+                result = await resp.json()
+                if result and not result.get("IsErroredOnProcessing"):
+                    parsed_results = result.get("ParsedResults", [])
+                    if parsed_results:
+                        return parsed_results[0].get("ParsedText", "")
+    except Exception as e:
+        logger.error(f"OCR Error: {e}")
+    return ""
+
 @Client.on_message((filters.photo | filters.document) & filters.private & filters.incoming)
 async def photo_message_handler(client, message):
     me = client.me or await client.get_me()
+    
+    # Check if they are in screenshot verification state
+    ss_doc = await mongo_db.screenshot_verifications.find_one({"user_id": message.from_user.id})
+    if ss_doc and ss_doc.get("step") in ["waiting_for_screenshot_1", "waiting_for_screenshot_2"]:
+        step = ss_doc.get("step")
+        file_data = ss_doc.get("active_file_data", "")
+        gmail = ss_doc.get("gmail", "Not provided")
+        ss_count = ss_doc.get("count", 0)
+        
+        progress_msg = await message.reply_text("<b>🔍 Checking your screenshot... Please wait, this takes 2-3 seconds.</b>")
+        
+        # Download photo
+        temp_photo = await message.download()
+        if not temp_photo:
+            await progress_msg.edit_text("<b>❌ Error downloading screenshot. Please try again.</b>")
+            return
+            
+        # Perform OCR
+        ocr_text = await perform_ocr(temp_photo)
+        
+        # Clean up local file
+        try:
+            os.remove(temp_photo)
+        except:
+            pass
+            
+        # Check keywords
+        keywords = config.PLAYSTORE_APP1_KEYWORDS if ss_count == 0 else config.PLAYSTORE_APP2_KEYWORDS
+        text_lower = ocr_text.lower()
+        
+        match_count = sum(1 for kw in keywords if kw in text_lower)
+        is_valid = match_count >= max(1, len(keywords) // 2)
+        
+        if is_valid:
+            await mongo_db.screenshot_verifications.update_one(
+                {"user_id": message.from_user.id},
+                {"$set": {"count": ss_count + 1, "step": ""}}
+            )
+            
+            await progress_msg.edit_text("<b>✅ Screenshot Verified Automatically! Delivering your files...</b>")
+            await deliver_requested_files(client, message.from_user.id, file_data)
+            
+            # Send notification to LOG_CHANNEL
+            admin_text = (
+                f"<b>🤖 Screenshot Automatically APPROVED via OCR!</b>\n\n"
+                f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                f"📧 <b>Gmail:</b> <code>{gmail}</code>\n"
+                f"🤖 <b>Bot:</b> @{me.username} (Clone)\n"
+                f"🔄 <b>Verification App:</b> App {ss_count + 1}\n"
+                f"📁 <b>Requested File Data:</b> <code>{file_data}</code>"
+            )
+            try:
+                await client.send_message(LOG_CHANNEL, admin_text)
+            except:
+                pass
+        else:
+            await progress_msg.edit_text(
+                f"<b>❌ Verification Failed!</b>\n\n"
+                f"We could not find the required details in your screenshot.\n"
+                f"Please make sure you have opened the correct page in the app and have taken a clear screenshot, then try sending it again."
+            )
+            
+            # Send notification to LOG_CHANNEL
+            admin_text = (
+                f"<b>❌ Screenshot Automatically DECLINED via OCR!</b>\n\n"
+                f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                f"📧 <b>Gmail:</b> <code>{gmail}</code>\n"
+                f"🤖 <b>Bot:</b> @{me.username} (Clone)\n"
+                f"🔄 <b>Verification App:</b> App {ss_count + 1}\n"
+                f"📝 <b>OCR Extracted Text:</b> <code>{ocr_text[:300]}...</code>"
+            )
+            try:
+                await client.send_message(LOG_CHANNEL, admin_text)
+            except:
+                pass
+        return
+
     state_doc = await mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id})
     if state_doc and state_doc.get("state") == "waiting_paid_screenshot":
         payload = state_doc.get("payload")
@@ -5061,7 +5325,13 @@ async def clone_bulk_add_thumb_cmd_handler(client, message):
                                     if cid and mid:
                                         video_msg = await client.get_messages(int(cid), int(mid))
                             if video_msg:
+                                if video_msg.photo:
+                                    skipped += 1
+                                    continue
                                 vid_media = video_msg.video or video_msg.animation or video_msg.document
+                            if not vid_media:
+                                skipped += 1
+                                continue
                             if vid_media:
                                 local_fn = getattr(vid_media, "file_name", f"video_{int(time.time())}.mp4")
                                 local_path = os.path.join(temp_dir, local_fn)

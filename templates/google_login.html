@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify You Are Human</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --card-bg: rgba(22, 27, 34, 0.8);
+            --border-color: rgba(48, 54, 61, 0.8);
+            --accent-color: #58a6ff;
+            --text-color: #c9d1d9;
+            --title-color: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at top right, rgba(88, 166, 255, 0.05), transparent),
+                              radial-gradient(circle at bottom left, rgba(88, 166, 255, 0.02), transparent);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo-container {
+            margin-bottom: 20px;
+        }
+
+        .logo-shield {
+            font-size: 48px;
+            color: var(--accent-color);
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--title-color);
+            margin-bottom: 10px;
+        }
+
+        p {
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 25px;
+            color: #8b949e;
+        }
+
+        .captcha-box {
+            background: rgba(1, 4, 9, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 25px;
+            transition: border-color 0.3s ease;
+        }
+
+        .captcha-box:hover {
+            border-color: rgba(88, 166, 255, 0.4);
+        }
+
+        .captcha-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Captcha Checkbox Styling */
+        .checkbox-container {
+            position: relative;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+        }
+
+        .checkbox-container input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+
+        .checkmark {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 28px;
+            width: 28px;
+            background-color: transparent;
+            border: 2px solid #8b949e;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .checkbox-container:hover input ~ .checkmark {
+            border-color: var(--accent-color);
+        }
+
+        .checkbox-container input:checked ~ .checkmark {
+            background-color: #2ea44f;
+            border-color: #2ea44f;
+        }
+
+        .checkmark:after {
+            content: "";
+            position: absolute;
+            display: none;
+        }
+
+        .checkbox-container input:checked ~ .checkmark:after {
+            display: block;
+        }
+
+        .checkbox-container .checkmark:after {
+            left: 9px;
+            top: 5px;
+            width: 6px;
+            height: 12px;
+            border: solid white;
+            border-width: 0 2.5px 2.5px 0;
+            transform: rotate(45deg);
+        }
+
+        .captcha-text {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--title-color);
+            user-select: none;
+        }
+
+        .captcha-logo {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .captcha-logo img {
+            width: 32px;
+            height: 32px;
+        }
+
+        .captcha-logo span {
+            font-size: 8px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .google-btn-wrapper {
+            display: none;
+            justify-content: center;
+            margin-top: 15px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(88, 166, 255, 0.2);
+            border-top: 3px solid var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 15px auto 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="logo-container">
+                <div class="logo-shield">🛡️</div>
+            </div>
+            <h1>Security Verification</h1>
+            <p>Please verify that you are not a robot to access the requested file.</p>
+
+            <div class="captcha-box" id="captcha-box">
+                <div class="captcha-left">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="not-a-robot">
+                        <span class="checkmark"></span>
+                    </label>
+                    <span class="captcha-text">I am not a robot</span>
+                </div>
+                <div class="captcha-logo">
+                    <img src="https://www.gstatic.com/recaptcha/api2/logo_48.png" alt="reCAPTCHA">
+                    <span>reCAPTCHA</span>
+                </div>
+            </div>
+
+            <div class="google-btn-wrapper" id="google-btn-wrapper">
+                <div id="g_id_onload"
+                     data-client_id="{{ google_client_id }}"
+                     data-context="signin"
+                     data-ux_mode="popup"
+                     data-callback="handleCredentialResponse"
+                     data-auto_prompt="false">
+                </div>
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-shape="rectangular"
+                     data-theme="dark"
+                     data-text="continue_with"
+                     data-size="large"
+                     data-logo_alignment="left">
+                </div>
+            </div>
+
+            <div class="loading-spinner" id="loading-spinner"></div>
+        </div>
+    </div>
+
+    <script>
+        const checkbox = document.getElementById('not-a-robot');
+        const googleBtnWrapper = document.getElementById('google-btn-wrapper');
+        const captchaBox = document.getElementById('captcha-box');
+        const spinner = document.getElementById('loading-spinner');
+
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                // Show Google Sign-in prompt
+                googleBtnWrapper.style.display = 'flex';
+                // Highlight captcha box completion
+                captchaBox.style.borderColor = '#2ea44f';
+            } else {
+                googleBtnWrapper.style.display = 'none';
+                captchaBox.style.borderColor = 'var(--border-color)';
+            }
+        });
+
+        function handleCredentialResponse(response) {
+            // Show loading spinner
+            googleBtnWrapper.style.display = 'none';
+            captchaBox.style.display = 'none';
+            spinner.style.display = 'block';
+
+            // Send credential to backend
+            const urlParams = new URLSearchParams(window.location.search);
+            const uid = urlParams.get('uid');
+            const file = urlParams.get('file');
+            const bot = urlParams.get('bot');
+
+            fetch('/google-verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    credential: response.credential,
+                    uid: uid,
+                    file: file,
+                    bot: bot
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert('Verification failed. Please try again.');
+                    spinner.style.display = 'none';
+                    googleBtnWrapper.style.display = 'flex';
+                    captchaBox.style.display = 'flex';
+                    checkbox.checked = false;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('An error occurred during verification.');
+                spinner.style.display = 'none';
+                googleBtnWrapper.style.display = 'flex';
+                captchaBox.style.display = 'flex';
+                checkbox.checked = false;
+            });
+        }
+    </script>
+</body>
+</html>

@@ -163,9 +163,312 @@ async def get_invalid_link_btn(client, user_id, data):
 # Ask Doubt on telegram @KingVJ0
 
 
+async def deliver_requested_files(client, user_id, data):
+    try:
+        from plugins.clone import async_mongo_db as clone_mongo_db
+        import base64, json, os, asyncio
+        from pyrogram.errors import FloodWait
+        from urllib.parse import quote_plus
+        from TechVJ.utils.file_properties import get_name, get_hash
+        from TechVJ.bot import StreamBot
+        from utils import get_size, formate_file_name, is_valid_url
+        
+        me = client.me or await client.get_me()
+        
+        # Increment user download count
+        await clone_mongo_db.user_download_stats.update_one(
+            {"user_id": user_id},
+            {"$inc": {"count": 1}},
+            upsert=True
+        )
+        
+        if data.split("-", 1)[0] == "BATCH":
+            sts = await client.send_message(user_id, "**🔺 ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ**")
+            file_id = data.split("-", 1)[1]
+            msgs = BATCH_FILES.get(file_id)
+            if not msgs:
+                decode_file_id = base64.urlsafe_b64decode(file_id + "=" * (-len(file_id) % 4)).decode("ascii")
+                msg = await client.get_messages(LOG_CHANNEL, int(decode_file_id))
+                media = getattr(msg, msg.media.value)
+                file_id = media.file_id
+                file = await client.download_media(file_id)
+                try: 
+                    with open(file) as file_data:
+                        msgs=json.loads(file_data.read())
+                except:
+                    await sts.edit("FAILED")
+                    return await client.send_message(LOG_CHANNEL, "UNABLE TO OPEN FILE.")
+                os.remove(file)
+                BATCH_FILES[file_id] = msgs
+                
+            filesarr = []
+            for msg in msgs:
+                channel_id = int(msg.get("channel_id"))
+                msgid = msg.get("msg_id")
+                info = await client.get_messages(channel_id, int(msgid))
+                if info.media:
+                    file_type = info.media
+                    file = getattr(info, file_type.value)
+                    f_caption = getattr(info, 'caption', '')
+                    if f_caption:
+                        f_caption = f"@viralverse0909 {f_caption.html}"
+                    old_title = getattr(file, "file_name", "")
+                    title = formate_file_name(old_title)
+                    size=get_size(int(file.file_size))
+                    if BATCH_FILE_CAPTION:
+                        try:
+                            f_caption=BATCH_FILE_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
+                        except:
+                            f_caption=f_caption
+                    if f_caption is None:
+                        f_caption = f"@viralverse0909 {title}"
+                    reply_markup = None
+                    if config.STREAM_MODE == True:
+                        if info.video or info.document:
+                            try:
+                                log_msg = await StreamBot.copy_message(
+                                    chat_id=LOG_CHANNEL,
+                                    from_chat_id=info.chat.id,
+                                    message_id=info.id
+                                )
+                            except:
+                                log_msg = info
+                            fileName = {quote_plus(get_name(log_msg))}
+                            stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                            download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                            if is_valid_url(stream) and is_valid_url(download) and stream.startswith("https://") and download.startswith("https://"):
+                                button = [[
+                                    InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
+                                    InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
+                                ],[
+                                    InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                                ],[
+                                    InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+                                ]]
+                                reply_markup=InlineKeyboardMarkup(button)
+                    try:
+                        msg = await info.copy(chat_id=user_id, caption=f_caption, protect_content=False, reply_markup=reply_markup)
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
+                        msg = await info.copy(chat_id=user_id, caption=f_caption, protect_content=False, reply_markup=reply_markup)
+                    except:
+                        continue
+                else:
+                    try:
+                        msg = await info.copy(chat_id=user_id, protect_content=False)
+                    except FloodWait as e:
+                        await asyncio.sleep(e.value)
+                        msg = await info.copy(chat_id=user_id, protect_content=False)
+                    except:
+                        continue
+                filesarr.append(msg)
+                await asyncio.sleep(1) 
+            await sts.delete()
+            
+            try:
+                base_url = URL.strip()
+                if not base_url.startswith("https://") and not base_url.startswith("http://"):
+                    base_url = "https://" + base_url
+                elif base_url.startswith("http://"):
+                    base_url = base_url.replace("http://", "https://")
+                portal_url = f"{base_url.rstrip('/')}/portal?uid={user_id}&bot={me.username}"
+                
+                await client.send_message(
+                    chat_id=user_id,
+                    text="<b>🍿 naya taza maal dekhlo</b>",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("💦 Tᴀᴢᴀ Mᴀᴀʟ 💦", web_app=WebAppInfo(url=portal_url))
+                    ]])
+                )
+            except Exception as final_msg_err:
+                logger.error(f"Error sending final portal link message: {final_msg_err}")
+
+            if AUTO_DELETE_MODE == True:
+                k = await client.send_message(chat_id=user_id, text=f"<b><u>❗️❗️❗️IMPORTANT❗️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{AUTO_DELETE} mins</u> 🫥 <i>(Due to Copyright Issues)</i>.\n\nPlease forward this File/Video to your Saved Messages and Start Download there</b>")
+                await asyncio.sleep(AUTO_DELETE_TIME)
+                for x in filesarr:
+                    try:
+                        await x.delete()
+                    except:
+                        pass
+                try:
+                    await k.edit_text("<b>Your All Files/Videos is successfully deleted!!!</b>")
+                except:
+                    pass
+        else:
+            try:
+                pre, decode_file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
+            except:
+                decode_file_id = data
+                
+            msg = await client.get_messages(LOG_CHANNEL, int(decode_file_id))
+            if msg.media:
+                media = getattr(msg, msg.media.value)
+                title = formate_file_name(media.file_name)
+                size=get_size(media.file_size)
+                f_caption = f"@viralverse0909 <code>{title}</code>"
+                if CUSTOM_FILE_CAPTION:
+                    try:
+                        f_caption=CUSTOM_FILE_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='')
+                    except:
+                        f_caption = f"@viralverse0909 <code>{title}</code>"
+                reply_markup = None
+                if config.STREAM_MODE == True:
+                    if msg.video or msg.document:
+                        log_msg = msg
+                        fileName = {quote_plus(get_name(log_msg))}
+                        stream = f"{URL}watch/{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                        download = f"{URL}{str(log_msg.id)}/{quote_plus(get_name(log_msg))}?hash={get_hash(log_msg)}"
+                        if is_valid_url(stream) and is_valid_url(download) and stream.startswith("https://") and download.startswith("https://"):
+                            button = [[
+                                InlineKeyboardButton("• ᴅᴏᴡɴʟᴏᴀᴅ •", url=download),
+                                InlineKeyboardButton('• ᴡᴀᴛᴄʜ •', url=stream)
+                            ],[
+                                InlineKeyboardButton("• ᴡᴀᴛᴄʜ ɪɴ ᴡᴇʙ ᴀᴘᴘ •", web_app=WebAppInfo(url=stream))
+                            ],[
+                                InlineKeyboardButton("Jᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url="https://t.me/viralverse0909")
+                            ]]
+                            reply_markup=InlineKeyboardMarkup(button)
+                del_msg = await msg.copy(chat_id=user_id, caption=f_caption, reply_markup=reply_markup, protect_content=False)
+            else:
+                del_msg = await msg.copy(chat_id=user_id, protect_content=False)
+                
+            try:
+                base_url = URL.strip()
+                if not base_url.startswith("https://") and not base_url.startswith("http://"):
+                    base_url = "https://" + base_url
+                elif base_url.startswith("http://"):
+                    base_url = base_url.replace("http://", "https://")
+                portal_url = f"{base_url.rstrip('/')}/portal?uid={user_id}&bot={me.username}"
+                
+                await client.send_message(
+                    chat_id=user_id,
+                    text="<b>🍿 naya taza maal dekhlo</b>",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("💦 Tᴀᴢᴀ Mᴀᴀʟ 💦", web_app=WebAppInfo(url=portal_url))
+                    ]])
+                )
+            except Exception as final_msg_err:
+                logger.error(f"Error sending final portal link message: {final_msg_err}")
+
+            if AUTO_DELETE_MODE == True:
+                k = await client.send_message(chat_id=user_id, text=f"<b><u>❗️❗️❗️IMPORTANT❗️❗️❗️</u></b>\n\nThis Movie File/Video will be deleted in <b><u>{AUTO_DELETE} mins</u> 🫥 <i>(Due to Copyright Issues)</i>.\n\nPlease forward this File/Video to your Saved Messages and Start Download there</b>")
+                await asyncio.sleep(AUTO_DELETE_TIME)
+                try:
+                    await del_msg.delete()
+                except:
+                    pass
+                try:
+                    await k.edit_text("<b>Your File/Video is successfully deleted!!!</b>")
+                except:
+                    pass
+    except Exception as deliver_err:
+        logger.error(f"deliver_requested_files error: {deliver_err}")
+        try:
+            await client.send_message(user_id, f"<b>⚠️ Error delivering files:</b> <code>{deliver_err}</code>")
+        except:
+            pass
+
+async def check_and_send_screenshot_verification(client, message, data):
+    me = client.me or await client.get_me()
+    user_id = message.from_user.id
+    doc = await clone_mongo_db.screenshot_verifications.find_one({"user_id": user_id})
+    ss_count = doc.get("count", 0) if doc else 0
+    if config.SCREENSHOT_VERIFY_MODE and ss_count < config.SCREENSHOT_VERIFY_LIMIT:
+        await clone_mongo_db.screenshot_verifications.update_one(
+            {"user_id": user_id},
+            {"$set": {"active_file_data": data}},
+            upsert=True
+        )
+        btn = [
+            [
+                InlineKeyboardButton("🤖 Android", callback_data=f"ss_dev_android_{data}"),
+                InlineKeyboardButton("🍏 iPhone", callback_data=f"ss_dev_iphone_{data}")
+            ]
+        ]
+        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+        if plan_cfg:
+            btn.append([InlineKeyboardButton("💳 Buy VIP Plan (Bypass)", callback_data="buy_plan")])
+            
+        await message.reply_text(
+            text=f"<b>🔒 Verification Required!</b>\n\nHey {message.from_user.mention}, to access this file, please verify you are a human. Choose your device below:",
+            reply_markup=InlineKeyboardMarkup(btn),
+            protect_content=True
+        )
+        return True
+    return False
+
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):
     try:
+        me = client.me or await client.get_me()
+        
+        # Check Google redirect start payload
+        if len(message.command) == 2 and message.command[1].startswith("ss_"):
+            data = message.command[1]
+            parts = data.split("_")
+            if len(parts) >= 4 and parts[2] == "login":
+                uid_str = parts[1]
+                file_data = "_".join(parts[3:])
+                if str(message.from_user.id) == uid_str:
+                    doc = await clone_mongo_db.screenshot_verifications.find_one({"user_id": message.from_user.id})
+                    if doc and doc.get("google_verified"):
+                        gmail = doc.get("gmail")
+                        ss_count = doc.get("count", 0)
+                        admin_text = (
+                            f"<b>📧 New Gmail Verified for Closed Testing!</b>\n\n"
+                            f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                            f"📧 <b>Gmail:</b> <code>{gmail}</code>\n"
+                            f"🤖 <b>Bot:</b> @{me.username}\n"
+                            f"🔄 <b>Verification:</b> App {ss_count + 1}"
+                        )
+                        try:
+                            admin_msg = await client.send_message(LOG_CHANNEL, admin_text)
+                            await admin_msg.pin()
+                        except Exception as pin_err:
+                            logger.error(f"Failed to pin admin Gmail notification: {pin_err}")
+                        
+                        if ss_count == 0:
+                            app_url = config.PLAYSTORE_APP1_URL
+                            instruction = config.PLAYSTORE_APP1_INSTRUCTION
+                        else:
+                            app_url = config.PLAYSTORE_APP2_URL
+                            instruction = config.PLAYSTORE_APP2_INSTRUCTION
+                            
+                        btn = [[InlineKeyboardButton("📲 Download & Install App", url=app_url)]]
+                        
+                        await clone_mongo_db.screenshot_verifications.update_one(
+                            {"user_id": message.from_user.id},
+                            {"$set": {"step": f"waiting_for_screenshot_{ss_count + 1}", "active_file_data": file_data}}
+                        )
+                        
+                        caption = (
+                            f"<b>✅ Email Verified! Now proceed to App Installation:</b>\n\n"
+                            f"Instructions:\n"
+                            f"{instruction}\n\n"
+                            f"After installing and completing the task, please take a screenshot and <b>send it directly as a photo to this bot</b> to complete verification."
+                        )
+                        
+                        import os
+                        photo_path = "screenshot/app1.png" if ss_count == 0 else "screenshot/app2.png"
+                        
+                        if os.path.exists(photo_path):
+                            try:
+                                return await message.reply_photo(
+                                    photo=photo_path,
+                                    caption=caption,
+                                    reply_markup=InlineKeyboardMarkup(btn),
+                                    protect_content=True
+                                )
+                            except Exception as photo_err:
+                                logger.error(f"Failed to send screenshot app photo: {photo_err}")
+
+                        return await message.reply_text(
+                            text=caption,
+                            reply_markup=InlineKeyboardMarkup(btn),
+                            protect_content=True
+                        )
+
         me = client.me or await client.get_me()
         if not await db.is_user_exist(message.from_user.id):
             try:
@@ -562,8 +865,15 @@ async def start(client, message):
             try:
                 user_is_vip = await is_vip(me.id, message.from_user.id)
                 if not user_is_vip:
-                    # TMA Mode: use Monetag Mini App for verification
-                    if config.TMA_MODE and not is_unlocked:
+                    stats = await clone_mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
+                    download_count = stats.get("count", 0) if stats else 0
+                    if download_count >= 5:
+                        # Check Screenshot Verification Mode
+                        if config.SCREENSHOT_VERIFY_MODE and not is_unlocked:
+                            if await check_and_send_screenshot_verification(client, message, data):
+                                return
+                        # TMA Mode: use Monetag Mini App for verification
+                        if config.TMA_MODE and not is_unlocked:
                         if not await check_tma_verification(message.from_user.id):
                             ads_today = 0
                             try:
@@ -754,8 +1064,15 @@ async def start(client, message):
         pre, decode_file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
         user_is_vip = await is_vip(me.id, message.from_user.id)
         if not user_is_vip:
-            # TMA Mode: use Monetag Mini App for verification
-            if config.TMA_MODE and not is_unlocked:
+            stats = await clone_mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
+            download_count = stats.get("count", 0) if stats else 0
+            if download_count >= 5:
+                # Check Screenshot Verification Mode
+                if config.SCREENSHOT_VERIFY_MODE and not is_unlocked:
+                    if await check_and_send_screenshot_verification(client, message, data):
+                        return
+                # TMA Mode: use Monetag Mini App for verification
+                if config.TMA_MODE and not is_unlocked:
                 if not await check_tma_verification(message.from_user.id):
                     ads_today = 0
                     try:
@@ -1257,6 +1574,91 @@ async def clear_force_sub_handler(client, message):
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
     from config import ADMINS
+    
+    if query.data.startswith("ss_dev_android_"):
+        file_data = query.data.split("_", 3)[3]
+        user_id = query.from_user.id
+        me = client.me or await client.get_me()
+        google_url = f"{URL.rstrip('/')}/google-login?uid={user_id}&file={file_data}&bot={me.username}"
+        btn = [[InlineKeyboardButton("🔒 Not a Robot Verification", url=google_url)]]
+        await query.message.edit_text(
+            text=f"<b>🤖 Android Verification Step 1:</b>\n\nClick the button below to complete the human verification using Google Sign-In.",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        return
+
+    elif query.data.startswith("ss_dev_iphone_"):
+        file_data = query.data.split("_", 3)[3]
+        user_id = query.from_user.id
+        me = client.me or await client.get_me()
+        tma_app_url = f"{URL.rstrip('/')}/tma"
+        tma_link = await get_tma_link(client, user_id, tma_app_url, file_data=file_data)
+        btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+        if plan_cfg:
+            btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+        await query.message.edit_text(
+            text=script.TMA_UNLOCK_TEXT.format(query.from_user.mention),
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        return
+
+    elif query.data.startswith("ss_appr_"):
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ You are not an admin!", show_alert=True)
+        user_id = int(query.data.split("_")[2])
+        doc = await clone_mongo_db.screenshot_verifications.find_one({"user_id": user_id})
+        if not doc:
+            return await query.answer("Verification request not found!", show_alert=True)
+            
+        ss_count = doc.get("count", 0)
+        file_data = doc.get("active_file_data", "")
+        
+        await clone_mongo_db.screenshot_verifications.update_one(
+            {"user_id": user_id},
+            {"$set": {"count": ss_count + 1, "step": ""}}
+        )
+        
+        try:
+            await client.send_message(
+                chat_id=user_id,
+                text="<b>✅ Your screenshot verification has been approved! Delivering files...</b>"
+            )
+            await deliver_requested_files(client, user_id, file_data)
+        except Exception as notify_err:
+            logger.error(f"Failed to notify user after screenshot approval: {notify_err}")
+            
+        await query.answer("Screenshot approved and user notified!", show_alert=True)
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.reply_text(f"<b>✅ Approved by {query.from_user.mention}</b>")
+        return
+
+    elif query.data.startswith("ss_decl_"):
+        if query.from_user.id not in ADMINS:
+            return await query.answer("❌ You are not an admin!", show_alert=True)
+        user_id = int(query.data.split("_")[2])
+        doc = await clone_mongo_db.screenshot_verifications.find_one({"user_id": user_id})
+        if not doc:
+            return await query.answer("Verification request not found!", show_alert=True)
+            
+        await clone_mongo_db.screenshot_verifications.update_one(
+            {"user_id": user_id},
+            {"$set": {"step": ""}}
+        )
+        
+        try:
+            await client.send_message(
+                chat_id=user_id,
+                text="<b>❌ Your screenshot verification was declined.</b>\n\nPlease make sure you sent the correct screenshot showing the class 12 math paper page and your review. Try downloading the file again to restart."
+            )
+        except Exception as notify_err:
+            logger.error(f"Failed to notify user after screenshot decline: {notify_err}")
+            
+        await query.answer("Screenshot declined and user notified!", show_alert=True)
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.reply_text(f"<b>❌ Declined by {query.from_user.mention}</b>")
+        return
+
     if query.data.startswith("delbot_"):
         if query.from_user.id not in ADMINS:
             return await query.answer("❌ Only the bot owner can delete cloned bots.", show_alert=True)
@@ -3374,9 +3776,107 @@ async def successful_payment_handler(client, message):
             except Exception as e:
                 logger.error(f"Failed to notify admin {admin} of successful payment: {e}")
 
+async def perform_ocr(image_path):
+    import aiohttp
+    url = "https://api.ocr.space/parse/image"
+    data = aiohttp.FormData()
+    data.add_field('apikey', config.OCR_API_KEY)
+    data.add_field('language', 'eng')
+    data.add_field('isOverlayRequired', 'false')
+    data.add_field('file', open(image_path, 'rb'), filename=os.path.basename(image_path))
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, data=data) as resp:
+                result = await resp.json()
+                if result and not result.get("IsErroredOnProcessing"):
+                    parsed_results = result.get("ParsedResults", [])
+                    if parsed_results:
+                        return parsed_results[0].get("ParsedText", "")
+    except Exception as e:
+        logger.error(f"OCR Error: {e}")
+    return ""
+
 @Client.on_message((filters.photo | filters.document) & filters.private & filters.incoming)
 async def photo_message_handler(client, message):
     me = client.me or await client.get_me()
+    
+    # Check if they are in screenshot verification state
+    ss_doc = await clone_mongo_db.screenshot_verifications.find_one({"user_id": message.from_user.id})
+    if ss_doc and ss_doc.get("step") in ["waiting_for_screenshot_1", "waiting_for_screenshot_2"]:
+        step = ss_doc.get("step")
+        file_data = ss_doc.get("active_file_data", "")
+        gmail = ss_doc.get("gmail", "Not provided")
+        ss_count = ss_doc.get("count", 0)
+        
+        progress_msg = await message.reply_text("<b>🔍 Checking your screenshot... Please wait, this takes 2-3 seconds.</b>")
+        
+        # Download photo
+        temp_photo = await message.download()
+        if not temp_photo:
+            await progress_msg.edit_text("<b>❌ Error downloading screenshot. Please try again.</b>")
+            return
+            
+        # Perform OCR
+        ocr_text = await perform_ocr(temp_photo)
+        
+        # Clean up local file
+        try:
+            os.remove(temp_photo)
+        except:
+            pass
+            
+        # Check keywords
+        keywords = config.PLAYSTORE_APP1_KEYWORDS if ss_count == 0 else config.PLAYSTORE_APP2_KEYWORDS
+        text_lower = ocr_text.lower()
+        
+        match_count = sum(1 for kw in keywords if kw in text_lower)
+        is_valid = match_count >= max(1, len(keywords) // 2)
+        
+        if is_valid:
+            await clone_mongo_db.screenshot_verifications.update_one(
+                {"user_id": message.from_user.id},
+                {"$set": {"count": ss_count + 1, "step": ""}}
+            )
+            
+            await progress_msg.edit_text("<b>✅ Screenshot Verified Automatically! Delivering your files...</b>")
+            await deliver_requested_files(client, message.from_user.id, file_data)
+            
+            # Send notification to LOG_CHANNEL
+            admin_text = (
+                f"<b>🤖 Screenshot Automatically APPROVED via OCR!</b>\n\n"
+                f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                f"📧 <b>Gmail:</b> <code>{gmail}</code>\n"
+                f"🤖 <b>Bot:</b> @{me.username}\n"
+                f"🔄 <b>Verification App:</b> App {ss_count + 1}\n"
+                f"📁 <b>Requested File Data:</b> <code>{file_data}</code>"
+            )
+            try:
+                await client.send_message(LOG_CHANNEL, admin_text)
+            except:
+                pass
+        else:
+            await progress_msg.edit_text(
+                f"<b>❌ Verification Failed!</b>\n\n"
+                f"We could not find the required details in your screenshot.\n"
+                f"Please make sure you have opened the correct page in the app and have taken a clear screenshot, then try sending it again."
+            )
+            
+            # Send notification to LOG_CHANNEL
+            admin_text = (
+                f"<b>❌ Screenshot Automatically DECLINED via OCR!</b>\n\n"
+                f"👤 <b>User:</b> {message.from_user.mention} (ID: <code>{message.from_user.id}</code>)\n"
+                f"📧 <b>Gmail:</b> <code>{gmail}</code>\n"
+                f"🤖 <b>Bot:</b> @{me.username}\n"
+                f"🔄 <b>Verification App:</b> App {ss_count + 1}\n"
+                f"📝 <b>OCR Extracted Text:</b> <code>{ocr_text[:300]}...</code>"
+            )
+            try:
+                await client.send_message(LOG_CHANNEL, admin_text)
+            except:
+                pass
+        return
+
     state_doc = await clone_mongo_db.user_states.find_one({"bot_id": me.id, "user_id": message.from_user.id})
     if state_doc and state_doc.get("state") == "waiting_screenshot":
         await clone_mongo_db.user_states.delete_one({"bot_id": me.id, "user_id": message.from_user.id})
@@ -4794,7 +5294,13 @@ async def bulk_add_thumb_cmd_handler(client, message):
                                     if cid and mid:
                                         video_msg = await client.get_messages(int(cid), int(mid))
                             if video_msg:
+                                if video_msg.photo:
+                                    skipped += 1
+                                    continue
                                 vid_media = video_msg.video or video_msg.animation or video_msg.document
+                            if not vid_media:
+                                skipped += 1
+                                continue
                             if vid_media:
                                 local_fn = getattr(vid_media, "file_name", f"video_{int(time.time())}.mp4")
                                 local_path = os.path.join(temp_dir, local_fn)
