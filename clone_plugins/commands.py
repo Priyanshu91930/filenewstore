@@ -1425,6 +1425,8 @@ async def settings_command(client, message):
     stream_status = "Enabled 🟢" if stream_mode else "Disabled 🔴"
     paid_links = bot_doc.get("paid_links", False) if bot_doc else False
     paid_status = "Enabled 🟢" if paid_links else "Disabled 🔴"
+    ss_mode = bot_doc.get("screenshot_verify_mode", SCREENSHOT_VERIFY_MODE) if bot_doc else SCREENSHOT_VERIFY_MODE
+    ss_status = "ON 🟢" if ss_mode else "OFF 🔴"
     
     buttons = [[
         InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
@@ -1435,6 +1437,8 @@ async def settings_command(client, message):
     ],[
         InlineKeyboardButton(f"Stream: {'ON 🟢' if stream_mode else 'OFF 🔴'}", callback_data="toggle_stream"),
         InlineKeyboardButton(f"Paid Links: {'ON 🟢' if paid_links else 'OFF 🔴'}", callback_data="toggle_paid")
+    ],[
+        InlineKeyboardButton(f"Screenshot Verify: {'ON 🟢' if ss_mode else 'OFF 🔴'}", callback_data="toggle_ssv")
     ],[
         InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
         InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -1460,7 +1464,7 @@ async def settings_command(client, message):
 
     reply_markup = InlineKeyboardMarkup(buttons)
     await message.reply_text(
-        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴘᴀɪᴅ ʟɪɴᴋs: <code>{paid_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+        text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴘᴀɪᴅ ʟɪɴᴋs: <code>{paid_status}</code>\nsᴄʀᴇᴇɴsʜᴏᴛ ᴠᴇʀɪꜰʏ: <code>{ss_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
         reply_markup=reply_markup,
         parse_mode=enums.ParseMode.HTML
     )
@@ -2320,6 +2324,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         paid_status = "Enabled 🟢" if paid_links else "Disabled 🔴"
         tma_type = bot_doc.get("tma_type", "links") if bot_doc else "links"
         tma_type_status = "Links 🔗" if tma_type == "links" else "Time 🕒"
+        ss_mode = bot_doc.get("screenshot_verify_mode", SCREENSHOT_VERIFY_MODE) if bot_doc else SCREENSHOT_VERIFY_MODE
+        ss_status = "ON 🟢" if ss_mode else "OFF 🔴"
         
         buttons = [[
             InlineKeyboardButton('📝 sᴇᴛ ᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx', callback_data='set_caption'),
@@ -2332,6 +2338,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             InlineKeyboardButton(f"Paid Links: {'ON 🟢' if paid_links else 'OFF 🔴'}", callback_data="toggle_paid")
         ],[
             InlineKeyboardButton(f"TMA Type: {tma_type_status}", callback_data="toggle_tma_type")
+        ],[
+            InlineKeyboardButton(f"Screenshot Verify: {'ON 🟢' if ss_mode else 'OFF 🔴'}", callback_data="toggle_ssv")
         ],[
             InlineKeyboardButton('💬 ᴄʜᴀᴛʙox', url='https://t.me/+cFO-dJGWlCMzNGRl'),
             InlineKeyboardButton('📢 ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ', url='https://t.me/viralverse0909')
@@ -2369,7 +2377,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
-            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴛᴍᴀ ᴛʏᴘᴇ: <code>{tma_type_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴘᴀɪᴅ ʟɪɴᴋs: <code>{paid_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
+            text=f"<b>⚙️ sᴇᴛᴛɪɴɢs ᴘᴀɴᴇʟ\n\nᴛᴍᴀ ᴀᴅs: <code>{tma_status}</code>\nᴛᴍᴀ ᴛʏᴘᴇ: <code>{tma_type_status}</code>\nᴠɪᴘ ᴘʟᴀɴ: <code>{plan_status}</code>\nsᴛʀᴇᴀᴍ ᴍᴏᴅᴇ: <code>{stream_status}</code>\nᴘᴀɪᴅ ʟɪɴᴋs: <code>{paid_status}</code>\nsᴄʀᴇᴇɴsʜᴏᴛ ᴠᴇʀɪꜰʏ: <code>{ss_status}</code>\nᴄᴀᴘᴛɪᴏɴ ᴘʀᴇꜰɪx: {prefix}</b>",
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
@@ -2426,6 +2434,19 @@ async def cb_handler(client: Client, query: CallbackQuery):
         )
         return await query.answer()
 
+    elif query.data == "toggle_ssv":
+        bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
+        owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
+        mods = bot_doc.get("moderators", []) if bot_doc else []
+        if query.from_user.id != owner_id and query.from_user.id not in mods:
+            return await query.answer("❌ Only the bot owner and moderators can configure Screenshot Verify!", show_alert=True)
+
+        ss_mode = bot_doc.get("screenshot_verify_mode", SCREENSHOT_VERIFY_MODE) if bot_doc else SCREENSHOT_VERIFY_MODE
+        new_mode = not ss_mode
+        await mongo_db.bots.update_one({"bot_id": me.id}, {"$set": {"screenshot_verify_mode": new_mode}})
+        await query.answer(f"Screenshot Verify {'Enabled 🟢' if new_mode else 'Disabled 🔴'}", show_alert=True)
+        query.data = "settings"
+        return await cb_handler(client, query)
     elif query.data.startswith("toggle_"):
         bot_doc = await mongo_db.bots.find_one({'bot_id': me.id})
         owner_id = int(bot_doc.get("user_id", 0)) if bot_doc else 0
