@@ -5174,21 +5174,23 @@ async def bulk_add_thumb_cmd_handler(client, message):
                     m, s = int(duration // 60), int(duration % 60)
                     fmt_dur = f"{m:02d}:{s:02d}"
 
-                await clone_mongo_db.posts.insert_one({
-                    "_id": str(uuid.uuid4())[:8],
-                    "title": title,
-                    "image_url": default_thumb,
-                    "thumbnails": thumb_urls,
-                    "category": category,
-                    "duration": fmt_dur,
-                    "gdrive_file_id": gdrive_file_id,
-                    "file_deeplink": file_deeplink,
-                    "is_gdrive": True,
-                    "bot_username": bot_username or client.me.username,
-                    "created_at": time.time(),
-                    "views": 0,
-                    "reactions": {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}
-                })
+                await clone_mongo_db.posts.update_one(
+                    {"file_deeplink": file_deeplink},
+                    {"$set": {
+                        "title": title,
+                        "image_url": default_thumb,
+                        "thumbnails": thumb_urls,
+                        "category": category,
+                        "duration": fmt_dur,
+                        "gdrive_file_id": gdrive_file_id,
+                        "is_gdrive": True,
+                        "bot_username": bot_username or client.me.username,
+                        "created_at": time.time(),
+                        "views": 0,
+                        "reactions": {"❤️": 0, "👍": 0, "🔥": 0, "💦": 0}
+                    }},
+                    upsert=True
+                )
                 imported += 1
 
             elif msg.photo:
@@ -5383,7 +5385,13 @@ async def bulk_add_thumb_cmd_handler(client, message):
                     post_doc["is_gdrive"] = True
                     post_doc["duration"] = fmt_dur
 
-                await clone_mongo_db.posts.insert_one(post_doc)
+                # Dedup: if a post with the same bot_deeplink already exists, update it instead of inserting a duplicate
+                existing = await clone_mongo_db.posts.find_one({"bot_deeplink": bot_deeplink})
+                if existing:
+                    post_doc["_id"] = existing["_id"]
+                    await clone_mongo_db.posts.update_one({"_id": existing["_id"]}, {"$set": post_doc})
+                else:
+                    await clone_mongo_db.posts.insert_one(post_doc)
                 imported += 1
             else:
                 skipped += 1
