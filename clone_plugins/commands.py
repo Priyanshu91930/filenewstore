@@ -1167,15 +1167,15 @@ async def start(client, message):
                         protect_content=True,
                         reply_markup=InlineKeyboardMarkup(btn)
                     )
+            else:
+                btn = [[InlineKeyboardButton("💳 Buy VIP Plan to Unlock", callback_data="buy_plan")]]
+                return await message.reply_text(
+                    text=f"<b>🔒 Hey {message.from_user.mention}, this file is locked!\n\nPlease purchase a VIP Plan to get instant access to files.</b>",
+                    protect_content=True,
+                    reply_markup=InlineKeyboardMarkup(btn)
+                )
         else:
             pass
-        else:
-            btn = [[InlineKeyboardButton("💳 Buy VIP Plan to Unlock", callback_data="buy_plan")]]
-            return await message.reply_text(
-                text=f"<b>🔒 Hey {message.from_user.mention}, this file is locked!\n\nPlease purchase a VIP Plan to get instant access to files.</b>",
-                protect_content=True,
-                reply_markup=InlineKeyboardMarkup(btn)
-            )
     elif tma_mode and not user_is_vip:
         if not await check_tma_verification(message.from_user.id, bot_id=me.id):
             ads_today = 0
