@@ -860,11 +860,13 @@ async def start(client, message):
             is_verified = False
             
             if plan_cfg and plan_enabled and not user_is_vip:
-                stats = await mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
+                from utils import get_ist_today
+                stats = await mongo_db.user_download_stats.find_one({"user_id": message.from_user.id, "date": get_ist_today()})
                 download_count = stats.get("count", 0) if stats else 0
-                if download_count >= 5:
-                    if SCREENSHOT_VERIFY_MODE and not is_unlocked:
-                        if await check_and_send_screenshot_verification(client, message, data):
+                if download_count >= 3:
+                    ss_verify_mode = bot_doc.get("screenshot_verify_mode", SCREENSHOT_VERIFY_MODE) if bot_doc else SCREENSHOT_VERIFY_MODE
+                    if ss_verify_mode and not is_unlocked:
+                        if await check_and_send_screenshot_verification(client, message, data, enabled=ss_verify_mode):
                             return
                     if tma_mode:
                         if not await check_tma_verification(message.from_user.id, bot_id=me.id):
@@ -888,7 +890,7 @@ async def start(client, message):
                             ]
                             
                             if ads_today > 0:
-                                unlock_text = f"<b>⚠️ 5 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 5 free files limit is over. Please watch another ad to unlock 5 more files, or purchase a VIP plan."
+                                unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
                             else:
                                 unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
 
@@ -1025,6 +1027,12 @@ async def start(client, message):
                     except Exception as e:
                         logger.error(f"Batch copy error: {e}")
                 
+                from utils import get_ist_today
+                await mongo_db.user_download_stats.update_one(
+                    {"user_id": message.from_user.id, "date": get_ist_today()},
+                    {"$inc": {"count": 1}},
+                    upsert=True
+                )
                 await sts.delete()
                 
                 try:
@@ -1127,11 +1135,13 @@ async def start(client, message):
     logger.info(f"TMA mode: {tma_mode}, User VIP: {user_is_vip}, Plan configured: {plan_cfg is not None}, Plan enabled: {plan_enabled}")
     
     if plan_cfg and plan_enabled and not user_is_vip:
-        stats = await mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
+        from utils import get_ist_today
+        stats = await mongo_db.user_download_stats.find_one({"user_id": message.from_user.id, "date": get_ist_today()})
         download_count = stats.get("count", 0) if stats else 0
-        if download_count >= 5:
-            if SCREENSHOT_VERIFY_MODE and not is_unlocked:
-                if await check_and_send_screenshot_verification(client, message, data):
+        if download_count >= 3:
+            ss_verify_mode = bot_owner.get("screenshot_verify_mode", SCREENSHOT_VERIFY_MODE) if bot_owner else SCREENSHOT_VERIFY_MODE
+            if ss_verify_mode and not is_unlocked:
+                if await check_and_send_screenshot_verification(client, message, data, enabled=ss_verify_mode):
                     return
             if tma_mode:
                 ads_today = 0
@@ -1244,6 +1254,13 @@ async def start(client, message):
         
         if not msg or getattr(msg, "empty", False) or not getattr(msg, "media", None):
             return await message.reply_text("<b>❌ Error sending file! The file might have been deleted from Telegram (e.g. copyright strike) or is no longer available.</b>")
+        
+        from utils import get_ist_today
+        await mongo_db.user_download_stats.update_one(
+            {"user_id": message.from_user.id, "date": get_ist_today()},
+            {"$inc": {"count": 1}},
+            upsert=True
+        )
         
         # Send portal link immediately here to bypass downstream exceptions
         try:

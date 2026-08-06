@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 TOKENS = {}
 
+def get_ist_today() -> str:
+    """Current date string in Asia/Kolkata timezone (YYYY-MM-DD)."""
+    tz = pytz.timezone('Asia/Kolkata')
+    return datetime.now(tz).strftime('%Y-%m-%d')
+
 from collections import UserDict
 import motor.motor_asyncio
 from config import DB_URI

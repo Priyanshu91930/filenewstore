@@ -176,8 +176,9 @@ async def deliver_requested_files(client, user_id, data):
         me = client.me or await client.get_me()
         
         # Increment user download count
+        from utils import get_ist_today
         await clone_mongo_db.user_download_stats.update_one(
-            {"user_id": user_id},
+            {"user_id": user_id, "date": get_ist_today()},
             {"$inc": {"count": 1}},
             upsert=True
         )
@@ -369,12 +370,13 @@ async def deliver_requested_files(client, user_id, data):
         except:
             pass
 
-async def check_and_send_screenshot_verification(client, message, data):
+async def check_and_send_screenshot_verification(client, message, data, enabled=None):
     me = client.me or await client.get_me()
     user_id = message.from_user.id
     doc = await clone_mongo_db.screenshot_verifications.find_one({"user_id": user_id})
     ss_count = doc.get("count", 0) if doc else 0
-    if config.SCREENSHOT_VERIFY_MODE and ss_count < config.SCREENSHOT_VERIFY_LIMIT:
+    mode_enabled = config.SCREENSHOT_VERIFY_MODE if enabled is None else enabled
+    if mode_enabled and ss_count < config.SCREENSHOT_VERIFY_LIMIT:
         await clone_mongo_db.screenshot_verifications.update_one(
             {"user_id": user_id},
             {"$set": {"active_file_data": data}},
@@ -696,6 +698,9 @@ async def start(client, message):
                 tma_mode = bot.get("tma_mode", False)
                 status_txt = "ON 🟢" if tma_mode else "OFF 🔴"
                 tma_btn = "Disable ❌ TMA Ads" if tma_mode else "Enable ✅ TMA Ads"
+                ss_mode = bot.get("screenshot_verify_mode", config.SCREENSHOT_VERIFY_MODE)
+                ss_status = "ON 🟢" if ss_mode else "OFF 🔴"
+                ss_btn = "Disable ❌ Screenshot Verify" if ss_mode else "Enable ✅ Screenshot Verify"
                 api_key = bot.get("shortener_api") or "Not set"
                 api2_key = bot.get("secondary_shortener_api") or "Not set"
                 api2_site = bot.get("secondary_shortener_site") or "arolinks.com"
@@ -726,11 +731,13 @@ async def start(client, message):
                     [InlineKeyboardButton("🔑 Set 6th API Key", callback_data=f"tok_api6_{bot_id}")],
                     [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
                     [InlineKeyboardButton(f"{tma_btn}", callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear Settings", callback_data=f"tok_clr_{bot_id}")],
+                    [InlineKeyboardButton(ss_btn, callback_data=f"tok_ssv_{bot_id}")],
                     [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
                 ]
                 text = (
                     f"<b><u>⚙️ TMA Ads Setting</u></b>\n\n"
                     f"  - Status: {status_txt}\n"
+                    f"  - Screenshot Verify: {ss_status}\n"
                     f"  - Domain: <code>vplink.in</code>\n"
                     f"  - API Key: {api_display}\n"
                     f"  - 2nd API Key: {api2_display}\n"
@@ -865,7 +872,8 @@ async def start(client, message):
             try:
                 user_is_vip = await is_vip(me.id, message.from_user.id)
                 if not user_is_vip:
-                    stats = await clone_mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
+                    from utils import get_ist_today
+                    stats = await clone_mongo_db.user_download_stats.find_one({"user_id": message.from_user.id, "date": get_ist_today()})
                     download_count = stats.get("count", 0) if stats else 0
                     if download_count >= 3:
                         # Check Screenshot Verification Mode
@@ -896,7 +904,7 @@ async def start(client, message):
                                     btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                                 
                                 if ads_today > 0:
-                                    unlock_text = f"<b>⚠️ 5 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 5 free files limit is over. Please watch another ad to unlock 5 more files, or purchase a VIP plan."
+                                    unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
                                 else:
                                     unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
                                     
@@ -1005,6 +1013,12 @@ async def start(client, message):
                         continue
                 filesarr.append(msg)
                 await asyncio.sleep(1) 
+            from utils import get_ist_today
+            await clone_mongo_db.user_download_stats.update_one(
+                {"user_id": message.from_user.id, "date": get_ist_today()},
+                {"$inc": {"count": 1}},
+                upsert=True
+            )
             await sts.delete()
             
             try:
@@ -1064,7 +1078,8 @@ async def start(client, message):
         pre, decode_file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
         user_is_vip = await is_vip(me.id, message.from_user.id)
         if not user_is_vip:
-            stats = await clone_mongo_db.user_download_stats.find_one({"user_id": message.from_user.id})
+            from utils import get_ist_today
+            stats = await clone_mongo_db.user_download_stats.find_one({"user_id": message.from_user.id, "date": get_ist_today()})
             download_count = stats.get("count", 0) if stats else 0
             if download_count >= 3:
                 # Check Screenshot Verification Mode
@@ -1095,7 +1110,7 @@ async def start(client, message):
                             btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                         
                         if ads_today > 0:
-                            unlock_text = f"<b>⚠️ 5 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 5 free files limit is over. Please watch another ad to unlock 5 more files, or purchase a VIP plan."
+                            unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
                         else:
                             unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
 
@@ -1153,6 +1168,13 @@ async def start(client, message):
             else:
                 del_msg = await msg.copy(chat_id=message.from_user.id, protect_content=False)
                 
+            from utils import get_ist_today
+            await clone_mongo_db.user_download_stats.update_one(
+                {"user_id": message.from_user.id, "date": get_ist_today()},
+                {"$inc": {"count": 1}},
+                upsert=True
+            )
+            
             try:
                 me = client.me or await client.get_me()
                 base_url = URL.strip()
@@ -2228,6 +2250,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
         tma_mode = bot.get("tma_mode", False)
         status_txt = "ON 🟢" if tma_mode else "OFF 🔴"
         tma_btn = "Disable ❌ TMA Ads" if tma_mode else "Enable ✅ TMA Ads"
+        ss_mode = bot.get("screenshot_verify_mode", config.SCREENSHOT_VERIFY_MODE)
+        ss_status = "ON 🟢" if ss_mode else "OFF 🔴"
+        ss_btn = "Disable ❌ Screenshot Verify" if ss_mode else "Enable ✅ Screenshot Verify"
         
         api_key = bot.get("shortener_api") or "Not set"
         api2_key = bot.get("secondary_shortener_api") or "Not set"
@@ -2260,12 +2285,14 @@ async def cb_handler(client: Client, query: CallbackQuery):
             [InlineKeyboardButton("🔑 Set 6th API Key", callback_data=f"tok_api6_{bot_id}")],
             [InlineKeyboardButton("⏱ Validity", callback_data=f"tok_val_{bot_id}"), InlineKeyboardButton("📖 Tutorial", callback_data=f"tok_tut_{bot_id}")],
             [InlineKeyboardButton(tma_btn, callback_data=f"tok_tma_{bot_id}"), InlineKeyboardButton("🧹 Clear All Settings", callback_data=f"tok_clr_{bot_id}")],
+            [InlineKeyboardButton(ss_btn, callback_data=f"tok_ssv_{bot_id}")],
             [InlineKeyboardButton("🔙 Back", callback_data=f"cust_{bot_id}")]
         ]
         
         text = (
             f"<b><u>⚙️ TMA Ads Setting</u></b>\n\n"
             f"  - Status: {status_txt}\n"
+            f"  - Screenshot Verify: {ss_status}\n"
             f"  - Domain: <code>vplink.in</code>\n"
             f"  - API Key: {api_display}\n"
             f"  - 2nd API Key: {api2_display}\n"
@@ -2569,6 +2596,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
         new_tma = not tma_mode
         await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"tma_mode": new_tma}})
         await query.answer(f"TMA Ads {'Enabled 🟢' if new_tma else 'Disabled 🔴'}", show_alert=True)
+        query.data = f"tokencfg_{bot_id}"
+        return await cb_handler(client, query)
+
+    elif query.data.startswith("tok_ssv_"):
+        bot_id = int(query.data.split("_")[-1])
+        bot = await clone_mongo_db.bots.find_one({"bot_id": bot_id})
+        ss_mode = bot.get("screenshot_verify_mode", config.SCREENSHOT_VERIFY_MODE)
+        new_ss = not ss_mode
+        await clone_mongo_db.bots.update_one({"bot_id": bot_id}, {"$set": {"screenshot_verify_mode": new_ss}})
+        await query.answer(f"Screenshot Verify {'Enabled 🟢' if new_ss else 'Disabled 🔴'}", show_alert=True)
         query.data = f"tokencfg_{bot_id}"
         return await cb_handler(client, query)
 
