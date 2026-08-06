@@ -212,4 +212,9 @@ async def restart_bots():
             await set_clone_commands(vj)
             running_clones[bot_id] = vj
         except Exception as startup_err:
-            logger.error(f"Error starting clone bot {bot_id}: {startup_err}")
+            err_str = str(startup_err)
+            if "ACCESS_TOKEN_EXPIRED" in err_str or "token has expired" in err_str:
+                logger.warning(f"Clone bot {bot_id} token has expired. Removing from MongoDB...")
+                await async_mongo_db.bots.delete_one({"bot_id": bot_id})
+            else:
+                logger.error(f"Error starting clone bot {bot_id}: {startup_err}")
