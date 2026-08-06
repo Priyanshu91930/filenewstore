@@ -874,38 +874,38 @@ async def start(client, message):
                                 return
                         # TMA Mode: use Monetag Mini App for verification
                         if config.TMA_MODE and not is_unlocked:
-                        if not await check_tma_verification(message.from_user.id):
-                            ads_today = 0
-                            try:
-                                import pytz
-                                from datetime import datetime
-                                tz = pytz.timezone('Asia/Kolkata')
-                                today_str = datetime.now(tz).strftime('%Y-%m-%d')
-                                doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-                                if doc:
-                                    ads_today = doc.get("ads_watched", 0)
-                            except Exception as e:
-                                logger.error(f"Error checking daily ads: {e}")
+                            if not await check_tma_verification(message.from_user.id):
+                                ads_today = 0
+                                try:
+                                    import pytz
+                                    from datetime import datetime
+                                    tz = pytz.timezone('Asia/Kolkata')
+                                    today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                                    doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                                    if doc:
+                                        ads_today = doc.get("ads_watched", 0)
+                                except Exception as e:
+                                    logger.error(f"Error checking daily ads: {e}")
 
-                            tma_app_url = f"{URL.rstrip('/')}/tma"
-                            # Pass the raw /start data so the Mini App knows which file to deliver
-                            tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
-                            btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-                            plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
-                            if plan_cfg:
-                                btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-                            
-                            if ads_today > 0:
-                                unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
-                            else:
-                                unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+                                tma_app_url = f"{URL.rstrip('/')}/tma"
+                                # Pass the raw /start data so the Mini App knows which file to deliver
+                                tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
+                                btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                                plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                                if plan_cfg:
+                                    btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
                                 
-                            await message.reply_text(
-                                text=unlock_text,
-                                protect_content=True,
-                                reply_markup=InlineKeyboardMarkup(btn)
-                            )
-                            return
+                                if ads_today > 0:
+                                    unlock_text = f"<b>⚠️ 5 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 5 free files limit is over. Please watch another ad to unlock 5 more files, or purchase a VIP plan."
+                                else:
+                                    unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+                                    
+                                await message.reply_text(
+                                    text=unlock_text,
+                                    protect_content=True,
+                                    reply_markup=InlineKeyboardMarkup(btn)
+                                )
+                                return
                     elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
                         btn = [[
                             InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
@@ -1073,38 +1073,38 @@ async def start(client, message):
                         return
                 # TMA Mode: use Monetag Mini App for verification
                 if config.TMA_MODE and not is_unlocked:
-                if not await check_tma_verification(message.from_user.id):
-                    ads_today = 0
-                    try:
-                        import pytz
-                        from datetime import datetime
-                        tz = pytz.timezone('Asia/Kolkata')
-                        today_str = datetime.now(tz).strftime('%Y-%m-%d')
-                        doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
-                        if doc:
-                            ads_today = doc.get("ads_watched", 0)
-                    except Exception as e:
-                        logger.error(f"Error checking daily ads: {e}")
+                    if not await check_tma_verification(message.from_user.id):
+                        ads_today = 0
+                        try:
+                            import pytz
+                            from datetime import datetime
+                            tz = pytz.timezone('Asia/Kolkata')
+                            today_str = datetime.now(tz).strftime('%Y-%m-%d')
+                            doc = await clone_mongo_db.tma_stats.find_one({"bot_id": me.id, "user_id": message.from_user.id, "date": today_str})
+                            if doc:
+                                ads_today = doc.get("ads_watched", 0)
+                        except Exception as e:
+                            logger.error(f"Error checking daily ads: {e}")
 
-                    tma_app_url = f"{URL.rstrip('/')}/tma"
-                    # Pass the raw /start data so the Mini App knows which file to deliver
-                    tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
-                    btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
-                    plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
-                    if plan_cfg:
-                        btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
-                    
-                    if ads_today > 0:
-                        unlock_text = f"<b>⚠️ 3 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 3 free files limit is over. Please watch another ad to unlock 3 more files, or purchase a VIP plan."
-                    else:
-                        unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
+                        tma_app_url = f"{URL.rstrip('/')}/tma"
+                        # Pass the raw /start data so the Mini App knows which file to deliver
+                        tma_link = await get_tma_link(client, message.from_user.id, tma_app_url, file_data=data)
+                        btn = [[InlineKeyboardButton("🎯 Watch Ad & Unlock File", web_app=WebAppInfo(url=tma_link))]]
+                        plan_cfg = await clone_mongo_db.plans_config.find_one({"_id": me.id})
+                        if plan_cfg:
+                            btn.append([InlineKeyboardButton("💳 Buy Plan (Skip Ads)", callback_data="buy_plan")])
+                        
+                        if ads_today > 0:
+                            unlock_text = f"<b>⚠️ 5 File Limit is Over!</b>\n\nHey {message.from_user.mention}, your 5 free files limit is over. Please watch another ad to unlock 5 more files, or purchase a VIP plan."
+                        else:
+                            unlock_text = script.TMA_UNLOCK_TEXT.format(message.from_user.mention)
 
-                    await message.reply_text(
-                        text=unlock_text,
-                        protect_content=True,
-                        reply_markup=InlineKeyboardMarkup(btn)
-                    )
-                    return
+                        await message.reply_text(
+                            text=unlock_text,
+                            protect_content=True,
+                            reply_markup=InlineKeyboardMarkup(btn)
+                        )
+                        return
             elif not config.TMA_MODE and not await check_verification(client, message.from_user.id) and VERIFY_MODE == True:
                 btn = [[
                     InlineKeyboardButton("Verify", url=await get_token(client, message.from_user.id, f"https://telegram.me/{BOT_USERNAME}?start="))
