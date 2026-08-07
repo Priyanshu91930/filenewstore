@@ -285,12 +285,14 @@ async def create_razorpay_subscription(amount_inr: int, plan_duration: str, user
                 else:
                     return {"success": False, "error": f"Plan creation failed: {await resp.text()}"}
 
-    cb_url = f"{URL.rstrip('/')}/autopay_callback?user_id={user_id}&bot_id={bot_id}&bot_username={bot_username}"
     sub_payload = {
         "plan_id": plan_id, "total_count": total_count, "quantity": 1,
         "customer_notify": 1,
-        "callback_url": cb_url,
-        "callback_method": "get"
+        "notes": {
+            "user_id": str(user_id),
+            "bot_id": str(bot_id),
+            "bot_username": bot_username
+        }
     }
     async with aiohttp.ClientSession() as session:
         async with session.post("https://api.razorpay.com/v1/subscriptions", json=sub_payload, auth=auth) as resp:

@@ -496,7 +496,7 @@ async def portal_data_route_handler(request: web.Request):
             posts.append({
                 'id': str(doc['_id']),
                 'title': doc.get('caption', 'Unlock Content'),
-                'image_url': _normalize_image_url(doc.get('image_url', '')),
+                'image_url': _resolve_post_image_url(str(doc['_id']), doc.get('image_url', '')),
                 'category': 'Paid',
                 'file_deeplink': doc.get('payload', ''),
                 'bot_username': doc.get('bot_username', ''),
@@ -526,7 +526,7 @@ async def portal_data_route_handler(request: web.Request):
             posts.append({
                 'id': str(doc['_id']),
                 'title': doc.get('title', ''),
-                'image_url': _normalize_image_url(doc.get('image_url', '')),
+                'image_url': _resolve_post_image_url(str(doc['_id']), doc.get('image_url', '')),
                 'category': doc.get('category', ''),
                 'file_deeplink': doc.get('file_deeplink', ''),
                 'bot_deeplink': doc.get('bot_deeplink') or doc.get('file_deeplink', ''),  # original bot link for card click
@@ -541,7 +541,7 @@ async def portal_data_route_handler(request: web.Request):
                 'is_gdrive': bool(doc.get('is_gdrive', False)),
                 'duration': doc.get('duration', '03:15'),
                 'stream_url': f"{CLOUDFLARE_WORKER_URL}/video.mp4?fileId={doc.get('gdrive_file_id', '')}" if doc.get('gdrive_file_id') else '',
-                'thumbnails': [_normalize_image_url(t) for t in doc.get('thumbnails', [])] if doc.get('thumbnails') else [_normalize_image_url(doc.get('image_url', ''))]
+                'thumbnails': [_resolve_post_image_url(str(doc['_id']), t) for t in doc.get('thumbnails', [])] if doc.get('thumbnails') else [_resolve_post_image_url(str(doc['_id']), doc.get('image_url', ''))]
             })
 
         # Fetch paid cards and prepend (skip if searching)
@@ -552,7 +552,7 @@ async def portal_data_route_handler(request: web.Request):
                 paid_cards.append({
                     'id': str(doc['_id']),
                     'title': doc.get('caption', 'Unlock Content'),
-                    'image_url': _normalize_image_url(doc.get('image_url', '')),
+                    'image_url': _resolve_post_image_url(str(doc['_id']), doc.get('image_url', '')),
                     'category': 'Paid',
                     'file_deeplink': doc.get('payload', ''),
                     'bot_username': doc.get('bot_username', ''),
@@ -652,6 +652,69 @@ async def api_check_vip_route_handler(request: web.Request):
             is_user_vip = True
 
     return web.json_response({'is_vip': is_user_vip})
+
+
+# ─── VPS Caching and Local Image serving ──────────────────────────────────
+import os
+os.makedirs("static/post_images", exist_ok=True)
+
+_downloading_images = set()
+
+async def _download_post_image_bg(post_id, stream_url):
+    if post_id in _downloading_images:
+        return
+    _downloading_images.add(post_id)
+    try:
+        from config import LOG_CHANNEL
+        from TechVJ.bot import StreamBot
+        import re
+        import os
+        
+        # Parse message ID from stream_url
+        match = re.search(r'/(\d+)/', stream_url)
+        if not match:
+            match = re.search(r'/watch/(\d+)', stream_url)
+        if not match:
+            match = re.search(r'/(\d+)(?:[/?]|$)', stream_url)
+            
+        if not match:
+            logging.warning(f"Could not parse message ID from stream_url: {stream_url}")
+            return
+            
+        msg_id = int(match.group(1))
+        logging.info(f"Downloading post image in background for post_id={post_id}, msg_id={msg_id}")
+        
+        msg = await StreamBot.get_messages(LOG_CHANNEL, msg_id)
+        if msg and msg.media:
+            target_path = f"static/post_images/{post_id}.jpg"
+            temp_path = target_path + ".temp"
+            dl_path = await StreamBot.download_media(message=msg, file_name=temp_path)
+            if dl_path and os.path.exists(dl_path):
+                if os.path.exists(target_path):
+                    os.remove(target_path)
+                os.rename(dl_path, target_path)
+                logging.info(f"Successfully cached post image locally: {target_path}")
+            else:
+                logging.warning(f"Failed to download media for msg_id={msg_id}")
+    except Exception as e:
+        logging.error(f"Error in background image downloader: {e}")
+    finally:
+        _downloading_images.discard(post_id)
+
+def _resolve_post_image_url(post_id, db_image_url):
+    if not db_image_url:
+        return _normalize_image_url(db_image_url)
+        
+    local_path = f"static/post_images/{post_id}.jpg"
+    if os.path.exists(local_path):
+        return _normalize_image_url(f"/static/post_images/{post_id}.jpg")
+        
+    # File doesn't exist locally; trigger background download if it looks like a stream URL
+    if "/static/post_images/" not in db_image_url and any(char.isdigit() for char in db_image_url):
+        import asyncio
+        asyncio.create_task(_download_post_image_bg(post_id, db_image_url))
+        
+    return _normalize_image_url(db_image_url)
 
 
 # ─── GDrive Video Feed (for React Native App) ────────────────────────────────
@@ -839,10 +902,10 @@ async def gdrive_portal_data_handler(request: web.Request):
                 match = db_map.get(p['gdrive_file_id'])
                 if match:
                     p['title'] = match.get('title') or p['title']
-                    p['image_url'] = _normalize_image_url(_get_aesthetic_thumbnail(p['title'], match.get('image_url')))
+                    p['image_url'] = _resolve_post_image_url(str(match['_id']), _get_aesthetic_thumbnail(p['title'], match.get('image_url')))
                     p['views'] = int(match.get('views', 0)) or p['views']
                     p['is_paid'] = bool(match.get('is_paid', False))
-                    p['thumbnails'] = [_normalize_image_url(t) for t in match.get('thumbnails', [])] if match.get('thumbnails') else [p['image_url']]
+                    p['thumbnails'] = [_resolve_post_image_url(str(match['_id']), t) for t in match.get('thumbnails', [])] if match.get('thumbnails') else [p['image_url']]
                     if match.get('duration'):
                         p['duration'] = match.get('duration')
                     if match.get('created_at'):

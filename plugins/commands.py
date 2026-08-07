@@ -4529,7 +4529,16 @@ async def add_post_cmd_handler(client, message):
             
         import uuid
         import time
+        import os
         post_id = str(uuid.uuid4())[:8]
+        
+        # Cache photo locally on VPS immediately
+        try:
+            os.makedirs("static/post_images", exist_ok=True)
+            await client.download_media(message=replied, file_name=f"static/post_images/{post_id}.jpg")
+        except Exception as cache_err:
+            logger.error(f"Failed to cache post image locally: {cache_err}")
+
         await clone_mongo_db.posts.insert_one({
             "_id": post_id,
             "title": title,
